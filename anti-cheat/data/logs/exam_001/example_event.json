@@ -1,0 +1,25 @@
+{
+  "event_id": "event_687aa96f",
+  "exam_id": "exam_001",
+  "occurred_at": "2026-07-26T12:22:20+09:00",
+  "severity": "HIGH",
+  "decision": "CREATE_CLIP",
+  "create_clip": true,
+  "clip_name": "exam_001_event_687aa96f.webm",
+  "rule_count": 1,
+  "applied_rules": [
+    {
+      "rule_id": "RULE_IDENTITY_MISMATCH",
+      "event_type": "IDENTITY_MISMATCH",
+      "severity": "HIGH",
+      "decision": "CREATE_CLIP",
+      "message": "시험 시작 시 등록한 사용자와 현재 사용자가 일치하지 않습니다.",
+      "details": {
+        "verified": false,
+        "similarity": 0.0,
+        "similarity_threshold": 80.0,
+        "matched_face_count": 0
+      }
+    }
+  ]
+}

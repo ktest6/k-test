@@ -1,0 +1,63 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# =========================
+# Virtual Environment
+# =========================
+.venv/
+venv/
+env/
+
+# =========================
+# Environment Variables
+# =========================
+.env
+.env.*
+.aws/
+
+# =========================
+# IDE / OS
+# =========================
+.vscode/
+.idea/
+.DS_Store
+
+# =========================
+# Log Files
+# =========================
+*.log
+
+# =========================
+# Data
+# example_event.json만 포함
+# =========================
+data/*
+!data/logs/
+
+data/logs/*
+!data/logs/exam_001/
+
+data/logs/exam_001/*
+!data/logs/exam_001/example_event.json
+
+# =========================
+# Sensitive Files
+# =========================
+*.pem
+*.key
+*.crt
+
+# =========================
+# Temporary Files
+# =========================
+*.tmp
+*.bak
