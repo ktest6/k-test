@@ -1,0 +1,28 @@
+# K-TEST 채점 파이프라인 의존 패키지
+# 설치:
+#   python -m venv .venv
+#   .venv\Scripts\python.exe -m pip install -r requirements.txt
+#
+# 확인된 환경: Windows 11 / Python 3.13.14
+
+# 한국어 형태소 분석기. KoNLPy와 달리 Java가 필요 없어서 이것을 쓴다.
+# Python 3.13 휠이 정상 제공되는 것을 설치로 확인했다.
+kiwipiepy==0.23.2
+kiwipiepy_model==0.23.0
+
+# 채점 API 서버
+fastapi==0.140.0
+uvicorn[standard]==0.51.0
+
+# 입출력 형식(계약) 정의
+pydantic==2.13.4
+
+# LLM(Gemini) 호출
+google-genai==2.14.0
+
+# .env 파일에서 API 키를 읽기 위한 패키지
+python-dotenv==1.2.2
+
+# 검증·테스트용
+pytest==9.1.1
+httpx==0.28.1
