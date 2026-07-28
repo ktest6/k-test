@@ -43,6 +43,10 @@ ENV/
 .tox/
 htmlcov/
 
+# ---------- AI tooling ----------
+CLAUDE.md
+.claude/
+
 # ---------- Editors / OS ----------
 .vscode/
 .idea/
