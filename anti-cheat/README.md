@@ -118,13 +118,13 @@ anti-cheat/
 
 # 3. 개발 환경 및 구성
 ## 환경
-Python 3.11
-FastAPI
-Uvicorn
-Boto3
-AWS Rekognition
-python-dotenv
-python-multipart
+Python 3.11  
+FastAPI   
+Uvicorn  
+Boto3  
+AWS Rekognition  
+python-dotenv  
+python-multipart  
 
 ## 구성
 프로젝트의 anti-cheat 디렉토리로 이동합니다.
