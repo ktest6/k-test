@@ -24,7 +24,7 @@ supabase link --project-ref <project-ref>
 supabase db push
 ```
 
-또는 `supabase/migrations/0001_init.sql`, `0002_user_registration_fields.sql`을 순서대로 Supabase SQL Editor에 직접 붙여넣어 실행해도 됩니다.
+또는 `supabase/migrations/0001_init.sql`, `0002_user_registration_fields.sql`, `0003_convert_timestamps_to_timestamptz.sql`을 순서대로 Supabase SQL Editor에 직접 붙여넣어 실행해도 됩니다.
 
 로컬 개발 서버 실행:
 
@@ -108,6 +108,10 @@ Supabase Auth(GoTrue)는 사용하지 않고, `tb_user` 테이블 기반의 자�
 `supabase/migrations/0001_init.sql`이 `tb_exam`/`tb_question`/`tb_user`/`tb_exam_session`/`tb_answers`/`tb_score`/`tb_exam_results`/`tb_proctoring_events` 중심의 새 ERD로 교체되었습니다. 이번 작업은 `tb_user`와 Auth/User 모듈만 이 ERD에 맞춰 재작성했고, `test`/`question`/`submission`/`scoring`/`identity-verification` 모듈의 Repository는 아직 예전 테이블명(`tests`, `questions`, `submissions`, `scores`, `identity_verification_*`)을 그대로 참조합니다. 이 모듈들을 실제로 쓰려면 새 ERD(`tb_exam`, `tb_question`, `tb_exam_session` 등)에 맞춰 별도로 재작성이 필요합니다.
 
 ## 알려진 트레이드오프
+
+### 시간대(Timezone) — 저장은 UTC, 표시는 프론트에서 로컬 변환
+
+해외에서 응시하는 외국인 응시자가 있을 수 있으므로, 서버/DB는 항상 UTC 기준으로 저장하고 특정 지역 시간으로 변환해서 저장하지 않습니다. 모든 시간 컬럼은 `TIMESTAMPTZ`이고(`0003_convert_timestamps_to_timestamptz.sql`), 백엔드도 `new Date().toISOString()` / Postgres `now()`로 항상 UTC 값을 다룹니다. 사용자에게 보여줄 시각(응시 시간, 로그 시각 등)은 프론트엔드가 응시자의 로컬 타임존으로 변환해서 표시해야 합니다 — 서버가 특정 국가/지역 시간에 맞춰 저장하는 방식은 쓰지 않습니다. 새 시간 컬럼을 추가할 때도 항상 `TIMESTAMPTZ`를 쓸 것.
 
 ### RLS(Row Level Security)는 켜져 있지만 정책은 없음 — 인가는 애플리케이션 계층 책임
 
