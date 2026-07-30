@@ -70,4 +70,17 @@ export class SupabaseExamRepository implements ExamRepository {
       .returns<ExamRow[]>();
     return (data ?? []).map(toDomain);
   }
+
+  async findLatestRoundNameForYear(year: number): Promise<string | null> {
+    const client = this.supabaseService.getAdminClient();
+    // soft-delete된 회차도 번호 재사용을 막기 위해 deleted_at 필터를 안 건다.
+    const { data } = await client
+      .from(TABLE)
+      .select('round_name')
+      .like('round_name', `${year}%`)
+      .order('round_name', { ascending: false })
+      .limit(1)
+      .maybeSingle<{ round_name: string }>();
+    return data?.round_name ?? null;
+  }
 }

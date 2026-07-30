@@ -26,7 +26,6 @@ export class ExamController {
   @ApiStandardResponse(ExamAdminResponseDto, { status: 201, message: '회차 추가 완료' })
   async create(@Body() dto: CreateExamDto): Promise<ExamAdminResponseDto> {
     const exam = await this.examService.create({
-      roundName: dto.roundName,
       openAt: new Date(dto.openAt),
       closeAt: new Date(dto.closeAt),
       capacity: dto.capacity,
