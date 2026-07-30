@@ -6,6 +6,7 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Public } from '../../../common/decorators/public.decorator';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { AuthService } from '../application/services/auth.service';
+import { AdminSignUpDto } from '../application/dto/admin-sign-up.dto';
 import { AuthResponseDto } from '../application/dto/auth-response.dto';
 import { CheckEmailQueryDto } from '../application/dto/check-email-query.dto';
 import { CheckEmailResponseDto } from '../application/dto/check-email-response.dto';
@@ -34,6 +35,20 @@ export class AuthController {
   @ApiStandardResponse(AuthResponseDto, { status: 201, message: '회원가입 완료' })
   signUp(@Body() dto: SignUpDto): Promise<AuthResponseDto> {
     return this.authService.signUp(dto);
+  }
+
+  @Public()
+  @Post('admin/sign-up')
+  @ApiOperation({
+    summary: '관리자 계정 생성(확인용)',
+    description:
+      '로그인 없이(@Public) 호출하지만, 서버 env(ADMIN_SIGNUP_SECRET)와 일치하는 adminSecret이 ' +
+      '있어야 생성된다 — 첫 관리자를 만들 방법이 없다는 부트스트랩 문제를 이렇게 푼다. ' +
+      '신분증/약관동의 같은 응시자 전용 필드는 받지 않는다.',
+  })
+  @ApiStandardResponse(AuthResponseDto, { status: 201, message: '관리자 계정 생성 완료' })
+  adminSignUp(@Body() dto: AdminSignUpDto): Promise<AuthResponseDto> {
+    return this.authService.adminSignUp(dto);
   }
 
   @Public()

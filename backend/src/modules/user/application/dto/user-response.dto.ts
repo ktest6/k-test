@@ -15,31 +15,31 @@ export class UserResponseDto {
   @ApiProperty({ enum: Role })
   role: Role;
 
-  @ApiProperty()
-  nationality: string;
+  @ApiPropertyOptional({ nullable: true, description: '응시자(USER)만 값 있음, 관리자는 null' })
+  nationality: string | null;
 
-  @ApiProperty({ description: 'YYYY-MM-DD' })
-  birthDate: string;
+  @ApiPropertyOptional({ nullable: true, description: 'YYYY-MM-DD. 응시자(USER)만 값 있음' })
+  birthDate: string | null;
 
-  @ApiProperty({ enum: IdentityDocumentType })
-  idType: IdentityDocumentType;
+  @ApiPropertyOptional({ enum: IdentityDocumentType, nullable: true })
+  idType: IdentityDocumentType | null;
 
-  @ApiProperty()
-  idNumber: string;
+  @ApiPropertyOptional({ nullable: true })
+  idNumber: string | null;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ nullable: true })
   companyCode: string | null;
 
-  @ApiProperty()
-  termsAgreedAt: Date;
+  @ApiPropertyOptional({ nullable: true })
+  termsAgreedAt: Date | null;
 
-  @ApiProperty()
-  privacyAgreedAt: Date;
+  @ApiPropertyOptional({ nullable: true })
+  privacyAgreedAt: Date | null;
 
   @ApiProperty()
   loginAttempts: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ nullable: true })
   lastLoginAt: Date | null;
 
   @ApiProperty()

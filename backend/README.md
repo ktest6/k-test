@@ -120,6 +120,8 @@ Supabase Auth(GoTrue)는 사용하지 않고, `tb_user` 테이블 기반의 자�
 
 **엔드포인트**: `GET /auth/check-email`, `POST /auth/sign-up`, `POST /auth/sign-in`, `POST /auth/refresh`, `POST /auth/sign-out`(stateless라 서버는 아무 것도 하지 않음 — 클라이언트가 토큰 폐기), `GET /auth/me`.
 
+**관리자 계정 생성** (`POST /auth/admin/sign-up`): `tb_user`가 응시자/관리자를 같은 테이블로 관리하므로(`role` 컬럼으로 구분), 응시자 전용 필드(국적/생년월일/신분증/약관동의)는 관리자 계정에 아예 없다 — 마이그레이션 `0004_admin_user_fields_nullable.sql`에서 해당 컬럼을 nullable로 바꾸고, `role = 'ADMIN' OR (모든 응시자 필드 NOT NULL)`을 CHECK 제약으로 강제해 응시자 쪽은 여전히 필수임을 DB 레벨에서 보장한다. 이 엔드포인트는 `@Public()`(로그인 불필요)이지만 서버 env `ADMIN_SIGNUP_SECRET`과 일치하는 `adminSecret`을 요구한다 — 로그인한 관리자만 새 관리자를 만들 수 있게 하면 "첫 관리자를 누가 만드나"라는 부트스트랩 문제가 생기기 때문에, 공유 비밀값으로 게이트를 걸었다. 비밀값 비교는 `timingSafeEqual`로 처리(타이밍 공격 방지).
+
 ### Identity Verification (본인인증)
 
 가장 핵심적인 모듈로, 다음을 지원합니다:

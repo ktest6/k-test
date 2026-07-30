@@ -6,7 +6,7 @@ import { SignUpDto } from './sign-up.dto';
 function validPayload(): Record<string, unknown> {
   return {
     email: 'student@example.com',
-    password: 'StrongPassword123!',
+    password: '12341234!!',
     name: 'GILDONG HONG',
     nationality: 'KOR',
     birthDate: '1995-05-20',

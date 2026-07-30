@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
@@ -5,6 +6,7 @@ import { appConfig } from '../../../../config/configuration';
 import { UnauthorizedDomainException } from '../../../../common/exceptions/domain.exception';
 import { User } from '../../../user/domain/entities/user.entity';
 import { UserService } from '../../../user/application/services/user.service';
+import { AdminSignUpDto } from '../dto/admin-sign-up.dto';
 import { AuthResponseDto } from '../dto/auth-response.dto';
 import { CheckEmailResponseDto } from '../dto/check-email-response.dto';
 import { SignInDto } from '../dto/sign-in.dto';
@@ -43,6 +45,25 @@ export class AuthService {
       companyCode: dto.companyCode,
       termsAgreedAt: now,
       privacyAgreedAt: now,
+    });
+    return this.toAuthResponse(user);
+  }
+
+  /**
+   * 관리자 계정 생성. 로그인 사용자 검증(@Roles(ADMIN)) 대신 공유 비밀값으로
+   * 게이트를 건다 — 그래야 "첫 관리자를 누가 만드나"라는 부트스트랩 문제가
+   * 없다. 이후 관리자 관리 기능(비활성화, 권한 회수 등)은 별도로 ADMIN 전용
+   * 엔드포인트로 만들면 된다.
+   */
+  async adminSignUp(dto: AdminSignUpDto): Promise<AuthResponseDto> {
+    if (!this.isValidAdminSecret(dto.adminSecret)) {
+      throw new UnauthorizedDomainException('관리자 계정 생성 비밀값이 올바르지 않습니다.');
+    }
+
+    const user = await this.userService.registerAdmin({
+      email: dto.email,
+      password: dto.password,
+      name: dto.name,
     });
     return this.toAuthResponse(user);
   }
@@ -106,5 +127,15 @@ export class AuthService {
     const expiresIn = decoded.exp - decoded.iat;
 
     return { accessToken, refreshToken, expiresIn };
+  }
+
+  /** 길이가 다르면 timingSafeEqual이 던지므로 그 경우는 그냥 불일치로 처리. */
+  private isValidAdminSecret(provided: string): boolean {
+    const expected = Buffer.from(this.config.admin.signupSecret);
+    const actual = Buffer.from(provided);
+    if (expected.length !== actual.length) {
+      return false;
+    }
+    return timingSafeEqual(expected, actual);
   }
 }
