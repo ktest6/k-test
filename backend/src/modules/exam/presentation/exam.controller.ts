@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { ApiBearerAuth, ApiNoContentResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiCommonErrorResponses } from '../../../common/decorators/api-common-error-responses.decorator';
 import { ApiStandardResponse } from '../../../common/decorators/api-standard-response.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -77,6 +77,17 @@ export class ExamController {
   ): Promise<ApplyExamResponseDto> {
     const application = await this.examApplicationService.apply(id, user.id);
     return { id: application.id, examId: application.examId, appliedAt: application.appliedAt };
+  }
+
+  @Delete(':id/apply')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: '회차 신청 취소' })
+  @ApiNoContentResponse({ description: '취소 성공 (바디 없음)' })
+  async cancelApplication(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<void> {
+    await this.examApplicationService.cancel(id, user.id);
   }
 
   /** capacity/applicantCount는 관리자에게만 노출 — 응답 DTO 자체를 role에 따라 다르게 만든다. */
