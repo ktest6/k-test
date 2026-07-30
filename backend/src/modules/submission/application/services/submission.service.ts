@@ -42,7 +42,7 @@ export class SubmissionService {
     return this.submissionRepository.listByUserId(userId);
   }
 
-  /** Called by the identity-verification-failed listener on a WARNING action. */
+  /** Called by the verification-failed listener on a WARNING action. */
   async applyWarning(id: string): Promise<Submission> {
     const submission = await this.findById(id);
     if (submission.status === SubmissionStatus.DISQUALIFIED) {
@@ -60,7 +60,7 @@ export class SubmissionService {
     return this.submissionRepository.updateStatus(id, SubmissionStatus.GRADED);
   }
 
-  /** Called by the identity-verification-failed listener on a DISQUALIFICATION action, and by the admin override endpoint. */
+  /** Called by the verification-failed listener on a DISQUALIFICATION action, and by the admin override endpoint. */
   async disqualify(id: string): Promise<Submission> {
     const submission = await this.findById(id);
     if (submission.status === SubmissionStatus.DISQUALIFIED) {

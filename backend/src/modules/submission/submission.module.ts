@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { SUBMISSION_REPOSITORY } from './domain/submission.repository.interface';
-import { IdentityVerificationFailedListener } from './application/listeners/identity-verification-failed.listener';
+import { VerificationFailedListener } from './application/listeners/verification-failed.listener';
 import { SubmissionService } from './application/services/submission.service';
 import { SupabaseSubmissionRepository } from './infrastructure/repositories/supabase-submission.repository';
 import { SubmissionController } from './presentation/submission.controller';
@@ -9,7 +9,7 @@ import { SubmissionController } from './presentation/submission.controller';
   controllers: [SubmissionController],
   providers: [
     SubmissionService,
-    IdentityVerificationFailedListener,
+    VerificationFailedListener,
     { provide: SUBMISSION_REPOSITORY, useClass: SupabaseSubmissionRepository },
   ],
   exports: [SubmissionService],
