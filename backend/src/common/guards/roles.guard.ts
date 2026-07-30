@@ -19,7 +19,7 @@ export class RolesGuard implements CanActivate {
 
     const { user } = context.switchToHttp().getRequest<AuthenticatedRequest>();
     if (!user || !requiredRoles.includes(user.role)) {
-      throw new ForbiddenException('Insufficient role for this action');
+      throw new ForbiddenException('이 작업을 수행할 권한이 없습니다.');
     }
 
     return true;

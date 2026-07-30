@@ -45,7 +45,7 @@ export class JwtAuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const token = this.extractToken(request);
     if (!token) {
-      throw new UnauthorizedException('Missing bearer token');
+      throw new UnauthorizedException('인증 토큰이 없습니다.');
     }
 
     let payload: AccessTokenPayload;
@@ -54,10 +54,10 @@ export class JwtAuthGuard implements CanActivate {
         secret: this.config.jwt.accessSecret,
       });
     } catch {
-      throw new UnauthorizedException('Invalid or expired token');
+      throw new UnauthorizedException('유효하지 않거나 만료된 토큰입니다.');
     }
     if (payload.type === 'refresh') {
-      throw new UnauthorizedException('Refresh tokens cannot be used to authenticate requests');
+      throw new UnauthorizedException('리프레시 토큰으로는 인증할 수 없습니다.');
     }
 
     request.user = { id: payload.sub, email: payload.email, role: payload.role };
