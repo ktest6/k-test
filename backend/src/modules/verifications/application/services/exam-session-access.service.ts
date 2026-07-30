@@ -16,12 +16,12 @@ interface ExamSessionOwnerRow {
 export class ExamSessionAccessService {
   constructor(private readonly supabaseService: SupabaseService) {}
 
-  async assertOwnership(userId: string, sessionId: string): Promise<void> {
+  async assertOwnership(userId: string, examSessionId: string): Promise<void> {
     const client = this.supabaseService.getAdminClient();
     const { data: session } = await client
       .from('tb_exam_session')
       .select('exam_session_id, user_id')
-      .eq('exam_session_id', Number(sessionId))
+      .eq('exam_session_id', Number(examSessionId))
       .maybeSingle<ExamSessionOwnerRow>();
 
     if (!session || String(session.user_id) !== userId) {

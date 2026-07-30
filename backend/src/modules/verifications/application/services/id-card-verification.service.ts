@@ -25,13 +25,13 @@ export class IdCardVerificationService {
     // 1) 전달받은 경로가 실제로 이 사용자 소유 폴더 아래인지 확인.
     // upload-url 발급 단계에서 이미 서버가 경로를 정해줬으므로(바꿔치기 불가),
     // 여기서는 그 경로가 그대로 전달됐는지 한 번 더 확인하는 방어 계층이다.
-    const expectedPrefix = `${userId}/${dto.sessionId}/`;
+    const expectedPrefix = `${userId}/${dto.examSessionId}/`;
     if (!dto.idCardPath.startsWith(expectedPrefix) || !dto.facePath.startsWith(expectedPrefix)) {
       throw new ForbiddenDomainException('본인 파일 경로가 아닙니다.');
     }
 
     // 2) 세션 소유자 확인
-    await this.examSessionAccessService.assertOwnership(userId, dto.sessionId);
+    await this.examSessionAccessService.assertOwnership(userId, dto.examSessionId);
 
     // 3) FastAPI(VM)로 얼굴 대조 요청
     // TODO: FastAPI 연동 준비되면 주석 해제.
@@ -54,7 +54,7 @@ export class IdCardVerificationService {
 
     // 4) 결과 로그 저장
     await client.from('identity_logs').insert({
-      exam_session_id: Number(dto.sessionId),
+      exam_session_id: Number(dto.examSessionId),
       id_card_path: dto.idCardPath,
       face_path: dto.facePath,
       matched,
