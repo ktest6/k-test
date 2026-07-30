@@ -9,13 +9,21 @@ import { ExamApplicationService } from './exam-application.service';
 import { ExamService } from './exam.service';
 
 function buildExam(
-  overrides: Partial<{ openAt: Date; closeAt: Date; capacity: number }> = {},
+  overrides: Partial<{
+    applicationOpenAt: Date;
+    applicationCloseAt: Date;
+    openAt: Date;
+    closeAt: Date;
+    capacity: number;
+  }> = {},
 ): Exam {
   return new Exam(
     '1',
     '2026년 1회차',
-    overrides.openAt ?? new Date('2026-01-01T00:00:00.000Z'),
-    overrides.closeAt ?? new Date('2026-12-31T23:59:59.000Z'),
+    overrides.applicationOpenAt ?? new Date('2026-01-01T00:00:00.000Z'),
+    overrides.applicationCloseAt ?? new Date('2026-12-31T23:59:59.000Z'),
+    overrides.openAt ?? new Date('2027-01-01T00:00:00.000Z'),
+    overrides.closeAt ?? new Date('2027-01-14T23:59:59.000Z'),
     overrides.capacity ?? 100,
     new Date(),
   );
@@ -32,8 +40,8 @@ function buildRepository(overrides: Partial<ExamApplicationRepository> = {}) {
 }
 
 describe('ExamApplicationService.apply', () => {
-  it('rejects when the exam is not currently OPEN', async () => {
-    const exam = buildExam({ openAt: new Date('2099-01-01T00:00:00.000Z') }); // SCHEDULED, far future
+  it('rejects when the current time is outside the application period', async () => {
+    const exam = buildExam({ applicationOpenAt: new Date('2099-01-01T00:00:00.000Z') }); // 아직 신청 시작 전
     const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
     const repository = buildRepository();
     const service = new ExamApplicationService(examService, repository);

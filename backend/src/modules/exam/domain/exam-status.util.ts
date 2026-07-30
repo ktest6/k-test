@@ -13,3 +13,14 @@ export function computeExamStatus(openAt: Date, closeAt: Date, now: Date = new D
   }
   return ExamStatus.OPEN;
 }
+
+/** 신청 가능 기간(application_open_at ~ application_close_at)인지 — 경계값 포함. */
+export function isApplicationOpen(
+  applicationOpenAt: Date,
+  applicationCloseAt: Date,
+  now: Date = new Date(),
+): boolean {
+  return (
+    now.getTime() >= applicationOpenAt.getTime() && now.getTime() <= applicationCloseAt.getTime()
+  );
+}

@@ -9,6 +9,8 @@ const TABLE = 'tb_exam';
 interface ExamRow {
   exam_id: number;
   round_name: string;
+  application_open_at: string;
+  application_close_at: string;
   open_at: string;
   close_at: string;
   capacity: number;
@@ -19,6 +21,8 @@ function toDomain(row: ExamRow): Exam {
   return new Exam(
     String(row.exam_id),
     row.round_name,
+    new Date(row.application_open_at),
+    new Date(row.application_close_at),
     new Date(row.open_at),
     new Date(row.close_at),
     row.capacity,
@@ -36,6 +40,8 @@ export class SupabaseExamRepository implements ExamRepository {
       .from(TABLE)
       .insert({
         round_name: input.roundName,
+        application_open_at: input.applicationOpenAt.toISOString(),
+        application_close_at: input.applicationCloseAt.toISOString(),
         open_at: input.openAt.toISOString(),
         close_at: input.closeAt.toISOString(),
         capacity: input.capacity,

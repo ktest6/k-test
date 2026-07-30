@@ -8,8 +8,7 @@ import {
   EXAM_APPLICATION_REPOSITORY,
   ExamApplicationRepository,
 } from '../../domain/exam-application.repository.interface';
-import { ExamStatus } from '../../domain/enums/exam-status.enum';
-import { computeExamStatus } from '../../domain/exam-status.util';
+import { isApplicationOpen } from '../../domain/exam-status.util';
 import { ExamService } from './exam.service';
 
 @Injectable()
@@ -23,7 +22,7 @@ export class ExamApplicationService {
   async apply(examId: string, userId: string): Promise<ExamApplication> {
     const exam = await this.examService.findById(examId);
 
-    if (computeExamStatus(exam.openAt, exam.closeAt) !== ExamStatus.OPEN) {
+    if (!isApplicationOpen(exam.applicationOpenAt, exam.applicationCloseAt)) {
       throw new ConflictDomainException('지금은 신청 기간이 아닙니다.');
     }
 

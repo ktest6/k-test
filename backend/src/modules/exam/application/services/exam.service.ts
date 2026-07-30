@@ -7,6 +7,8 @@ import { Exam } from '../../domain/entities/exam.entity';
 import { EXAM_REPOSITORY, ExamRepository } from '../../domain/exam.repository.interface';
 
 export interface CreateExamRequest {
+  applicationOpenAt: Date;
+  applicationCloseAt: Date;
   openAt: Date;
   closeAt: Date;
   capacity: number;
@@ -20,7 +22,13 @@ export class ExamService {
 
   async create(input: CreateExamRequest): Promise<Exam> {
     if (input.closeAt.getTime() <= input.openAt.getTime()) {
-      throw new ConflictDomainException('마감 시각은 시작 시각보다 나중이어야 합니다.');
+      throw new ConflictDomainException('시험 마감 시각은 시작 시각보다 나중이어야 합니다.');
+    }
+    if (input.applicationCloseAt.getTime() <= input.applicationOpenAt.getTime()) {
+      throw new ConflictDomainException('신청 마감 시각은 신청 시작 시각보다 나중이어야 합니다.');
+    }
+    if (input.applicationCloseAt.getTime() > input.openAt.getTime()) {
+      throw new ConflictDomainException('신청 마감 시각은 시험 시작 시각보다 늦을 수 없습니다.');
     }
 
     const roundName = await this.generateRoundName(new Date().getFullYear());
