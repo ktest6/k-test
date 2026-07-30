@@ -132,13 +132,14 @@ assessment/
 │   │   └── transcript.py  STT 전사 보정 + 보정 위치 기록
 │   ├── scoring/
 │   │   ├── schema.py      백엔드와의 REST 계약 (여기를 바꾸면 백엔드가 깨진다)
+│   │   ├── validity.py    채점 전 답안 유효성 가드 4종 (규칙만 쓴다)
 │   │   ├── combine.py     자질 -> 영역 점수 -> 종합 점수
 │   │   ├── pipeline.py    전체 조립 + 신뢰도 판정
 │   │   └── finalize.py    시험 전체 최종 등급·백분위
 │   ├── resources/       어휘 등급 목록 등 데이터 파일
 │   └── api.py           FastAPI 엔드포인트
 ├── scripts/             실행해서 눈으로 값을 확인하는 검증 스크립트
-└── tests/               pytest 회귀 방지 (86개)
+└── tests/               pytest 회귀 방지 (111개)
 ```
 
 자질을 추가할 때 **규칙 계산이면 `features/lexical.py`, 판단이 필요하면 `features/errors.py`** 입니다.
@@ -185,6 +186,15 @@ python scripts/check_pipeline_demo.py
 ```
 
 3문항(말하기 2 + 쓰기 1) 채점부터 최종 등급까지 전부 출력합니다.
+
+### 악성 답안이 막히는지 확인
+
+```bash
+python scripts/check_guards.py
+python scripts/check_guards.py --no-llm
+```
+
+영어 답안·단어 반복 스팸·지시문 베끼기·초단답을 넣어 가드 적용 전후를 나란히 보여줍니다.
 
 ### 테스트
 

@@ -22,10 +22,21 @@ from .features.lexical import (
     extract_lexical_features,
     is_default_vocab_list,
 )
-from .llm.client import GeminiClient
+from .llm.client import GeminiClient, client_for_errors
 from .scoring.combine import DEFAULT_WEIGHTS
 from .scoring.finalize import finalize_session
 from .scoring.pipeline import score_submission
+from .scoring.validity import (
+    FLAG_NOT_KOREAN,
+    FLAG_NOT_SENTENCES,
+    FLAG_PROMPT_COPY,
+    FLAG_TOO_SHORT,
+    MAX_PROMPT_OVERLAP,
+    MIN_EOJEOL_COUNT,
+    MIN_HANGUL_RATIO,
+    MIN_SENTENCE_RATIO_HARD,
+    PROMPT_NGRAM_SIZE,
+)
 from .scoring.schema import (
     SCORING_VERSION,
     FinalizeRequest,
@@ -94,6 +105,9 @@ def health() -> dict:
         "scoring_version": SCORING_VERSION,
         "llm_available": client.available,
         "llm_model": client.model_name,
+        # 오류 자질(조사·어미·어휘·높임법)만 다른 모델로 돌린다.
+        # 배포한 뒤 GEMINI_MODEL_ERRORS 가 제대로 들어갔는지 여기서 확인한다
+        "llm_model_errors": client_for_errors(client).model_name,
         # 임시값을 쓰고 있는지 한눈에 보이게 함께 알려준다
         "weights_profile": DEFAULT_WEIGHTS.profile,
         "weights_provisional": DEFAULT_WEIGHTS.provisional,
@@ -152,6 +166,47 @@ def feature_catalog() -> dict:
             "note": (
                 "보정 구간과 겹치는 오류 지적에는 신뢰도 낮음 표시가 붙고 "
                 "그 건수가 meta.transcript_low_confidence_errors 에 나온다."
+            ),
+        },
+        # 채점 전에 돌리는 답안 유효성 가드. 어떤 표시가 나올 수 있는지 미리 알려 준다.
+        # 프론트가 무효 사유 문구를 코드에 베껴 넣지 않고 flag 로 분기할 수 있게 하려는 것이다
+        "answer_validity": {
+            "checked_before_llm": True,
+            "rule_based_only": True,
+            "meta_fields": ["answer_valid", "validity_flags", "validity_reason"],
+            "guards": [
+                {
+                    "flag": FLAG_NOT_KOREAN,
+                    "label": "한글 비율",
+                    "effect": "invalid",
+                    "threshold": MIN_HANGUL_RATIO,
+                    "unit": "공백·숫자·문장부호를 뺀 글자 중 한글 비율",
+                },
+                {
+                    "flag": FLAG_TOO_SHORT,
+                    "label": "최소 길이",
+                    "effect": "language_use_partial",
+                    "threshold": MIN_EOJEOL_COUNT,
+                    "unit": "어절",
+                },
+                {
+                    "flag": FLAG_PROMPT_COPY,
+                    "label": "지시문 겹침",
+                    "effect": "invalid",
+                    "threshold": MAX_PROMPT_OVERLAP,
+                    "unit": f"지시문과 그대로 겹치는 글자 비율({PROMPT_NGRAM_SIZE}글자 단위)",
+                },
+                {
+                    "flag": FLAG_NOT_SENTENCES,
+                    "label": "문장 성립",
+                    "effect": "invalid_or_content_partial",
+                    "threshold": MIN_SENTENCE_RATIO_HARD,
+                    "unit": "어미가 붙은 문장의 비율",
+                },
+            ],
+            "note": (
+                "invalid 이면 overall_score 와 overall_grade 가 null 이고 "
+                "meta.answer_valid 가 false 다. 기준값은 전부 임시값이다."
             ),
         },
         # 등급 커트라인을 백엔드가 알 필요는 없지만, 확인용으로 열어 둔다.

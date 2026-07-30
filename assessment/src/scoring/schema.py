@@ -210,6 +210,16 @@ class ScoringMeta(BaseModel):
     weights_profile: str = "provisional_v0"
     llm_used: bool = False
     llm_model: str | None = None
+    # 오류 자질(조사·어미·어휘·높임법)만 다른 모델로 돌린다. 나중에 추가한 값이라 기본값이 있다.
+    # 상위 모델이라야 잡히는 오류가 있어서(높임법 오류가 실측으로 확인됐다) 갈라 두었고,
+    # 어떤 모델이 문법을 판정했는지가 남아야 채점 결과를 나중에 재현할 수 있다.
+    llm_model_errors: str | None = Field(
+        default=None,
+        description=(
+            "오류 자질 추출에 실제로 쓴 모델 이름. llm_model 과 다를 수 있다. "
+            "LLM을 쓰지 않았으면 null 이다"
+        ),
+    )
     dropped_citations: int = Field(
         default=0, description="원문에 없어서 버린 LLM 인용 개수",
     )
@@ -235,6 +245,34 @@ class ScoringMeta(BaseModel):
             "warnings 를 읽어서 판단하지 말고 이 값 하나만 보면 된다. "
             "등급을 확정 통보해도 되는지는 다른 문제이며 weights_provisional 로 따로 본다"
         ),
+    )
+
+    # --- 답안 유효성 가드 (전부 나중에 추가한 값이고 기본값이 있다) ---
+    # 가드를 안 태우면 지금까지와 똑같이 answer_valid=True 인 채로 나간다.
+    #
+    # 왜 이 값이 필요한가:
+    # 한국어를 한 글자도 안 쓴 답안이 문법 오류가 0건이라는 이유로 B등급을 받았다(실측).
+    # 그래서 채점 전에 '이 글이 채점 대상이 되는 답안인가'를 규칙으로 먼저 확인한다.
+    # 무효 판정이 나면 overall_score 와 overall_grade 가 null 로 나가므로,
+    # 백엔드는 점수를 읽기 전에 이 값을 봐야 한다.
+    answer_valid: bool = Field(
+        default=True,
+        description=(
+            "답안이 채점 대상으로 성립하는지. False 면 overall_score 와 overall_grade 가 "
+            "null 이고 safe_to_show_candidate 도 False 다. 사유는 validity_reason 에 있다"
+        ),
+    )
+    validity_flags: list[str] = Field(
+        default_factory=list,
+        description=(
+            "걸린 가드의 표시 이름 목록. 문구가 아니라 이 값으로 분기한다. "
+            "not_korean(한국어가 아님) / prompt_copy(지시문 베끼기) 는 채점 무효, "
+            "too_short(너무 짧음) / not_sentences(문장이 아님) 는 경고만인 경우가 있다"
+        ),
+    )
+    validity_reason: str = Field(
+        default="",
+        description="가드에 걸렸을 때 그 사유. 사람이 읽는 한 문장이다",
     )
 
     # --- STT 전사 보정 관련 (전부 나중에 추가한 값이고 기본값이 있다) ---
