@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiNoContentResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiCommonErrorResponses } from '../../../common/decorators/api-common-error-responses.decorator';
 import { ApiStandardResponse } from '../../../common/decorators/api-standard-response.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -13,6 +13,7 @@ import { CheckEmailResponseDto } from '../application/dto/check-email-response.d
 import { MeResponseDto } from '../application/dto/me-response.dto';
 import { RefreshTokenDto } from '../application/dto/refresh-token.dto';
 import { SignInDto } from '../application/dto/sign-in.dto';
+import { SignOutResponseDto } from '../application/dto/sign-out-response.dto';
 import { SignUpDto } from '../application/dto/sign-up.dto';
 
 @ApiTags('Auth')
@@ -71,15 +72,15 @@ export class AuthController {
 
   @ApiBearerAuth()
   @Post('sign-out')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: '로그아웃',
     description:
       '자체 발급 JWT는 상태를 저장하지 않으므로(stateless) 서버가 할 일은 없다 — 클라이언트가 보유한 토큰을 폐기하면 된다. 엔드포인트는 프론트엔드 흐름의 대칭성을 위해 유지한다.',
   })
-  @ApiNoContentResponse({ description: '로그아웃 성공 (바디 없음)' })
-  signOut(): void {
-    return;
+  @ApiStandardResponse(SignOutResponseDto, { message: '로그아웃되었습니다.' })
+  signOut(): SignOutResponseDto {
+    return {};
   }
 
   @ApiBearerAuth()
