@@ -8,14 +8,15 @@ export class User {
     /** 영문성명 (여권 표기 기준) — 응시 당일 신분증 대조용. */
     readonly name: string,
     readonly role: Role,
-    readonly nationality: string,
+    /** 아래 신원/약관동의 필드는 응시자(USER) 전용 — 관리자(ADMIN)는 전부 null. */
+    readonly nationality: string | null,
     /** ISO date string (YYYY-MM-DD). */
-    readonly birthDate: string,
-    readonly idType: IdentityDocumentType,
-    readonly idNumber: string,
+    readonly birthDate: string | null,
+    readonly idType: IdentityDocumentType | null,
+    readonly idNumber: string | null,
     readonly companyCode: string | null,
-    readonly termsAgreedAt: Date,
-    readonly privacyAgreedAt: Date,
+    readonly termsAgreedAt: Date | null,
+    readonly privacyAgreedAt: Date | null,
     readonly loginAttempts: number,
     readonly lastLoginAt: Date | null,
     readonly createdAt: Date,

@@ -22,6 +22,10 @@ export interface AppConfig {
     refreshSecret: string;
     refreshExpiresIn: string;
   };
+  admin: {
+    /** 관리자 계정 생성 시 요구하는 공유 비밀값 — 첫 관리자 부트스트랩용. */
+    signupSecret: string;
+  };
 }
 
 export const appConfig = registerAs('app', (): AppConfig => ({
@@ -51,5 +55,8 @@ export const appConfig = registerAs('app', (): AppConfig => ({
     accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN ?? '1h',
     refreshSecret: process.env.JWT_REFRESH_SECRET ?? '',
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? '14d',
+  },
+  admin: {
+    signupSecret: process.env.ADMIN_SIGNUP_SECRET ?? '',
   },
 }));

@@ -8,6 +8,7 @@ import { SupabaseService } from '../../../../infrastructure/supabase/supabase.se
 import { User } from '../../domain/entities/user.entity';
 import { IdentityDocumentType } from '../../domain/enums/identity-document-type.enum';
 import {
+  RegisterAdminInput,
   RegisterUserInput,
   UpdateUserProfileInput,
   UserCredentials,
@@ -43,6 +44,25 @@ export class SupabaseUserRepository implements UserRepository {
 
     if (error || !data) {
       throw new ConflictDomainException(error?.message ?? '회원가입에 실패했습니다.');
+    }
+    return UserMapper.toDomain(data);
+  }
+
+  async registerAdmin(input: RegisterAdminInput): Promise<User> {
+    const client = this.supabaseService.getAdminClient();
+    const { data, error } = await client
+      .from(TABLE)
+      .insert({
+        email: input.email,
+        password: input.passwordHash,
+        name: input.name,
+        role: Role.ADMIN,
+      })
+      .select()
+      .single<UserRow>();
+
+    if (error || !data) {
+      throw new ConflictDomainException(error?.message ?? '관리자 계정 생성에 실패했습니다.');
     }
     return UserMapper.toDomain(data);
   }

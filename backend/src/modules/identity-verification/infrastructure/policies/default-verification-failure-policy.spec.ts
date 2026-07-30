@@ -21,6 +21,9 @@ function buildConfig(maxFailuresBeforeDisqualification: number): AppConfig {
       refreshSecret: 'test-refresh-secret',
       refreshExpiresIn: '14d',
     },
+    admin: {
+      signupSecret: 'test-admin-signup-secret',
+    },
   };
 }
 

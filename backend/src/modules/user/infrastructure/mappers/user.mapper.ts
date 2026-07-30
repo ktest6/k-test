@@ -8,13 +8,13 @@ export interface UserRow {
   password: string;
   name: string;
   role: Role;
-  nationality: string;
-  birth_date: string;
-  id_type: IdentityDocumentType;
-  id_number: string;
+  nationality: string | null;
+  birth_date: string | null;
+  id_type: IdentityDocumentType | null;
+  id_number: string | null;
   company_code: string | null;
-  terms_agreed_at: string;
-  privacy_agreed_at: string;
+  terms_agreed_at: string | null;
+  privacy_agreed_at: string | null;
   login_attempts: number;
   last_login_at: string | null;
   created_at: string;
@@ -32,8 +32,8 @@ export class UserMapper {
       row.id_type,
       row.id_number,
       row.company_code,
-      new Date(row.terms_agreed_at),
-      new Date(row.privacy_agreed_at),
+      row.terms_agreed_at ? new Date(row.terms_agreed_at) : null,
+      row.privacy_agreed_at ? new Date(row.privacy_agreed_at) : null,
       row.login_attempts,
       row.last_login_at ? new Date(row.last_login_at) : null,
       new Date(row.created_at),
