@@ -16,11 +16,14 @@ anti-cheat/
 │
 ├── app/
 │   ├── main.py
-│   │   └── FastAPI 애플리케이션 실행
+│   │   └── FastAPI 애플리케이션 실행 및 API Router 등록
 │   │
 │   ├── api/
 │   │   ├── identity.py
 │   │   │   └── 시험 시작 전 본인 인증 요청 수신
+│   │   │
+│   │   ├── earphone_detection.py
+│   │   │   └── 시험 시작 전 귀 이미지 수신 및 이어폰 검사 요청
 │   │   │
 │   │   └── monitoring.py
 │   │       └── 시험 중 프레임 이미지 수신
@@ -29,17 +32,20 @@ anti-cheat/
 │   │   ├── identity.py
 │   │   │   └── 본인 인증 요청 및 응답 구조 정의
 │   │   │
+│   │   ├── earphone_detection.py
+│   │   │   └── 이어폰 탐지 요청 및 응답 구조 정의
+│   │   │
 │   │   └── monitoring.py
 │   │       └── 모니터링 요청 및 응답 구조 정의
 │   │
 │   └── core/
 │       └── config.py
-│           └── 얼굴 유사도 및 이벤트 Threshold 설정
+│           └── 얼굴 유사도, 이벤트 및 이어폰 탐지 Threshold 설정
 │
 ├── modules/
 │   ├── aws_rekognition/
 │   │   └── client.py
-│   │       └── AWS Rekognition Client 생성
+│   │       └── AWS Rekognition Client 생성 및 공통 제공
 │   │
 │   ├── identity_verification/
 │   │   ├── service.py
@@ -47,6 +53,16 @@ anti-cheat/
 │   │   │
 │   │   └── face_compare.py
 │   │       └── CompareFaces 호출 및 결과 해석
+│   │
+│   ├── earphone_detection/
+│   │   ├── detector.py
+│   │   │   └── AWS Rekognition을 이용해 이미지에서 이어폰 후보 탐지
+│   │   │
+│   │   ├── analyzer.py
+│   │   │   └── 탐지 결과를 분석하여 이어폰 착용 여부 판단
+│   │   │
+│   │   └── service.py
+│   │       └── 귀 이미지 검증부터 최종 응답 생성까지 전체 흐름 관리
 │   │
 │   ├── cheating_detection/
 │   │   ├── face_detection.py
@@ -69,14 +85,17 @@ anti-cheat/
 │   │
 │   └── common/
 │       ├── exceptions.py
-│       │   └── 공통 예외 정의
+│       │   └── 본인 인증, 모니터링 및 이어폰 탐지 공통 예외 정의
 │       │
 │       └── image_validation.py
-│           └── 입력 이미지 bytes 검증
+│           └── 전달받은 이미지 bytes 공통 검증
 │
 ├── scripts/
 │   ├── run_identity_verification.py
 │   │   └── 로컬 이미지 기반 본인 인증 테스트
+│   │
+│   ├── run_earphone_detection.py
+│   │   └── 로컬 귀 이미지 기반 이어폰 탐지 테스트
 │   │
 │   └── run_monitoring.py
 │       └── 로컬 이미지 기반 시험 중 모니터링 테스트
@@ -94,16 +113,31 @@ anti-cheat/
 ---
 
 # 2. 주요 기능
+
 ## 시험 시작 전 본인 인증
+
 - 신분증 또는 수험표 이미지 입력
 - 시험 시작 전 웹캠 캡처 이미지 입력
 - AWS Rekognition CompareFaces 호출
 - 두 이미지의 얼굴 유사도 비교
 - 설정된 Threshold를 기준으로 본인 여부 판단
 - 본인 인증 결과 반환 및 JSON 로그 저장
-- 신분증과 사전 입력 정보 비교 -> 논의 필요
+- 신분증과 사전 입력 정보 비교 → 논의 필요
+
+## 시험 시작 전 이어폰 탐지
+
+- 응시자의 왼쪽 귀 이미지 입력
+- 응시자의 오른쪽 귀 이미지 입력
+- 입력 이미지 형식 및 크기 검증
+- AWS Rekognition DetectLabels 호출
+- Earbuds, Headphones 등 이어폰 관련 Label 분석
+- 설정된 Threshold를 기준으로 이어폰 탐지 여부 판단
+- 왼쪽 귀와 오른쪽 귀 검사 결과 반환
+- 한쪽이라도 이어폰이 탐지되면 시험 시작 제한
+- 탐지 결과와 재촬영 필요 여부 반환
 
 ## 시험 중 모니터링
+
 - 시험 중 프레임 이미지 수신
 - 얼굴 검출
 - 얼굴 화면 이탈 감지
@@ -112,19 +146,21 @@ anti-cheat/
 - 위험도와 Decision 결정
 - 이벤트 메타데이터 생성
 - 이벤트 JSON 로그 저장
-- 객체 탐지(휴대폰, 이어폰 등) -> 개발 전
+- 휴대폰 등 추가 객체 탐지 → 개발 전
 
 ---
 
 # 3. 개발 환경 및 구성
+
 ## 환경
-Python 3.11
-FastAPI
-Uvicorn
-Boto3
-AWS Rekognition
-python-dotenv
-python-multipart
+
+- Python 3.11
+- FastAPI
+- Uvicorn
+- Boto3
+- AWS Rekognition
+- python-dotenv
+- python-multipart
 
 ## 구성
 프로젝트의 anti-cheat 디렉토리로 이동합니다.
@@ -237,6 +273,61 @@ anti-cheat/
     - 얼굴이 없는 이미지
     - 얼굴이 검출되지 않는 이미지
     - 입력 이미지 오류
+
+## 시험 시작 전 이어폰 탐지
+현재는 웹에서 귀 이미지를 전달받는 구조가 완성되지 않았으므로, 로컬 이미지 파일을 사용해 기능을 테스트합니다.
+
+이어폰 탐지 테스트에는 다음 이미지가 필요합니다.
+
+- 왼쪽 귀 이미지
+    - 이어폰을 착용하지 않은 이미지
+    - 유선 이어폰을 착용한 이미지
+    - 무선 이어폰을 착용한 이미지
+    - 귀가 제대로 보이지 않는 이미지
+- 오른쪽 귀 이미지
+    - 이어폰을 착용하지 않은 이미지
+    - 유선 이어폰을 착용한 이미지
+    - 무선 이어폰을 착용한 이미지
+    - 귀가 제대로 보이지 않는 이미지
+
+실제 응시자의 얼굴 및 개인정보가 포함된 이미지는 GitHub에 업로드하지 않습니다.
+
+예시:
+```
+anti-cheat/
+└── data/
+    ├── earphone/
+    │   ├── left_ear.jpg
+    │   └── right_ear.jpg
+    │
+    └── logs/
+```
+
+이미지 확장자 형식은 jpg, jpeg, png 등이 가능합니다.
+
+로컬 테스트 이미지 경로는 run_earphone_detection.py의 설정과 일치해야 합니다.
+
+### 실행
+1. 가상환경을 활성화합니다.
+`source face_api/bin/activate`
+
+2. anti-cheat 디렉토리에서 실행합니다.
+`python scripts/run_earphone_detection.py`
+
+### 실행 결과
+
+정상적으로 실행되면 다음 항목을 확인할 수 있습니다.
+
+- 왼쪽 귀 이미지 검증 결과
+- 오른쪽 귀 이미지 검증 결과
+- AWS Rekognition DetectLabels 호출 결과
+- 탐지된 이어폰 관련 Label
+- 탐지 confidence
+- 적용된 Threshold
+- 왼쪽 귀 이어폰 탐지 여부
+- 오른쪽 귀 이어폰 탐지 여부
+- 재촬영 필요 여부
+- 최종 시험 시작 가능 여부
 
 ## 시험 모니터링
 현재는 웹에서 이미지를 전달받는 구조가 완성되지 않았으므로, 로컬 이미지 파일을 사용해 기능을 테스트 합니다.
