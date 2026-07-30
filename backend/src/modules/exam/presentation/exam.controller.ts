@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiNoContentResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiCommonErrorResponses } from '../../../common/decorators/api-common-error-responses.decorator';
 import { ApiStandardResponse } from '../../../common/decorators/api-standard-response.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -9,6 +9,7 @@ import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user
 import { Exam } from '../domain/entities/exam.entity';
 import { computeExamStatus } from '../domain/exam-status.util';
 import { ApplyExamResponseDto } from '../application/dto/apply-exam-response.dto';
+import { CancelExamApplicationResponseDto } from '../application/dto/cancel-exam-application-response.dto';
 import { CreateExamDto } from '../application/dto/create-exam.dto';
 import { ExamAdminResponseDto } from '../application/dto/exam-admin-response.dto';
 import { ExamResponseDto } from '../application/dto/exam-response.dto';
@@ -82,14 +83,14 @@ export class ExamController {
   }
 
   @Delete(':id/apply')
-  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: '회차 신청 취소' })
-  @ApiNoContentResponse({ description: '취소 성공 (바디 없음)' })
+  @ApiStandardResponse(CancelExamApplicationResponseDto, { message: '회차 신청이 취소되었습니다.' })
   async cancelApplication(
     @Param('id') id: string,
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<void> {
+  ): Promise<CancelExamApplicationResponseDto> {
     await this.examApplicationService.cancel(id, user.id);
+    return { examId: id };
   }
 
   /** capacity/applicantCount는 관리자에게만 노출 — 응답 DTO 자체를 role에 따라 다르게 만든다. */

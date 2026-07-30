@@ -97,12 +97,13 @@ describe('ExamController.apply', () => {
 });
 
 describe('ExamController.cancelApplication', () => {
-  it('delegates to ExamApplicationService.cancel', async () => {
+  it('delegates to ExamApplicationService.cancel and returns the cancelled examId', async () => {
     const { service, cancel } = buildApplicationService();
     const controller = new ExamController({} as unknown as ExamService, service);
 
-    await controller.cancelApplication('1', buildUser(Role.USER));
+    const result = await controller.cancelApplication('1', buildUser(Role.USER));
 
     expect(cancel).toHaveBeenCalledWith('1', '1');
+    expect(result).toEqual({ examId: '1' });
   });
 });
