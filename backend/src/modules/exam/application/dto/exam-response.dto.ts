@@ -9,10 +9,16 @@ export class ExamResponseDto {
   @ApiProperty()
   roundName: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: '신청 접수 시작 시각' })
+  applicationOpenAt: Date;
+
+  @ApiProperty({ description: '신청 접수 마감 시각' })
+  applicationCloseAt: Date;
+
+  @ApiProperty({ description: '시험 응시 시작 시각' })
   openAt: Date;
 
-  @ApiProperty()
+  @ApiProperty({ description: '시험 응시 마감 시각' })
   closeAt: Date;
 
   @ApiProperty({ enum: ExamStatus, description: 'open_at/close_at 기준으로 매번 계산됨' })

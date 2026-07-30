@@ -31,6 +31,8 @@ export class ExamController {
   @ApiStandardResponse(ExamAdminResponseDto, { status: 201, message: '회차 추가 완료' })
   async create(@Body() dto: CreateExamDto): Promise<ExamAdminResponseDto> {
     const exam = await this.examService.create({
+      applicationOpenAt: new Date(dto.applicationOpenAt),
+      applicationCloseAt: new Date(dto.applicationCloseAt),
       openAt: new Date(dto.openAt),
       closeAt: new Date(dto.closeAt),
       capacity: dto.capacity,
@@ -68,7 +70,7 @@ export class ExamController {
   @Post(':id/apply')
   @ApiOperation({
     summary: '회차 신청',
-    description: '신청 기간(OPEN)이 아니거나, 이미 신청했거나, 정원이 찼으면 409.',
+    description: '신청 접수 기간이 아니거나, 이미 신청했거나, 정원이 찼으면 409.',
   })
   @ApiStandardResponse(ApplyExamResponseDto, { status: 201, message: '회차 신청 완료' })
   async apply(
@@ -98,6 +100,8 @@ export class ExamController {
     const base: ExamResponseDto = {
       id: exam.id,
       roundName: exam.roundName,
+      applicationOpenAt: exam.applicationOpenAt,
+      applicationCloseAt: exam.applicationCloseAt,
       openAt: exam.openAt,
       closeAt: exam.closeAt,
       status: computeExamStatus(exam.openAt, exam.closeAt),

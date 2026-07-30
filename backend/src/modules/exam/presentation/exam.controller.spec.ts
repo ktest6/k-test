@@ -9,6 +9,8 @@ function buildExam(): Exam {
   return new Exam(
     '1',
     '2026년 1회차',
+    new Date('2026-07-01T00:00:00.000Z'),
+    new Date('2026-07-14T23:59:59.000Z'),
     new Date('2026-08-01T00:00:00.000Z'),
     new Date('2026-08-14T23:59:59.000Z'),
     100,
