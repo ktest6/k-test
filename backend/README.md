@@ -32,7 +32,7 @@ supabase db push
 npm run start:dev
 ```
 
-기동 후 `http://localhost:3000/docs`에서 Swagger UI로 전체 API(Auth/User/Identity Verification/Test/Question/Submission/Scoring/AI, 8개 태그)를 확인할 수 있습니다.
+기동 후 `http://localhost:3000/docs`에서 Swagger UI로 전체 API(Auth/User/Identity Verification/Exam/Question/Submission/Scoring/AI, 8개 태그)를 확인할 수 있습니다.
 
 ### 자주 쓰는 명령어
 
@@ -66,7 +66,7 @@ modules/<name>/
 └── presentation/       # 컨트롤러, Swagger 문서
 ```
 
-기본 모듈: `auth`, `user`, `identity-verification`, `test`, `question`, `submission`, `scoring`, `ai`.
+기본 모듈: `auth`, `user`, `identity-verification`, `exam`, `question`, `submission`, `scoring`, `ai`.
 
 ### 공통 응답 형식 (Response Envelope)
 
@@ -133,13 +133,22 @@ Supabase Auth(GoTrue)는 사용하지 않고, `tb_user` 테이블 기반의 자�
 
 **모듈 간 결합**: 인증 실패 시 Identity Verification 모듈은 Submission 모듈을 직접 호출하지 않고 `@nestjs/event-emitter`로 `IdentityVerificationFailedEvent`를 발행합니다. Submission 모듈이 이를 구독(`IdentityVerificationFailedListener`)해 `WARNING`/`DISQUALIFICATION` 액션에 따라 응시 상태를 갱신합니다. Identity Verification → Submission 방향의 import는 없습니다(순환 의존 방지, 정책 변경 시 Submission 쪽만 수정하면 됨).
 
+### Exam (시험 회차)
+
+`tb_exam` 기반. 상태(`SCHEDULED`/`OPEN`/`CLOSED`)는 컬럼으로 저장하지 않고 `open_at`/`close_at`과 현재 시각을 비교해 매 요청마다 계산합니다(`domain/exam-status.util.ts`, 정원과 무관 — 정원 초과로 자동 마감하는 로직 없음).
+
+- `POST /exams` — 회차 추가(`ADMIN` 전용). `closeAt`이 `openAt`보다 뒤가 아니면 409.
+- `GET /exams`, `GET /exams/:id` — 회차 목록/상세 조회. **같은 라우트를 쓰되 응답 DTO가 role에 따라 달라집니다**: 관리자는 `capacity`(정원) 포함, 일반 사용자는 미포함. 다른 모듈들처럼 관리자/사용자용 라우트를 따로 만들지 않고, 컨트롤러 안에서 `role`을 보고 응답 객체를 다르게 구성하는 방식을 씁니다(`ExamController.toResponse`).
+
 ### Role / 권한
 
 `Role` enum은 `USER`, `ADMIN` 두 가지입니다. 본인인증 감사 로그 조회(`GET /identity-verification/sessions/:submissionId/logs`)와 수동 실격 처리(`POST /submissions/:id/disqualify`)는 `ADMIN` 전용입니다.
 
 ## 알려진 이슈 (스키마-코드 불일치)
 
-`supabase/migrations/0001_init.sql`이 `tb_exam`/`tb_question`/`tb_user`/`tb_exam_session`/`tb_answers`/`tb_score`/`tb_exam_results`/`tb_proctoring_events` 중심의 새 ERD로 교체되었습니다. 이번 작업은 `tb_user`와 Auth/User 모듈만 이 ERD에 맞춰 재작성했고, `test`/`question`/`submission`/`scoring`/`identity-verification` 모듈의 Repository는 아직 예전 테이블명(`tests`, `questions`, `submissions`, `scores`, `identity_verification_*`)을 그대로 참조합니다. 이 모듈들을 실제로 쓰려면 새 ERD(`tb_exam`, `tb_question`, `tb_exam_session` 등)에 맞춰 별도로 재작성이 필요합니다.
+`supabase/migrations/0001_init.sql`이 `tb_exam`/`tb_question`/`tb_user`/`tb_exam_session`/`tb_answers`/`tb_score`/`tb_exam_results`/`tb_proctoring_events` 중심의 새 ERD로 교체되었습니다. `tb_user`(Auth/User)와 `tb_exam`(Exam)은 이 ERD에 맞춰 작성되어 있지만, `question`/`submission`/`scoring`/`identity-verification` 모듈의 Repository는 아직 예전 테이블명(`questions`, `submissions`, `scores`, `identity_verification_*`)을 그대로 참조합니다. 이 모듈들을 실제로 쓰려면 새 ERD(`tb_question`, `tb_exam_session` 등)에 맞춰 별도로 재작성이 필요합니다.
+
+(예전 `test` 모듈 — 존재하지 않는 `tests` 테이블을 참조하던 죽은 코드 — 은 이번에 `exam` 모듈로 교체하며 삭제했습니다.)
 
 ## 알려진 트레이드오프
 
