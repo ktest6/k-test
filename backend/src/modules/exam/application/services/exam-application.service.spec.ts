@@ -1,4 +1,7 @@
-import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
+import {
+  ConflictDomainException,
+  NotFoundDomainException,
+} from '../../../../common/exceptions/domain.exception';
 import { Exam } from '../../domain/entities/exam.entity';
 import { ExamApplication } from '../../domain/entities/exam-application.entity';
 import { ExamApplicationRepository } from '../../domain/exam-application.repository.interface';
@@ -76,5 +79,29 @@ describe('ExamApplicationService.apply', () => {
 
     expect(repository.create).toHaveBeenCalledWith({ examId: '1', userId: '1' });
     expect(result).toBe(created);
+  });
+});
+
+describe('ExamApplicationService.cancel', () => {
+  it('rejects when there is no active application', async () => {
+    const examService = {} as unknown as ExamService;
+    const repository = buildRepository();
+    const service = new ExamApplicationService(examService, repository);
+
+    await expect(service.cancel('1', '1')).rejects.toThrow(NotFoundDomainException);
+    expect(repository.cancel).not.toHaveBeenCalled();
+  });
+
+  it('cancels the caller’s own active application', async () => {
+    const examService = {} as unknown as ExamService;
+    const existing = new ExamApplication('5', '1', '1', new Date());
+    const repository = buildRepository({
+      findActiveByExamAndUser: jest.fn().mockResolvedValue(existing),
+    });
+    const service = new ExamApplicationService(examService, repository);
+
+    await service.cancel('1', '1');
+
+    expect(repository.cancel).toHaveBeenCalledWith('5');
   });
 });

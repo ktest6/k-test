@@ -1,5 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
+import {
+  ConflictDomainException,
+  NotFoundDomainException,
+} from '../../../../common/exceptions/domain.exception';
 import { ExamApplication } from '../../domain/entities/exam-application.entity';
 import {
   EXAM_APPLICATION_REPOSITORY,
@@ -39,6 +42,17 @@ export class ExamApplicationService {
     }
 
     return this.examApplicationRepository.create({ examId, userId });
+  }
+
+  async cancel(examId: string, userId: string): Promise<void> {
+    const application = await this.examApplicationRepository.findActiveByExamAndUser(
+      examId,
+      userId,
+    );
+    if (!application) {
+      throw new NotFoundDomainException('신청 내역을 찾을 수 없습니다.');
+    }
+    await this.examApplicationRepository.cancel(application.id);
   }
 
   countActive(examId: string): Promise<number> {
