@@ -9,7 +9,9 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiNoContentResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiCommonErrorResponses } from '../../../common/decorators/api-common-error-responses.decorator';
+import { ApiStandardResponse } from '../../../common/decorators/api-standard-response.decorator';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { Role } from '../../../common/enums/role.enum';
 import { CreateQuestionDto } from '../application/dto/create-question.dto';
@@ -19,6 +21,7 @@ import { QuestionService } from '../application/services/question.service';
 
 @ApiBearerAuth()
 @ApiTags('Question')
+@ApiCommonErrorResponses()
 @Controller()
 export class QuestionController {
   constructor(private readonly questionService: QuestionService) {}
@@ -26,6 +29,7 @@ export class QuestionController {
   @Post('tests/:testId/questions')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: '문제 생성 (관리자)' })
+  @ApiStandardResponse(QuestionResponseDto, { status: 201, message: '문제 생성 완료' })
   create(
     @Param('testId') testId: string,
     @Body() dto: CreateQuestionDto,
@@ -35,12 +39,14 @@ export class QuestionController {
 
   @Get('tests/:testId/questions')
   @ApiOperation({ summary: '시험별 문제 목록 조회' })
+  @ApiStandardResponse(QuestionResponseDto, { isArray: true, message: '문제 목록 조회 성공' })
   listByTest(@Param('testId') testId: string): Promise<QuestionResponseDto[]> {
     return this.questionService.listByTestId(testId);
   }
 
   @Get('questions/:id')
   @ApiOperation({ summary: '문제 상세 조회' })
+  @ApiStandardResponse(QuestionResponseDto, { message: '문제 조회 성공' })
   findById(@Param('id') id: string): Promise<QuestionResponseDto> {
     return this.questionService.findById(id);
   }
@@ -48,6 +54,7 @@ export class QuestionController {
   @Put('questions/:id')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: '문제 수정 (관리자)' })
+  @ApiStandardResponse(QuestionResponseDto, { message: '문제 수정 완료' })
   update(@Param('id') id: string, @Body() dto: UpdateQuestionDto): Promise<QuestionResponseDto> {
     return this.questionService.update(id, dto);
   }
@@ -56,6 +63,7 @@ export class QuestionController {
   @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: '문제 삭제 (관리자)' })
+  @ApiNoContentResponse({ description: '삭제 성공 (바디 없음)' })
   delete(@Param('id') id: string): Promise<void> {
     return this.questionService.delete(id);
   }

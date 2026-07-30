@@ -19,7 +19,7 @@ export class TestService {
   async findById(id: string): Promise<Test> {
     const test = await this.testRepository.findById(id);
     if (!test) {
-      throw new NotFoundDomainException(`Test ${id} not found`);
+      throw new NotFoundDomainException(`시험(${id})을 찾을 수 없습니다.`);
     }
     return test;
   }

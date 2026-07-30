@@ -72,7 +72,7 @@ export class UserService {
   async findById(id: string): Promise<User> {
     const user = await this.userRepository.findById(id);
     if (!user) {
-      throw new NotFoundDomainException(`User ${id} not found`);
+      throw new NotFoundDomainException(`사용자(${id})를 찾을 수 없습니다.`);
     }
     return user;
   }

@@ -24,7 +24,7 @@ export class ScoringService {
   async findBySubmissionId(submissionId: string): Promise<Score> {
     const score = await this.scoringRepository.findBySubmissionId(submissionId);
     if (!score) {
-      throw new NotFoundDomainException(`Score for submission ${submissionId} not found`);
+      throw new NotFoundDomainException(`응시(${submissionId})의 채점 결과를 찾을 수 없습니다.`);
     }
     return score;
   }

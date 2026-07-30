@@ -47,7 +47,7 @@ export class SupabaseIdentityVerificationLogRepository implements IdentityVerifi
       .single<LogRow>();
 
     if (error || !data) {
-      throw new NotFoundDomainException(error?.message ?? 'Failed to write verification log');
+      throw new NotFoundDomainException(error?.message ?? '본인인증 로그 기록에 실패했습니다.');
     }
     return toDomain(data);
   }
