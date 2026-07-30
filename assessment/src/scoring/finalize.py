@@ -206,6 +206,13 @@ def _collect_coverage(
             failed_ids.append(exp.item_id)
             continue
 
+        # 답안 유효성 가드에 걸려 채점이 무효가 된 문항.
+        # 영역 자리는 남아 있지만 점수가 없으므로 '채점된 문항'으로 세면 안 된다.
+        # 세어 버리면 영어로 쓴 답안 하나가 조용히 이수 처리된다
+        if item.meta is not None and not item.meta.answer_valid:
+            failed_ids.append(exp.item_id)
+            continue
+
         # 상태는 정상인데 점수가 비어 있으면 쓸 수 없다. 0점으로 오해하면 안 되므로 뺀다
         if item.overall_score is None and not item.subscores:
             failed_ids.append(exp.item_id)

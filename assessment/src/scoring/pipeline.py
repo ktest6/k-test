@@ -31,8 +31,8 @@ from dataclasses import dataclass, field
 
 from ..features.checklist import ChecklistJudgeResult, judge_checklist
 from ..features.errors import ErrorExtractionResult, extract_error_features
-from ..features.lexical import extract_lexical_features
-from ..llm.client import GeminiClient
+from ..features.lexical import analyze, extract_lexical_features
+from ..llm.client import GeminiClient, client_for_errors
 from ..llm.transcript import correct_transcript
 from .combine import combine, get_weights
 from .schema import (
@@ -44,11 +44,13 @@ from .schema import (
     FeatureValue,
     Mode,
     Reliability,
+    ScoreArea,
     ScoreRequest,
     ScoreResponse,
     ScoringMeta,
     SubScore,
 )
+from .validity import ValidityReport, check_answer_validity
 
 # 내용·과제 수행 영역이 쓰는 자질.
 # 이 자질들만 보정본 기준으로 다시 계산해서 갈아 끼운다.
@@ -215,11 +217,122 @@ def _resolve_transcript(
     )
 
 
+def _invalid_response(
+    request: ScoreRequest,
+    report: ValidityReport,
+    warnings: list[str],
+    timings: dict[str, float],
+) -> ScoreResponse:
+    """가드에 걸린 답안을 '채점 무효'로 돌려준다.
+
+    예외를 던지지 않는 이유:
+    백엔드는 답안마다 이 함수를 부르고 결과를 저장한다. 여기서 예외가 나면
+    백엔드가 실패 처리를 따로 만들어야 하고, 무효 사유도 전달되지 않는다.
+    그래서 형태는 평소와 똑같은 응답을 주되 점수 자리만 비운다.
+
+    점수를 0점으로 두지 않는 것이 중요하다.
+    0점은 '한국어로 답했지만 다 틀렸다'는 뜻이고, 무효는 '채점할 수 없다'는 뜻이라
+    서로 다른 상태다. 0점으로 때우면 이의 제기에 답할 수 없다.
+    """
+    # 규칙 자질은 계산해 둔다. LLM을 부르지 않으므로 비용이 들지 않고,
+    # 운영자가 나중에 "이 답안이 어떤 글이었나"를 확인할 근거가 된다
+    started = time.perf_counter()
+    features = extract_lexical_features(request.answer_text, request.mode)
+    timings["lexical_ms"] = round((time.perf_counter() - started) * 1000, 1)
+
+    # 어느 영역도 채점하지 않았다는 사실을 영역마다 남긴다.
+    # 자리를 없애면 백엔드가 받는 응답 구조가 상황에 따라 달라진다
+    labels = [
+        (ScoreArea.CONTENT_TASK, "내용 및 과제 수행"),
+        (ScoreArea.LANGUAGE_USE, "언어 사용"),
+        (ScoreArea.DELIVERY, "발화 전달력"),
+    ]
+    note = f"답안 유효성 가드에 걸려 채점하지 않았다: {report.reason}"
+    subscores = [
+        SubScore(
+            area=area,
+            label=label,
+            score=None,
+            weight=0.0,
+            status=AreaStatus.NOT_EVALUATED,
+            contributions=[],
+            # 왜 무효인지의 근거(원문 어느 자리를 보고 판단했는지)를 함께 싣는다.
+            # 영역마다 따로 복사해 둔다(한 곳에서 손댄 것이 다른 영역까지 바뀌면 안 된다)
+            evidence=[ev.model_copy(deep=True) for ev in report.evidence[:6]],
+            note=note[:300],
+        )
+        for area, label in labels
+    ]
+
+    meta = ScoringMeta(
+        scoring_version=SCORING_VERSION,
+        mode=request.mode,
+        weights_profile=request.options.weights_profile,
+        llm_used=False,
+        llm_model=None,
+        timings_ms=timings,
+        # 채점 자체를 안 했으므로 '온전한 채점'은 아니다.
+        # 다만 대체 경로로 때운 것도 아니므로 fallback 이 아니라 partial 로 둔다.
+        # 무효라는 사실 자체는 answer_valid 로 따로 읽는다
+        reliability=Reliability.PARTIAL,
+        reliability_reason=report.reason,
+        # 점수가 없으므로 화면에 띄울 것도 없다
+        safe_to_show_candidate=False,
+        answer_valid=False,
+        validity_flags=report.flags,
+        validity_reason=report.reason,
+    )
+
+    return ScoreResponse(
+        submission_id=request.submission_id,
+        item_id=request.item.item_id,
+        mode=request.mode,
+        overall_score=None,
+        overall_grade=None,
+        subscores=subscores,
+        features=features,
+        checklist_results=[],
+        warnings=warnings,
+        meta=meta,
+    )
+
+
+def _apply_soft_validity_flags(
+    subscores: list[SubScore],
+    report: ValidityReport,
+) -> list[str]:
+    """무효까지는 아니지만 미덥지 않은 답안에 대해 해당 영역의 상태를 낮춘다.
+
+    점수 숫자는 건드리지 않는다. 손대면 그 숫자가 어디서 왔는지 설명할 수 없게 된다.
+    대신 '이 영역 점수는 표본이 부족하다'는 사실을 상태와 note 로 남겨서,
+    뒤따르는 신뢰도 판정(assess_reliability)이 partial 로 내려가게 만든다.
+    """
+    messages: list[str] = []
+    by_area = {s.area: s for s in subscores}
+
+    for check in report.soft_failures:
+        # 낮출 영역이 정해지지 않은 가드는 경고만 남긴다
+        target = by_area.get(check.affected_area) if check.affected_area else None
+        messages.append(f"[답안 유효성] {check.reason}")
+        if target is None or target.score is None:
+            continue
+
+        # 이미 반쪽으로 계산된 영역이면 상태는 그대로 두고 사유만 덧붙인다
+        if target.status == AreaStatus.SCORED:
+            target.status = AreaStatus.PARTIAL
+        target.note = ((target.note + " / ") if target.note else "") + check.reason
+        target.note = target.note[:300]
+        target.evidence.extend(ev.model_copy(deep=True) for ev in check.evidence[:2])
+
+    return messages
+
+
 def _run_llm_stages_in_parallel(
     language_text: str,
     content_text: str,
     request: ScoreRequest,
     client: GeminiClient,
+    error_client: GeminiClient,
     use_llm: bool,
     timings: dict[str, float],
 ) -> tuple[ErrorExtractionResult, ChecklistJudgeResult]:
@@ -227,6 +340,10 @@ def _run_llm_stages_in_parallel(
 
     둘 다 네트워크 응답을 기다리는 일이라 스레드 두 개로 겹쳐 두면
     기다리는 시간이 '둘의 합'이 아니라 '둘 중 긴 쪽'이 된다.
+
+    두 호출은 **모델도 다르다.** 오류 자질만 error_client(상위 모델)로 보낸다.
+    기본 모델이 높임법 오류를 놓치는 것이 실측으로 확인됐기 때문이다.
+    체크리스트 판정은 '했는가/안 했는가'라 기본 모델로 충분하다.
 
     한쪽이 실패해도 다른 쪽 결과는 살려야 한다.
     두 함수는 원래 LLM 실패를 안에서 삼키도록 만들어져 있지만,
@@ -238,7 +355,7 @@ def _run_llm_stages_in_parallel(
         result = extract_error_features(
             language_text,                 # 문법·어휘는 원본으로 센다
             mode=request.mode,
-            client=client,
+            client=error_client,           # 오류 자질만 상위 모델로 본다
             item_prompt=request.item.prompt,
             use_llm=use_llm,
         )
@@ -264,7 +381,7 @@ def _run_llm_stages_in_parallel(
             error_result, errors_ms = errors_future.result()
         except Exception as exc:  # pragma: no cover - 방어용
             error_result = extract_error_features(
-                language_text, mode=request.mode, client=client,
+                language_text, mode=request.mode, client=error_client,
                 item_prompt=request.item.prompt, use_llm=False,
             )
             error_result.warnings.append(f"오류 자질 추출이 예기치 않게 실패했다: {exc}")
@@ -345,15 +462,36 @@ def score_submission(
     transcript 를 넘기면 STT 원본/보정본을 영역별로 나눠 쓴다.
     직접 넘기지 않아도 요청(request.transcript)에 보정을 켜 두었으면
     여기서 만들어 쓴다. 둘 다 없으면 지금까지와 똑같이 answer_text 하나로만 채점한다.
+
+    맨 앞에서 답안 유효성 가드를 돌린다. 한국어가 아니거나 지시문을 베낀 답안은
+    여기서 걸러서 채점 무효(overall_score=None)로 돌려주고 LLM은 부르지 않는다.
     """
     timings: dict[str, float] = {}
     warnings: list[str] = []
 
     # 키가 없으면 available 이 False 인 클라이언트가 만들어진다(예외는 나지 않는다)
     client = client or GeminiClient()
+    # 오류 자질만 상위 모델로 본다. 나머지(전사 보정·체크리스트)는 기본 모델 그대로다
+    error_client = client_for_errors(client)
     use_llm = request.options.use_llm
 
-    # 0단계: 전사 보정. 부르는 쪽이 이미 만들어 넘겼으면 그것을 그대로 쓴다
+    # 0단계: 답안 유효성 가드. 규칙으로만 판단하며 LLM보다 반드시 앞에 선다.
+    # 무효 답안에 LLM 호출을 낭비하지 않기 위해서이고,
+    # 전사 보정도 LLM 호출이라 그보다도 앞이어야 한다
+    started = time.perf_counter()
+    analysis = analyze(request.answer_text)
+    validity = check_answer_validity(
+        request.answer_text, request.item.prompt, analysis=analysis
+    )
+    timings["validity_ms"] = round((time.perf_counter() - started) * 1000, 1)
+
+    # 하드 게이트에 걸리면 여기서 끝난다. 점수 대신 무효 사유를 돌려준다
+    if not validity.valid:
+        for check in validity.hard_failures:
+            warnings.append(f"[채점 무효] {check.reason}")
+        return _invalid_response(request, validity, warnings, timings)
+
+    # 1단계: 전사 보정. 부르는 쪽이 이미 만들어 넘겼으면 그것을 그대로 쓴다
     # (직접 넘긴 값이 항상 우선이다. 테스트와 데모가 보정 결과를 손으로 지정할 수 있어야 한다)
     if transcript is None:
         transcript = _resolve_transcript(request, client, warnings, timings)
@@ -363,7 +501,7 @@ def score_submission(
     language_text = request.answer_text
     content_text = transcript.corrected_text if transcript else request.answer_text
 
-    # 1단계: 규칙 자질. LLM과 무관하게 항상 계산되는, 채점의 뼈대다
+    # 2단계: 규칙 자질. LLM과 무관하게 항상 계산되는, 채점의 뼈대다
     started = time.perf_counter()
     features = extract_lexical_features(language_text, request.mode)
     if transcript and transcript.correction_applied:
@@ -371,13 +509,14 @@ def score_submission(
         _swap_in_content_features(features, content_text, request.mode)
     timings["lexical_ms"] = round((time.perf_counter() - started) * 1000, 1)
 
-    # 2단계: LLM이 하는 두 가지 일을 동시에 보낸다.
+    # 3단계: LLM이 하는 두 가지 일을 동시에 보낸다.
     # 오류 자질은 원본으로, 체크리스트는 보정본으로 각각 다른 글을 본다
     error_result, checklist_result = _run_llm_stages_in_parallel(
         language_text=language_text,
         content_text=content_text,
         request=request,
         client=client,
+        error_client=error_client,
         use_llm=use_llm,
         timings=timings,
     )
@@ -385,7 +524,7 @@ def score_submission(
     warnings.extend(error_result.warnings)
     warnings.extend(checklist_result.warnings)
 
-    # 3단계: 보정이 일어난 자리에서 나온 오류 지적에 신뢰도 표시를 단다
+    # 4단계: 보정이 일어난 자리에서 나온 오류 지적에 신뢰도 표시를 단다
     marked = 0
     if transcript and transcript.corrected_spans:
         marked = _mark_low_confidence_errors(features, transcript.corrected_spans)
@@ -395,7 +534,7 @@ def score_submission(
                 "전사 오류를 문법 오류로 잘못 센 것일 수 있으니 감점 근거로 쓸 때 확인이 필요하다."
             )
 
-    # 4단계: 자질과 판정을 점수로 결합한다
+    # 5단계: 자질과 판정을 점수로 결합한다
     started = time.perf_counter()
     weights = get_weights(request.options.weights_profile)
     combined = combine(
@@ -406,6 +545,11 @@ def score_submission(
     )
     timings["combine_ms"] = round((time.perf_counter() - started) * 1000, 1)
     warnings.extend(combined.warnings)
+
+    # 6단계: 무효까지는 아닌 가드(짧은 답안·문장이 덜 갖춰진 답안)를 영역 상태에 반영한다.
+    # 결합이 끝난 뒤에 하는 이유는 낮출 대상이 '계산된 영역 점수'이기 때문이다.
+    # 여기서 partial 로 내려가면 바로 아래 신뢰도 판정도 따라 내려간다
+    warnings.extend(_apply_soft_validity_flags(combined.subscores, validity))
 
     # 버려진 인용은 두 단계에서 나올 수 있으므로 합쳐서 보고한다.
     # 이 숫자가 크면 LLM이 답안에 없는 말을 지어내고 있다는 신호다
@@ -436,12 +580,22 @@ def score_submission(
         weights_profile=weights.profile,
         llm_used=error_result.llm_used or checklist_result.llm_used,
         llm_model=client.model_name if client.available else None,
+        # 문법을 판정한 모델이 따로라는 사실을 남긴다. 이것이 없으면
+        # 나중에 같은 답안을 다시 채점했을 때 값이 왜 달라졌는지 설명할 수 없다
+        llm_model_errors=(
+            error_client.model_name if error_result.llm_used else None
+        ),
         dropped_citations=dropped,
         timings_ms=timings,
         reliability=reliability,
         reliability_reason=reliability_reason,
         # 대체 경로로 때운 점수는 숫자가 멀쩡해 보여도 보여주면 안 된다
         safe_to_show_candidate=(reliability != Reliability.FALLBACK),
+        # 하드 게이트는 위에서 이미 걸러졌으므로 여기까지 왔다면 채점은 유효하다.
+        # 소프트 가드에 걸린 경우에는 표시만 남는다(점수는 그대로 나간다)
+        answer_valid=True,
+        validity_flags=validity.flags,
+        validity_reason=validity.reason,
         # 전사 보정이 있었다면 그 사실과 내역을 반드시 결과에 싣는다.
         # 보정본으로 채점해 놓고 무엇을 고쳤는지 안 밝히면 이의 제기에 답할 수 없다
         transcript_correction_applied=correction_applied,

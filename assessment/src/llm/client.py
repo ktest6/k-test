@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from dotenv import load_dotenv
@@ -34,6 +34,19 @@ load_dotenv(override=False)
 # lite 는 한도가 넉넉하고 단가도 10배 이상 싸다.
 # 바꾸려면 코드가 아니라 .env 의 GEMINI_MODEL 을 고치면 된다.
 DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+
+# 오류 자질(조사·어미 활용·어휘 오용·높임법)만 이 모델로 돌린다.
+#
+# 왜 여기만 따로 두는가 (2026-07-30 실측):
+# "어제 반장님이 말했습니다" 는 상급자를 안 높인 높임법 오류인데,
+# lite 모델은 이것을 한 번도 잡지 못했고 상위 모델은 잡았다.
+# 오류를 못 찾으면 그 답안은 '틀린 것이 없는 답안'이 되어 점수가 부풀려지므로,
+# 문법 판정만큼은 비용보다 정확도를 앞에 둔다.
+# 체크리스트 판정과 전사 보정은 지금까지대로 GEMINI_MODEL 을 쓴다.
+#
+# 모델 이름 주의: 'gemini-3-flash' 가 아니라 'gemini-3-flash-preview' 다.
+# 이 키로 실제 호출이 되는 것을 확인한 이름이다.
+DEFAULT_ERROR_MODEL = os.getenv("GEMINI_MODEL_ERRORS", "gemini-3-flash-preview")
 
 
 class LLMUnavailable(RuntimeError):
@@ -120,6 +133,20 @@ class GeminiClient:
     @property
     def model_name(self) -> str:
         return self.config.model
+
+    def for_model(self, model: str) -> "GeminiClient":
+        """같은 키를 쓰면서 모델만 바꾼 클라이언트를 만든다.
+
+        키를 다시 읽거나 설정을 복사해 붙이는 코드가 여기저기 생기지 않도록
+        만드는 자리를 한 곳으로 모아 둔 것이다.
+        temperature 0 · JSON 강제 같은 나머지 설정은 그대로 물려받는다.
+        """
+        # 이미 그 모델이면 새로 만들 것이 없다
+        if model == self.config.model:
+            return self
+        return GeminiClient(
+            api_key=self._api_key, config=replace(self.config, model=model)
+        )
 
     def _ensure_client(self):
         """접속 객체를 준비한다. 키가 없으면 여기서 막는다."""
@@ -233,3 +260,21 @@ def _parse_json_object(text: str) -> dict[str, Any]:
 def get_default_client() -> GeminiClient:
     """기본 설정으로 만든 클라이언트를 돌려준다. 키가 없어도 객체는 만들어진다."""
     return GeminiClient()
+
+
+def client_for_errors(base: GeminiClient | None = None) -> GeminiClient:
+    """오류 자질 추출에만 쓸 클라이언트를 고른다.
+
+    기본 모델(lite)이 높임법 오류를 놓치는 것이 실측으로 확인돼서,
+    문법 판정만 GEMINI_MODEL_ERRORS 모델로 돌린다.
+
+    받은 클라이언트가 GeminiClient 가 **아니면 그대로 돌려준다.**
+    테스트와 데모가 넘기는 가짜 클라이언트를 모델만 바꾼 진짜 클라이언트로
+    갈아 끼우면, 정해진 답을 돌려주기로 한 약속이 깨지고 실제 네트워크로 호출이 나간다.
+    (상속으로 만든 가짜도 있어서 isinstance 가 아니라 정확한 종류로 확인한다)
+    """
+    if base is None:
+        return GeminiClient(config=GeminiConfig(model=DEFAULT_ERROR_MODEL))
+    if type(base) is not GeminiClient:
+        return base
+    return base.for_model(DEFAULT_ERROR_MODEL)
