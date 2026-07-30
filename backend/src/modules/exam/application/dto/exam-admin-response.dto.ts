@@ -20,4 +20,7 @@ export class ExamAdminResponseDto {
 
   @ApiProperty({ description: '정원 — 관리자만 조회 가능' })
   capacity: number;
+
+  @ApiProperty({ description: '현재 신청 인원(취소 제외) — 관리자만 조회 가능' })
+  applicantCount: number;
 }
