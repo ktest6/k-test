@@ -14,7 +14,6 @@ import { HealthModule } from './health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
 import { IdentityVerificationModule } from './modules/identity-verification/identity-verification.module';
-import { TestModule } from './modules/test/test.module';
 import { QuestionModule } from './modules/question/question.module';
 import { SubmissionModule } from './modules/submission/submission.module';
 import { ScoringModule } from './modules/scoring/scoring.module';
@@ -39,7 +38,6 @@ import { AiModule } from './modules/ai/ai.module';
     AuthModule,
     UserModule,
     IdentityVerificationModule,
-    TestModule,
     QuestionModule,
     SubmissionModule,
     ScoringModule,
