@@ -8,7 +8,7 @@ export class RequestIdCardUploadUrlDto {
   @ApiProperty({ description: '응시 세션 ID (tb_exam_session.exam_session_id)', example: '1' })
   @IsString()
   @MinLength(1)
-  sessionId: string;
+  examSessionId: string;
 
   @ApiProperty({ enum: IdCardFileType, description: '신분증/수험표인지 웹캠 캡처인지' })
   @IsEnum(IdCardFileType)

@@ -43,7 +43,7 @@ export class IdCardUploadUrlService {
     userId: string,
     dto: RequestIdCardUploadUrlDto,
   ): Promise<UploadUrlResponseDto> {
-    await this.examSessionAccessService.assertOwnership(userId, dto.sessionId);
+    await this.examSessionAccessService.assertOwnership(userId, dto.examSessionId);
 
     if (!ALLOWED_CONTENT_TYPES_BY_FILE_TYPE[dto.fileType].includes(dto.contentType)) {
       throw new ConflictDomainException(
@@ -53,7 +53,7 @@ export class IdCardUploadUrlService {
 
     const extension = EXTENSION_BY_CONTENT_TYPE[dto.contentType];
     const fileName = FILE_NAME_BY_FILE_TYPE[dto.fileType];
-    const path = `${userId}/${dto.sessionId}/${fileName}.${extension}`;
+    const path = `${userId}/${dto.examSessionId}/${fileName}.${extension}`;
 
     return this.storageUploadUrlService.createSignedUploadUrl(STORAGE_BUCKET, path);
   }

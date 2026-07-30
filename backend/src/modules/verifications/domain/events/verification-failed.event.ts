@@ -16,7 +16,7 @@ export class VerificationFailedEvent {
   constructor(
     readonly submissionId: string,
     readonly userId: string,
-    readonly sessionId: string,
+    readonly examSessionId: string,
     readonly consecutiveFailures: number,
     readonly action: VerificationFailureAction,
   ) {}

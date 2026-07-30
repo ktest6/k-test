@@ -5,7 +5,7 @@ export class VerifyIdCardDto {
   @ApiProperty({ description: '응시 세션 ID (tb_exam_session.exam_session_id)', example: '1' })
   @IsString()
   @MinLength(1)
-  sessionId: string;
+  examSessionId: string;
 
   @ApiProperty({
     description: 'upload-url로 발급받아 업로드한 신분증/수험표 이미지 경로',
