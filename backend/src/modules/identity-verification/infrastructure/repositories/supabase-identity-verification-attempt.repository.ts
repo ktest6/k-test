@@ -48,7 +48,7 @@ export class SupabaseIdentityVerificationAttemptRepository implements IdentityVe
       .single<AttemptRow>();
 
     if (error || !data) {
-      throw new NotFoundDomainException(error?.message ?? 'Failed to record verification attempt');
+      throw new NotFoundDomainException(error?.message ?? '본인인증 시도 기록에 실패했습니다.');
     }
     return toDomain(data);
   }

@@ -48,7 +48,7 @@ export class SupabaseTestRepository implements TestRepository {
       .single<TestRow>();
 
     if (error || !data) {
-      throw new NotFoundDomainException(error?.message ?? 'Failed to create test');
+      throw new NotFoundDomainException(error?.message ?? '시험 생성에 실패했습니다.');
     }
     return toDomain(data);
   }
@@ -74,7 +74,7 @@ export class SupabaseTestRepository implements TestRepository {
       .single<TestRow>();
 
     if (error || !data) {
-      throw new NotFoundDomainException(`Test ${id} not found`);
+      throw new NotFoundDomainException(`시험(${id})을 찾을 수 없습니다.`);
     }
     return toDomain(data);
   }

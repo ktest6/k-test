@@ -25,17 +25,33 @@ describe('AppModule (e2e)', () => {
     await app.close();
   });
 
-  it('/health (GET) is publicly reachable and reports ok', () => {
+  it('/health (GET) is publicly reachable and wraps the payload in the standard envelope', () => {
     return request(app.getHttpServer())
       .get('/health')
       .expect(200)
       .expect((res) => {
-        const body = res.body as { status: string };
-        expect(body.status).toBe('ok');
+        const body = res.body as {
+          success: boolean;
+          statusCode: number;
+          message: string;
+          data: { status: string };
+        };
+        expect(body.success).toBe(true);
+        expect(body.statusCode).toBe(200);
+        expect(body.message).toBe('헬스체크 성공');
+        expect(body.data.status).toBe('ok');
       });
   });
 
-  it('/users/me (GET) rejects unauthenticated requests', () => {
-    return request(app.getHttpServer()).get('/users/me').expect(401);
+  it('/users/me (GET) rejects unauthenticated requests with the standard error envelope', () => {
+    return request(app.getHttpServer())
+      .get('/users/me')
+      .expect(401)
+      .expect((res) => {
+        const body = res.body as { success: boolean; statusCode: number; data: unknown };
+        expect(body.success).toBe(false);
+        expect(body.statusCode).toBe(401);
+        expect(body.data).toBeNull();
+      });
   });
 });

@@ -84,10 +84,10 @@ export class IdentityVerificationService {
   async verifyPreExam(dto: VerifyChallengeDto, userId: string): Promise<VerificationResultDto> {
     const session = await this.sessionRepository.findById(dto.sessionId);
     if (!session) {
-      throw new NotFoundDomainException(`Verification session ${dto.sessionId} not found`);
+      throw new NotFoundDomainException(`본인인증 세션(${dto.sessionId})을 찾을 수 없습니다.`);
     }
     if (session.userId !== userId) {
-      throw new ForbiddenDomainException('This verification session does not belong to you');
+      throw new ForbiddenDomainException('본인 소유의 본인인증 세션이 아닙니다.');
     }
 
     return this.completeVerification(session, dto.payload, dto.forceResult);

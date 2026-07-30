@@ -53,7 +53,7 @@ export class SupabaseSubmissionRepository implements SubmissionRepository {
       .single<SubmissionRow>();
 
     if (error || !data) {
-      throw new NotFoundDomainException(error?.message ?? 'Failed to create submission');
+      throw new NotFoundDomainException(error?.message ?? '응시 시작에 실패했습니다.');
     }
     return toDomain(data);
   }
@@ -82,7 +82,7 @@ export class SupabaseSubmissionRepository implements SubmissionRepository {
       .single<SubmissionRow>();
 
     if (error || !data) {
-      throw new NotFoundDomainException(`Submission ${id} not found`);
+      throw new NotFoundDomainException(`응시(${id})를 찾을 수 없습니다.`);
     }
     return toDomain(data);
   }

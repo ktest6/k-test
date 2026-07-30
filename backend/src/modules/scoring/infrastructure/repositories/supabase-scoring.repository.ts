@@ -45,7 +45,7 @@ export class SupabaseScoringRepository implements ScoringRepository {
       .single<ScoreRow>();
 
     if (error || !data) {
-      throw new NotFoundDomainException(error?.message ?? 'Failed to record score');
+      throw new NotFoundDomainException(error?.message ?? '채점 결과 등록에 실패했습니다.');
     }
     return toDomain(data);
   }

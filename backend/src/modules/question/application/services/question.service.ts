@@ -21,7 +21,7 @@ export class QuestionService {
   async findById(id: string): Promise<Question> {
     const question = await this.questionRepository.findById(id);
     if (!question) {
-      throw new NotFoundDomainException(`Question ${id} not found`);
+      throw new NotFoundDomainException(`문제(${id})를 찾을 수 없습니다.`);
     }
     return question;
   }

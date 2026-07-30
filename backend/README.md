@@ -68,6 +68,38 @@ modules/<name>/
 
 기본 모듈: `auth`, `user`, `identity-verification`, `test`, `question`, `submission`, `scoring`, `ai`.
 
+### 공통 응답 형식 (Response Envelope)
+
+프론트로 나가는 모든 응답은 성공/에러 관계없이 같은 필드 구조를 갖습니다:
+
+```jsonc
+// 성공
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "OK",
+  "data": { /* 실제 payload */ },
+  "path": "/users/me",
+  "timestamp": "2026-07-30T12:00:00.000Z"
+}
+
+// 에러
+{
+  "success": false,
+  "statusCode": 404,
+  "message": "User 1 not found",
+  "data": null,
+  "code": "NOT_FOUND",
+  "path": "/users/1",
+  "timestamp": "2026-07-30T12:00:00.000Z"
+}
+```
+
+- 컨트롤러는 지금까지처럼 순수 DTO만 리턴하면 됩니다 — `TransformResponseInterceptor`(전역, `APP_INTERCEPTOR`)가 성공 응답을 자동으로 위 봉투에 담습니다. 204(No Content) 응답은 HTTP 스펙상 바디가 없어야 하므로 감싸지 않고 그대로 통과시킵니다.
+- 에러는 `HttpExceptionFilter`가 같은 모양으로 내보냅니다. `code`는 `DomainException`(및 하위 클래스: `NotFoundDomainException`, `ForbiddenDomainException`, `ConflictDomainException`, `UnauthorizedDomainException`)이 지정한 값이거나, 일반 `HttpException`이면 `HTTP_ERROR`, 그 외 예기치 못한 에러면 `INTERNAL_ERROR`입니다.
+- 기본 성공 메시지는 상태 코드 기준(`200`→"OK", `201`→"Created")이며, 라우트별로 다른 메시지가 필요하면 컨트롤러 메서드에 `@ResponseMessage('로그인 성공')`을 붙이면 됩니다.
+- Swagger 문서에도 이 봉투가 그대로 반영됩니다. 각 엔드포인트는 실제 응답 DTO 대신 `@ApiStandardResponse(ResponseDto, { status?, isArray? })`를 붙이며, 이 데코레이터가 봉투 스키마(`ApiSuccessResponseDto`)와 실제 DTO 스키마를 `allOf`로 합성해서 `data` 필드 안에 정확한 타입을 보여줍니다. 공통 에러 응답(400/401/403/404/500)은 컨트롤러 단위로 `@ApiCommonErrorResponses()`를 붙여서 문서화합니다.
+
 ### Auth (응시자 회원가입 / 로그인)
 
 Supabase Auth(GoTrue)는 사용하지 않고, `tb_user` 테이블 기반의 자체 인증을 구현합니다: 비밀번호는 `UserService`에서 bcrypt로 해시해 `tb_user.password`에 저장하고, 로그인 성공 시 `AuthService`가 access/refresh 토큰을 직접 서명합니다(`@nestjs/jwt`, 시크릿/만료시간은 `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET` 등 env로 분리). `JwtAuthGuard`는 매 요청마다 이 토큰을 검증할 뿐 DB를 조회하지 않습니다 — `role`을 포함한 사용자 정보는 토큰 발급 시점의 값이 그대로 클레임에 담기므로, 역할이 바뀌면 재로그인 전까지는 반영되지 않는다는 트레이드오프가 있습니다.

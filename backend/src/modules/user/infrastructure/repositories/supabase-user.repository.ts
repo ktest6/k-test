@@ -42,7 +42,7 @@ export class SupabaseUserRepository implements UserRepository {
       .single<UserRow>();
 
     if (error || !data) {
-      throw new ConflictDomainException(error?.message ?? 'Failed to register user');
+      throw new ConflictDomainException(error?.message ?? '회원가입에 실패했습니다.');
     }
     return UserMapper.toDomain(data);
   }
@@ -135,7 +135,7 @@ export class SupabaseUserRepository implements UserRepository {
       .single<UserRow>();
 
     if (error || !data) {
-      throw new NotFoundDomainException(`User ${id} not found`);
+      throw new NotFoundDomainException(`사용자(${id})를 찾을 수 없습니다.`);
     }
     return UserMapper.toDomain(data);
   }

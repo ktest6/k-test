@@ -57,7 +57,7 @@ export class SupabaseIdentityVerificationSessionRepository implements IdentityVe
       .single<SessionRow>();
 
     if (error || !data) {
-      throw new NotFoundDomainException(error?.message ?? 'Failed to create verification session');
+      throw new NotFoundDomainException(error?.message ?? '본인인증 세션 생성에 실패했습니다.');
     }
     return toDomain(data);
   }
@@ -87,7 +87,7 @@ export class SupabaseIdentityVerificationSessionRepository implements IdentityVe
       .single<SessionRow>();
 
     if (error || !data) {
-      throw new NotFoundDomainException(`Verification session ${id} not found`);
+      throw new NotFoundDomainException(`본인인증 세션(${id})을 찾을 수 없습니다.`);
     }
     return toDomain(data);
   }

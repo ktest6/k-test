@@ -1,5 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiNoContentResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiCommonErrorResponses } from '../../../common/decorators/api-common-error-responses.decorator';
+import { ApiStandardResponse } from '../../../common/decorators/api-standard-response.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Public } from '../../../common/decorators/public.decorator';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
@@ -7,11 +9,13 @@ import { AuthService } from '../application/services/auth.service';
 import { AuthResponseDto } from '../application/dto/auth-response.dto';
 import { CheckEmailQueryDto } from '../application/dto/check-email-query.dto';
 import { CheckEmailResponseDto } from '../application/dto/check-email-response.dto';
+import { MeResponseDto } from '../application/dto/me-response.dto';
 import { RefreshTokenDto } from '../application/dto/refresh-token.dto';
 import { SignInDto } from '../application/dto/sign-in.dto';
 import { SignUpDto } from '../application/dto/sign-up.dto';
 
 @ApiTags('Auth')
+@ApiCommonErrorResponses()
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -19,6 +23,7 @@ export class AuthController {
   @Public()
   @Get('check-email')
   @ApiOperation({ summary: '회원가입 1단계: 이메일 중복 확인' })
+  @ApiStandardResponse(CheckEmailResponseDto, { message: '이메일 중복 확인 완료' })
   checkEmail(@Query() query: CheckEmailQueryDto): Promise<CheckEmailResponseDto> {
     return this.authService.checkEmailAvailability(query.email);
   }
@@ -26,6 +31,7 @@ export class AuthController {
   @Public()
   @Post('sign-up')
   @ApiOperation({ summary: '회원가입 완료 (계정 + 신원 정보 + 약관 동의)' })
+  @ApiStandardResponse(AuthResponseDto, { status: 201, message: '회원가입 완료' })
   signUp(@Body() dto: SignUpDto): Promise<AuthResponseDto> {
     return this.authService.signUp(dto);
   }
@@ -34,6 +40,7 @@ export class AuthController {
   @Post('sign-in')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '로그인' })
+  @ApiStandardResponse(AuthResponseDto, { message: '로그인 성공' })
   signIn(@Body() dto: SignInDto): Promise<AuthResponseDto> {
     return this.authService.signIn(dto);
   }
@@ -42,6 +49,7 @@ export class AuthController {
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '토큰 갱신' })
+  @ApiStandardResponse(AuthResponseDto, { message: '토큰 갱신 완료' })
   refresh(@Body() dto: RefreshTokenDto): Promise<AuthResponseDto> {
     return this.authService.refreshSession(dto.refreshToken);
   }
@@ -54,6 +62,7 @@ export class AuthController {
     description:
       '자체 발급 JWT는 상태를 저장하지 않으므로(stateless) 서버가 할 일은 없다 — 클라이언트가 보유한 토큰을 폐기하면 된다. 엔드포인트는 프론트엔드 흐름의 대칭성을 위해 유지한다.',
   })
+  @ApiNoContentResponse({ description: '로그아웃 성공 (바디 없음)' })
   signOut(): void {
     return;
   }
@@ -61,7 +70,8 @@ export class AuthController {
   @ApiBearerAuth()
   @Get('me')
   @ApiOperation({ summary: '현재 로그인한 사용자 정보' })
-  me(@CurrentUser() user: AuthenticatedUser): AuthenticatedUser {
+  @ApiStandardResponse(MeResponseDto, { message: '내 정보 조회 성공' })
+  me(@CurrentUser() user: AuthenticatedUser): MeResponseDto {
     return user;
   }
 }

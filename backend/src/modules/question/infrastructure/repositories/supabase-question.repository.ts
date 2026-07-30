@@ -55,7 +55,7 @@ export class SupabaseQuestionRepository implements QuestionRepository {
       .single<QuestionRow>();
 
     if (error || !data) {
-      throw new NotFoundDomainException(error?.message ?? 'Failed to create question');
+      throw new NotFoundDomainException(error?.message ?? '문제 생성에 실패했습니다.');
     }
     return toDomain(data);
   }
@@ -82,7 +82,7 @@ export class SupabaseQuestionRepository implements QuestionRepository {
       .single<QuestionRow>();
 
     if (error || !data) {
-      throw new NotFoundDomainException(`Question ${id} not found`);
+      throw new NotFoundDomainException(`문제(${id})를 찾을 수 없습니다.`);
     }
     return toDomain(data);
   }
