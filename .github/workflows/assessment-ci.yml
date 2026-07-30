@@ -1,0 +1,40 @@
+# assessment(채점 파트) 자동 테스트.
+#
+# assessment/ 아래가 바뀐 PR과 main 푸시에서만 돈다.
+# 다른 파트(backend·frontend·anti-cheat)에는 아무 영향이 없고,
+# 원하면 이 파일에 자기 파트 job을 추가하는 식으로 확장하면 된다.
+#
+# API 키 없이 도는 것을 전제로 한다(테스트가 가짜 클라이언트를 쓰도록 만들어져 있다).
+name: assessment tests
+
+on:
+  pull_request:
+    paths:
+      - "assessment/**"
+      - ".github/workflows/assessment-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "assessment/**"
+      - ".github/workflows/assessment-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: assessment
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: assessment/requirements.txt
+
+      - name: 의존성 설치
+        run: pip install -r requirements.txt
+
+      - name: 테스트 실행
+        run: python -m pytest tests -q
