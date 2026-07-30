@@ -32,7 +32,7 @@ supabase db push
 npm run start:dev
 ```
 
-기동 후 `http://localhost:3000/docs`에서 Swagger UI로 전체 API(Auth/User/Identity Verification/Exam/Question/Submission/Scoring/AI, 8개 태그)를 확인할 수 있습니다.
+기동 후 `http://localhost:3000/docs`에서 Swagger UI로 전체 API(Auth/User/Exam/Verifications/Question/Submission/Scoring/AI, 8개 태그)를 확인할 수 있습니다.
 
 ### 자주 쓰는 명령어
 
@@ -66,7 +66,7 @@ modules/<name>/
 └── presentation/       # 컨트롤러, Swagger 문서
 ```
 
-기본 모듈: `auth`, `user`, `identity-verification`, `exam`, `question`, `submission`, `scoring`, `ai`.
+기본 모듈: `auth`, `user`, `exam`, `verifications`, `question`, `submission`, `scoring`, `ai`.
 
 ### 공통 응답 형식 (Response Envelope)
 
@@ -122,16 +122,20 @@ Supabase Auth(GoTrue)는 사용하지 않고, `tb_user` 테이블 기반의 자�
 
 **관리자 계정 생성** (`POST /auth/admin/sign-up`): `tb_user`가 응시자/관리자를 같은 테이블로 관리하므로(`role` 컬럼으로 구분), 응시자 전용 필드(국적/생년월일/신분증/약관동의)는 관리자 계정에 아예 없다 — 마이그레이션 `0004_admin_user_fields_nullable.sql`에서 해당 컬럼을 nullable로 바꾸고, `role = 'ADMIN' OR (모든 응시자 필드 NOT NULL)`을 CHECK 제약으로 강제해 응시자 쪽은 여전히 필수임을 DB 레벨에서 보장한다. 이 엔드포인트는 `@Public()`(로그인 불필요)이지만 서버 env `ADMIN_SIGNUP_SECRET`과 일치하는 `adminSecret`을 요구한다 — 로그인한 관리자만 새 관리자를 만들 수 있게 하면 "첫 관리자를 누가 만드나"라는 부트스트랩 문제가 생기기 때문에, 공유 비밀값으로 게이트를 걸었다. 비밀값 비교는 `timingSafeEqual`로 처리(타이밍 공격 방지).
 
-### Identity Verification (본인인증)
+### Verifications (본인인증)
 
-가장 핵심적인 모듈로, 다음을 지원합니다:
+`/verifications` 아래에 인증 타입별로 고정 경로를 둡니다 — 지금은 `id-card`(신분증-얼굴 대조) 하나만 구현되어 있고, 나중에 다른 타입(예: 이어폰 착용 여부 확인)을 추가할 때는 이 컨트롤러를 건드리지 않고 형제 컨트롤러(`@Controller('verifications/earphone')` 등)를 새로 만들면 됩니다.
 
-- **사전 인증**: `POST /identity-verification/pre-exam/initiate` → `verify`
-- **응시 중 재인증**: `GET /identity-verification/periodic/status`로 클라이언트가 폴링하면 서버가 계산한 `nextCheckAt`(다음 재인증 시점)과 `dueNow` 여부를 반환. `dueNow`가 true면 `POST /identity-verification/periodic/verify` 호출.
-- **결과/로그 저장**: `identity_verification_sessions`(인증 컨텍스트) → `identity_verification_attempts`(개별 시도, N:1) → `identity_verification_logs`(세부 감사 트레일, attempt 1건당 N개 로그 가능)로 3단계 저장.
-- **실패 시 확장 가능한 처리**: `VerificationFailurePolicy` 인터페이스가 연속 실패 횟수를 `NONE`/`WARNING`/`DISQUALIFICATION`으로 매핑합니다(`DefaultVerificationFailurePolicy`, 임계값은 `IDENTITY_VERIFICATION_MAX_FAILURES_BEFORE_DISQUALIFICATION`으로 설정). 실제 인증 수단은 `IdentityProvider` 포트로 추상화되어 있으며 현재는 `MockIdentityProviderAdapter`가 스텁으로 동작합니다 — 향후 PASS/NICE, 얼굴 인식 등 실제 provider로 교체 가능합니다. Mock provider는 `IDENTITY_VERIFICATION_MOCK_FORCE_FAIL` 환경변수 또는 요청의 `forceResult` 필드로 강제 실패를 트리거할 수 있어(개발/테스트 전용) 정책 시나리오를 재현할 수 있습니다.
+**id-card (신분증-얼굴 대조)**:
 
-**모듈 간 결합**: 인증 실패 시 Identity Verification 모듈은 Submission 모듈을 직접 호출하지 않고 `@nestjs/event-emitter`로 `IdentityVerificationFailedEvent`를 발행합니다. Submission 모듈이 이를 구독(`IdentityVerificationFailedListener`)해 `WARNING`/`DISQUALIFICATION` 액션에 따라 응시 상태를 갱신합니다. Identity Verification → Submission 방향의 import는 없습니다(순환 의존 방지, 정책 변경 시 Submission 쪽만 수정하면 됨).
+- `POST /verifications/id-card/upload-url` — 프론트가 Storage에 직접 업로드할 수 있는 signed URL 발급. `fileType`(`ID_CARD` | `FACE`)별로 한 번씩, 총 두 번 호출해서 신분증 이미지와 웹캠 캡처 이미지 각각의 signed URL을 받습니다. 경로는 프론트가 아니라 **서버가** `${userId}/${sessionId}/...` 형태로 정하므로, 발급 단계부터 다른 사용자 경로로 업로드하는 게 원천 차단됩니다. 요청자가 그 `sessionId`(=`tb_exam_session.exam_session_id`)의 소유자인지도 여기서 확인합니다.
+  - signed URL 발급 자체(`createSignedUploadUrl` 호출 + 에러 처리)는 `IdCardUploadUrlService`가 하지 않고 공용 `StorageUploadUrlService`(`src/infrastructure/supabase/storage-upload-url.service.ts`, 전역 모듈)에 위임합니다. `IdCardUploadUrlService`는 id-card만의 규칙(세션 소유권, 허용 content-type, 경로 이름 규칙)만 정하고 마지막에 `bucket`/`path`만 넘겨줍니다. 나중에 영상/음성 녹음처럼 다른 파일 업로드 기능이 생기면, 그 기능만의 규칙을 가진 서비스를 하나 더 만들고 이 공용 서비스를 그대로 재사용하면 됩니다 — signed URL 발급 로직 자체는 중복 구현할 필요 없음.
+- `POST /verifications/id-card/verify` — 업로드된 신분증/웹캠 이미지 경로를 받아 (1) 경로가 본인 소유 폴더인지, (2) 세션 소유자인지 재검증한 뒤 `identity_logs`에 결과를 기록합니다. 얼굴 대조를 맡을 FastAPI 서비스가 아직 연동되지 않아 `matched`/`confidence`는 현재 항상 `null`로 반환됩니다 (연동 시점과 필요한 작업은 `id-card-verification.service.ts`의 TODO 주석 참고).
+- 이미지는 대조 완료 직후 Storage에서 삭제하는 게 원칙이지만, 아직 실제 대조가 일어나지 않으므로(위 이유) 지금은 삭제를 보류해뒀습니다 — FastAPI 연동 후 대조 직후 시점으로 옮겨서 다시 활성화할 것.
+
+**아직 안 만든 것 / 알려진 갭**: 본인인증 실패 시 응시 상태를 `WARNING`/`DISQUALIFICATION`으로 승격하는 로직(`VerificationFailureAction` enum, `VerificationFailedEvent`)은 Submission 모듈의 `verification-failed.listener.ts`에 리스너까지 준비되어 있지만, 지금은 아무도 이 이벤트를 발행하지 않습니다 (`id-card-verification.service.ts`가 항상 `matched: null`만 반환하기 때문). FastAPI 연동으로 실제 `matched: false` 케이스가 생기면, 연속 실패 횟수를 세서 이 이벤트를 발행하는 정책 로직을 다시 붙여야 합니다.
+
+**모듈 간 결합**: 실패 이벤트는 `@nestjs/event-emitter`로 발행하고 Submission 모듈이 구독하는 구조를 그대로 유지합니다(`VERIFICATION_FAILED_EVENT`). Verifications → Submission 방향의 import는 없습니다(순환 의존 방지, 정책 변경 시 Submission 쪽만 수정하면 됨).
 
 ### Exam (시험 회차)
 
@@ -142,13 +146,13 @@ Supabase Auth(GoTrue)는 사용하지 않고, `tb_user` 테이블 기반의 자�
 
 ### Role / 권한
 
-`Role` enum은 `USER`, `ADMIN` 두 가지입니다. 본인인증 감사 로그 조회(`GET /identity-verification/sessions/:submissionId/logs`)와 수동 실격 처리(`POST /submissions/:id/disqualify`)는 `ADMIN` 전용입니다.
+`Role` enum은 `USER`, `ADMIN` 두 가지입니다. 수동 실격 처리(`POST /submissions/:id/disqualify`)는 `ADMIN` 전용입니다.
 
 ## 알려진 이슈 (스키마-코드 불일치)
 
-`supabase/migrations/0001_init.sql`이 `tb_exam`/`tb_question`/`tb_user`/`tb_exam_session`/`tb_answers`/`tb_score`/`tb_exam_results`/`tb_proctoring_events` 중심의 새 ERD로 교체되었습니다. `tb_user`(Auth/User)와 `tb_exam`(Exam)은 이 ERD에 맞춰 작성되어 있지만, `question`/`submission`/`scoring`/`identity-verification` 모듈의 Repository는 아직 예전 테이블명(`questions`, `submissions`, `scores`, `identity_verification_*`)을 그대로 참조합니다. 이 모듈들을 실제로 쓰려면 새 ERD(`tb_question`, `tb_exam_session` 등)에 맞춰 별도로 재작성이 필요합니다.
+`supabase/migrations/0001_init.sql`이 `tb_exam`/`tb_question`/`tb_user`/`tb_exam_session`/`tb_answers`/`tb_score`/`tb_exam_results`/`tb_proctoring_events` 중심의 새 ERD로 교체되었습니다. `tb_user`(Auth/User), `tb_exam`(Exam), `verifications`(id-card)는 이 ERD에 맞춰 작성되어 있지만, `question`/`submission`/`scoring` 모듈의 Repository는 아직 예전 테이블명(`questions`, `submissions`, `scores`)을 그대로 참조합니다. 이 모듈들을 실제로 쓰려면 새 ERD(`tb_question`, `tb_exam_session` 등)에 맞춰 별도로 재작성이 필요합니다.
 
-(예전 `test` 모듈 — 존재하지 않는 `tests` 테이블을 참조하던 죽은 코드 — 은 이번에 `exam` 모듈로 교체하며 삭제했습니다.)
+(예전 `test` 모듈 — 존재하지 않는 `tests` 테이블을 참조하던 죽은 코드 — 은 `exam` 모듈로 교체하며 삭제했습니다. 예전 `identity-verification` 모듈 — 세션/시도/로그 3단계 저장 + Mock provider로 구성된 사전/주기 인증 mock 시스템 — 도 참조하던 테이블이 새 ERD에 아예 없어 항상 500이 나는 죽은 코드였고, 실제 구현인 `verifications/id-card`로 대체되면서 통째로 삭제했습니다.)
 
 ## 알려진 트레이드오프
 
@@ -162,4 +166,4 @@ Supabase Auth(GoTrue)는 사용하지 않고, `tb_user` 테이블 기반의 자�
 
 ### `@nestjs/event-emitter`는 인메모리 기반
 
-Identity Verification → Submission 간 결합을 낮추기 위해 쓰는 `@nestjs/event-emitter`는 프로세스 인메모리 이벤트 버스입니다. 인스턴스를 여러 개로 스케일아웃하면 한 인스턴스가 발행한 이벤트를 다른 인스턴스의 리스너가 받지 못해 유실될 수 있습니다. 단일 인스턴스 운영을 전제로 한 선택이며, 다중 인스턴스로 전환할 때는 Redis pub/sub 등 외부 메시지 브로커로 교체가 필요합니다.
+Verifications → Submission 간 결합을 낮추기 위해 쓰는 `@nestjs/event-emitter`는 프로세스 인메모리 이벤트 버스입니다. 인스턴스를 여러 개로 스케일아웃하면 한 인스턴스가 발행한 이벤트를 다른 인스턴스의 리스너가 받지 못해 유실될 수 있습니다. 단일 인스턴스 운영을 전제로 한 선택이며, 다중 인스턴스로 전환할 때는 Redis pub/sub 등 외부 메시지 브로커로 교체가 필요합니다.
