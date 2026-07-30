@@ -39,3 +39,24 @@ describe('ExamController.list', () => {
     expect(result).toMatchObject({ id: '1', roundName: '2026년 1회차' });
   });
 });
+
+describe('ExamController.findById', () => {
+  it('includes capacity for admins', async () => {
+    const findById = jest.fn().mockResolvedValue(buildExam());
+    const controller = new ExamController({ findById } as unknown as ExamService);
+
+    const result = await controller.findById('1', buildUser(Role.ADMIN));
+
+    expect(findById).toHaveBeenCalledWith('1');
+    expect(result).toMatchObject({ id: '1', capacity: 100 });
+  });
+
+  it('omits capacity for regular users', async () => {
+    const findById = jest.fn().mockResolvedValue(buildExam());
+    const controller = new ExamController({ findById } as unknown as ExamService);
+
+    const result = await controller.findById('1', buildUser(Role.USER));
+
+    expect(result).not.toHaveProperty('capacity');
+  });
+});

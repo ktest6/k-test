@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiCommonErrorResponses } from '../../../common/decorators/api-common-error-responses.decorator';
 import { ApiStandardResponse } from '../../../common/decorators/api-standard-response.decorator';
@@ -45,6 +45,20 @@ export class ExamController {
   ): Promise<(ExamResponseDto | ExamAdminResponseDto)[]> {
     const exams = await this.examService.list();
     return exams.map((exam) => this.toResponse(exam, user.role));
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: '회차 상세 조회',
+    description: '관리자로 조회하면 capacity(정원)가 추가로 포함된다.',
+  })
+  @ApiStandardResponse(ExamAdminResponseDto, { message: '회차 조회 성공' })
+  async findById(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ExamResponseDto | ExamAdminResponseDto> {
+    const exam = await this.examService.findById(id);
+    return this.toResponse(exam, user.role);
   }
 
   /** capacity(정원)는 관리자에게만 노출 — 응답 DTO 자체를 role에 따라 다르게 만든다. */
