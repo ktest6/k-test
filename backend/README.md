@@ -137,7 +137,7 @@ Supabase Auth(GoTrue)는 사용하지 않고, `tb_user` 테이블 기반의 자�
 
 `tb_exam` 기반. 상태(`SCHEDULED`/`OPEN`/`CLOSED`)는 컬럼으로 저장하지 않고 `open_at`/`close_at`과 현재 시각을 비교해 매 요청마다 계산합니다(`domain/exam-status.util.ts`, 정원과 무관 — 정원 초과로 자동 마감하는 로직 없음).
 
-- `POST /exams` — 회차 추가(`ADMIN` 전용). `closeAt`이 `openAt`보다 뒤가 아니면 409.
+- `POST /exams` — 회차 추가(`ADMIN` 전용). `closeAt`이 `openAt`보다 뒤가 아니면 409. **`roundName`은 요청에 없습니다** — 서버가 `"{연도}{그 해 순차번호}"`(예: `202601`, `202602`) 형식으로 자동 생성합니다(`ExamService.generateRoundName`). 관리자가 직접 입력하게 하면 오타로 표기가 흔들릴 수 있어서 아예 입력 필드를 없앴습니다. 순차번호는 그 해 가장 큰 번호 다음 값이고, soft-delete된 회차도 번호를 재사용하지 않으며, `tb_exam.round_name`에 UNIQUE 제약을 걸어 동시 생성 시 번호가 겹치면 409로 거부합니다(재시도하면 해결됨).
 - `GET /exams`, `GET /exams/:id` — 회차 목록/상세 조회. **같은 라우트를 쓰되 응답 DTO가 role에 따라 달라집니다**: 관리자는 `capacity`(정원) 포함, 일반 사용자는 미포함. 다른 모듈들처럼 관리자/사용자용 라우트를 따로 만들지 않고, 컨트롤러 안에서 `role`을 보고 응답 객체를 다르게 구성하는 방식을 씁니다(`ExamController.toResponse`).
 
 ### Role / 권한
