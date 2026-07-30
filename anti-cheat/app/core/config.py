@@ -6,6 +6,7 @@ config.py
 - .env 파일 로드
 - AWS Rekognition 설정 관리
 - 본인 인증 유사도 임계값 관리
+- 이어폰 탐지 신뢰도 임계값 관리
 """
 
 import os
@@ -31,6 +32,7 @@ class Settings:
     aws_access_key_id: str | None
     aws_secret_access_key: str | None
     identity_similarity_threshold: float
+    earphone_confidence_threshold: float
 
 
 def get_required_env(name: str) -> str:
@@ -71,9 +73,35 @@ def get_similarity_threshold() -> float:
     return threshold
 
 
+def get_earphone_confidence_threshold() -> float:
+    """이어폰 탐지 신뢰도 임계값을 읽고 검증한다."""
+
+    raw_value = os.getenv(
+        "EARPHONE_CONFIDENCE_THRESHOLD",
+        "60.0",
+    )
+
+    try:
+        threshold = float(raw_value)
+
+    except ValueError as error:
+        raise RuntimeError(
+            "EARPHONE_CONFIDENCE_THRESHOLD는 숫자여야 합니다."
+        ) from error
+
+    if not 0.0 <= threshold <= 100.0:
+        raise RuntimeError(
+            "EARPHONE_CONFIDENCE_THRESHOLD는 "
+            "0 이상 100 이하이어야 합니다."
+        )
+
+    return threshold
+
+
 settings = Settings(
     aws_region=get_required_env("AWS_REGION"),
     aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
     aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
     identity_similarity_threshold=get_similarity_threshold(),
+    earphone_confidence_threshold=get_earphone_confidence_threshold(),
 )

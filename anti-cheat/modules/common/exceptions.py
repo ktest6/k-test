@@ -6,6 +6,7 @@ exceptions.py
 - 온라인 시험 감독 시스템 공통 예외
 - 본인 인증 예외
 - 시험 모니터링 예외
+- 이어폰 탐지 예외
 - AWS Rekognition 예외
 - 이미지 검증 예외
 """
@@ -21,6 +22,10 @@ class IdentityVerificationError(ProctoringError):
 
 class MonitoringError(ProctoringError):
     """시험 모니터링 처리 중 발생하는 예외."""
+
+
+class EarphoneDetectionError(ProctoringError):
+    """이어폰 탐지 처리 중 발생하는 예외."""
 
 
 class RekognitionAPIError(ProctoringError):
