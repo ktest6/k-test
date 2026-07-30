@@ -1,20 +1,11 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Post,
-  Put,
-} from '@nestjs/common';
-import { ApiBearerAuth, ApiNoContentResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiCommonErrorResponses } from '../../../common/decorators/api-common-error-responses.decorator';
 import { ApiStandardResponse } from '../../../common/decorators/api-standard-response.decorator';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { Role } from '../../../common/enums/role.enum';
 import { CreateQuestionDto } from '../application/dto/create-question.dto';
+import { DeleteQuestionResponseDto } from '../application/dto/delete-question-response.dto';
 import { QuestionResponseDto } from '../application/dto/question-response.dto';
 import { UpdateQuestionDto } from '../application/dto/update-question.dto';
 import { QuestionService } from '../application/services/question.service';
@@ -61,10 +52,10 @@ export class QuestionController {
 
   @Delete('questions/:id')
   @Roles(Role.ADMIN)
-  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: '문제 삭제 (관리자)' })
-  @ApiNoContentResponse({ description: '삭제 성공 (바디 없음)' })
-  delete(@Param('id') id: string): Promise<void> {
-    return this.questionService.delete(id);
+  @ApiStandardResponse(DeleteQuestionResponseDto, { message: '문제가 삭제되었습니다.' })
+  async delete(@Param('id') id: string): Promise<DeleteQuestionResponseDto> {
+    await this.questionService.delete(id);
+    return { id };
   }
 }
