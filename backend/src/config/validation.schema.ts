@@ -24,4 +24,6 @@ export const validationSchema = Joi.object({
   JWT_REFRESH_EXPIRES_IN: Joi.string().default('14d'),
 
   ADMIN_SIGNUP_SECRET: Joi.string().min(16).required(),
+
+  FASTAPI_URL: Joi.string().uri().required(),
 });

@@ -26,6 +26,10 @@ export interface AppConfig {
     /** 관리자 계정 생성 시 요구하는 공유 비밀값 — 첫 관리자 부트스트랩용. */
     signupSecret: string;
   };
+  fastApi: {
+    /** 신분증-얼굴 대조를 맡는 FastAPI 서비스 베이스 URL. */
+    url: string;
+  };
 }
 
 export const appConfig = registerAs('app', (): AppConfig => ({
@@ -58,5 +62,8 @@ export const appConfig = registerAs('app', (): AppConfig => ({
   },
   admin: {
     signupSecret: process.env.ADMIN_SIGNUP_SECRET ?? '',
+  },
+  fastApi: {
+    url: process.env.FASTAPI_URL ?? '',
   },
 }));
