@@ -57,4 +57,12 @@ export class ExamApplicationService {
   countActive(examId: string): Promise<number> {
     return this.examApplicationRepository.countActiveByExam(examId);
   }
+
+  async hasActiveApplication(examId: string, userId: string): Promise<boolean> {
+    const application = await this.examApplicationRepository.findActiveByExamAndUser(
+      examId,
+      userId,
+    );
+    return !!application;
+  }
 }
