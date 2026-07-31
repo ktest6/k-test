@@ -62,6 +62,19 @@ export class AuthController {
   }
 
   @Public()
+  @Post('admin/sign-in')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: '관리자 로그인',
+    description:
+      '관리자는 tb_admin에 별도로 저장되어 있어 응시자 로그인(sign-in)과 다른 엔드포인트를 쓴다.',
+  })
+  @ApiStandardResponse(AuthResponseDto, { message: '관리자 로그인 성공' })
+  adminSignIn(@Body() dto: SignInDto): Promise<AuthResponseDto> {
+    return this.authService.adminSignIn(dto);
+  }
+
+  @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '토큰 갱신' })

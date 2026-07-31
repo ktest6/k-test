@@ -1,5 +1,4 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Role } from '../../../../common/enums/role.enum';
 import { IdentityDocumentType } from '../../domain/enums/identity-document-type.enum';
 
 export class UserResponseDto {
@@ -15,29 +14,26 @@ export class UserResponseDto {
   @ApiProperty({ description: '영문 성 (여권 표기 기준)' })
   lastName: string;
 
-  @ApiProperty({ enum: Role })
-  role: Role;
+  @ApiProperty()
+  nationality: string;
 
-  @ApiPropertyOptional({ nullable: true, description: '응시자(USER)만 값 있음, 관리자는 null' })
-  nationality: string | null;
+  @ApiProperty({ description: 'YYYY-MM-DD' })
+  birthDate: string;
 
-  @ApiPropertyOptional({ nullable: true, description: 'YYYY-MM-DD. 응시자(USER)만 값 있음' })
-  birthDate: string | null;
+  @ApiProperty({ enum: IdentityDocumentType })
+  idType: IdentityDocumentType;
 
-  @ApiPropertyOptional({ enum: IdentityDocumentType, nullable: true })
-  idType: IdentityDocumentType | null;
-
-  @ApiPropertyOptional({ nullable: true })
-  idNumber: string | null;
+  @ApiProperty()
+  idNumber: string;
 
   @ApiPropertyOptional({ nullable: true })
   companyCode: string | null;
 
-  @ApiPropertyOptional({ nullable: true })
-  termsAgreedAt: Date | null;
+  @ApiProperty()
+  termsAgreedAt: Date;
 
-  @ApiPropertyOptional({ nullable: true })
-  privacyAgreedAt: Date | null;
+  @ApiProperty()
+  privacyAgreedAt: Date;
 
   @ApiProperty()
   loginAttempts: number;

@@ -11,17 +11,14 @@ export class AdminSignUpDto {
   @MinLength(8)
   password: string;
 
-  @ApiProperty({ example: 'GILDONG', description: '영문 이름' })
+  @ApiProperty({
+    example: '관리자',
+    description: '관리자 이름 (신분증 대조 대상이 아니라 성/이름을 나누지 않는다)',
+  })
   @IsString()
   @MinLength(1)
   @MaxLength(100)
-  firstName: string;
-
-  @ApiProperty({ example: 'HONG', description: '영문 성' })
-  @IsString()
-  @MinLength(1)
-  @MaxLength(100)
-  lastName: string;
+  name: string;
 
   @ApiProperty({
     description:

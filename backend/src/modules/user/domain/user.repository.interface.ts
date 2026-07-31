@@ -15,13 +15,6 @@ export interface RegisterUserInput {
   privacyAgreedAt: Date;
 }
 
-export interface RegisterAdminInput {
-  email: string;
-  passwordHash: string;
-  firstName: string;
-  lastName: string;
-}
-
 export interface UpdateUserProfileInput {
   firstName?: string;
   lastName?: string;
@@ -36,7 +29,6 @@ export const USER_REPOSITORY = Symbol('USER_REPOSITORY');
 
 export interface UserRepository {
   register(input: RegisterUserInput): Promise<User>;
-  registerAdmin(input: RegisterAdminInput): Promise<User>;
   findById(id: string): Promise<User | null>;
   findByEmail(email: string): Promise<User | null>;
   /** Includes the password hash — only for AuthService's credential check, never returned from the public API. */

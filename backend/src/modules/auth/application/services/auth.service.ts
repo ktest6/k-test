@@ -3,8 +3,9 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { appConfig } from '../../../../config/configuration';
+import { Role } from '../../../../common/enums/role.enum';
 import { UnauthorizedDomainException } from '../../../../common/exceptions/domain.exception';
-import { User } from '../../../user/domain/entities/user.entity';
+import { AdminService } from '../../../admin/application/services/admin.service';
 import { UserService } from '../../../user/application/services/user.service';
 import { AdminSignUpDto } from '../dto/admin-sign-up.dto';
 import { AuthResponseDto } from '../dto/auth-response.dto';
@@ -15,14 +16,20 @@ import { SignUpDto } from '../dto/sign-up.dto';
 interface JwtPayload {
   sub: string;
   email: string;
-  role: string;
+  role: Role;
   type?: 'refresh';
+}
+
+interface Account {
+  id: string;
+  email: string;
 }
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly userService: UserService,
+    private readonly adminService: AdminService,
     private readonly jwtService: JwtService,
     @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>,
   ) {}
@@ -47,32 +54,37 @@ export class AuthService {
       termsAgreedAt: now,
       privacyAgreedAt: now,
     });
-    return this.toAuthResponse(user);
+    return this.toAuthResponse(user, Role.USER);
   }
 
   /**
    * 관리자 계정 생성. 로그인 사용자 검증(@Roles(ADMIN)) 대신 공유 비밀값으로
    * 게이트를 건다 — 그래야 "첫 관리자를 누가 만드나"라는 부트스트랩 문제가
    * 없다. 이후 관리자 관리 기능(비활성화, 권한 회수 등)은 별도로 ADMIN 전용
-   * 엔드포인트로 만들면 된다.
+   * 엔드포인트로 만들면 된다. 관리자는 tb_admin에 별도로 저장된다(tb_user와
+   * 완전히 분리) — 신분증/약관동의 같은 응시자 전용 필드는 아예 없다.
    */
   async adminSignUp(dto: AdminSignUpDto): Promise<AuthResponseDto> {
     if (!this.isValidAdminSecret(dto.adminSecret)) {
       throw new UnauthorizedDomainException('관리자 계정 생성 비밀값이 올바르지 않습니다.');
     }
 
-    const user = await this.userService.registerAdmin({
+    const admin = await this.adminService.register({
       email: dto.email,
       password: dto.password,
-      firstName: dto.firstName,
-      lastName: dto.lastName,
+      name: dto.name,
     });
-    return this.toAuthResponse(user);
+    return this.toAuthResponse(admin, Role.ADMIN);
   }
 
   async signIn(dto: SignInDto): Promise<AuthResponseDto> {
     const user = await this.userService.verifyCredentials(dto.email, dto.password);
-    return this.toAuthResponse(user);
+    return this.toAuthResponse(user, Role.USER);
+  }
+
+  async adminSignIn(dto: SignInDto): Promise<AuthResponseDto> {
+    const admin = await this.adminService.verifyCredentials(dto.email, dto.password);
+    return this.toAuthResponse(admin, Role.ADMIN);
   }
 
   async refreshSession(refreshToken: string): Promise<AuthResponseDto> {
@@ -88,28 +100,35 @@ export class AuthService {
       throw new UnauthorizedDomainException('리프레시 토큰이 아닙니다.');
     }
 
+    if (payload.role === Role.ADMIN) {
+      const admin = await this.adminService.findById(payload.sub);
+      return this.toAuthResponse(admin, Role.ADMIN);
+    }
     const user = await this.userService.findById(payload.sub);
-    return this.toAuthResponse(user);
+    return this.toAuthResponse(user, Role.USER);
   }
 
-  private toAuthResponse(user: User): AuthResponseDto {
-    const { accessToken, refreshToken, expiresIn } = this.issueTokens(user);
+  private toAuthResponse(account: Account, role: Role): AuthResponseDto {
+    const { accessToken, refreshToken, expiresIn } = this.issueTokens(account, role);
     return {
       accessToken,
       refreshToken,
       expiresIn,
-      userId: user.id,
-      email: user.email,
-      role: user.role,
+      userId: account.id,
+      email: account.email,
+      role,
     };
   }
 
-  private issueTokens(user: User): {
+  private issueTokens(
+    account: Account,
+    role: Role,
+  ): {
     accessToken: string;
     refreshToken: string;
     expiresIn: number;
   } {
-    const payload: JwtPayload = { sub: user.id, email: user.email, role: user.role };
+    const payload: JwtPayload = { sub: account.id, email: account.email, role };
 
     const accessExpiresIn = this.config.jwt
       .accessExpiresIn as unknown as JwtSignOptions['expiresIn'];

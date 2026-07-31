@@ -29,13 +29,6 @@ export interface RegisterUserRequest {
   privacyAgreedAt: Date;
 }
 
-export interface RegisterAdminRequest {
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-}
-
 @Injectable()
 export class UserService {
   constructor(@Inject(USER_REPOSITORY) private readonly userRepository: UserRepository) {}
@@ -59,22 +52,6 @@ export class UserService {
 
     const passwordHash = await bcrypt.hash(input.password, PASSWORD_SALT_ROUNDS);
     return this.userRepository.register({ ...input, passwordHash });
-  }
-
-  /** 응시자 가입과 달리 신원/약관동의 검증이 없다 — 관리자 계정은 신원 확인 대상이 아니다. */
-  async registerAdmin(input: RegisterAdminRequest): Promise<User> {
-    const emailTaken = await this.userRepository.existsByEmail(input.email);
-    if (emailTaken) {
-      throw new ConflictDomainException('이미 사용 중인 이메일입니다.');
-    }
-
-    const passwordHash = await bcrypt.hash(input.password, PASSWORD_SALT_ROUNDS);
-    return this.userRepository.registerAdmin({
-      email: input.email,
-      firstName: input.firstName,
-      lastName: input.lastName,
-      passwordHash,
-    });
   }
 
   async verifyCredentials(email: string, password: string): Promise<User> {
