@@ -5,7 +5,6 @@ import {
   Question,
   QuestionChecklistItem,
   QuestionContent,
-  QuestionStatus,
 } from '../../domain/entities/question.entity';
 import {
   CreateQuestionDraftInput,
@@ -19,9 +18,7 @@ interface QuestionRow {
   question_id: number;
   part: string;
   content: QuestionContent;
-  exam_id: number | null;
   document_id: number | null;
-  status: QuestionStatus;
   created_at: string;
 }
 
@@ -49,9 +46,7 @@ function toDomain(row: QuestionRow, checklistItems: QuestionChecklistItem[]): Qu
     String(row.question_id),
     row.part,
     row.content,
-    row.exam_id !== null ? String(row.exam_id) : null,
     row.document_id !== null ? String(row.document_id) : null,
-    row.status,
     checklistItems,
     new Date(row.created_at),
   );
@@ -115,7 +110,6 @@ export class SupabaseQuestionRepository implements QuestionRepository {
 
   async findByDocumentId(documentId: string): Promise<Question[]> {
     const client = this.supabaseService.getAdminClient();
-
     const { data: questionRows } = await client
       .from(QUESTION_TABLE)
       .select('*')
@@ -124,10 +118,50 @@ export class SupabaseQuestionRepository implements QuestionRepository {
       .order('question_id', { ascending: true })
       .returns<QuestionRow[]>();
 
-    if (!questionRows || questionRows.length === 0) {
+    return this.attachChecklistItems(questionRows ?? []);
+  }
+
+  async findById(id: string): Promise<Question | null> {
+    const client = this.supabaseService.getAdminClient();
+    const { data } = await client
+      .from(QUESTION_TABLE)
+      .select('*')
+      .eq('question_id', Number(id))
+      .is('deleted_at', null)
+      .maybeSingle<QuestionRow>();
+
+    if (!data) {
+      return null;
+    }
+    const [question] = await this.attachChecklistItems([data]);
+    return question;
+  }
+
+  async findByIds(ids: string[]): Promise<Question[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    const client = this.supabaseService.getAdminClient();
+    const { data: questionRows } = await client
+      .from(QUESTION_TABLE)
+      .select('*')
+      .in(
+        'question_id',
+        ids.map((id) => Number(id)),
+      )
+      .is('deleted_at', null)
+      .order('question_id', { ascending: true })
+      .returns<QuestionRow[]>();
+
+    return this.attachChecklistItems(questionRows ?? []);
+  }
+
+  private async attachChecklistItems(questionRows: QuestionRow[]): Promise<Question[]> {
+    if (questionRows.length === 0) {
       return [];
     }
 
+    const client = this.supabaseService.getAdminClient();
     const { data: checklistRows } = await client
       .from(CHECKLIST_TABLE)
       .select('*')

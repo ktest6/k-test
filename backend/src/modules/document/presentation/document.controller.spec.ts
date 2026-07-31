@@ -4,7 +4,7 @@ import { Document } from '../domain/entities/document.entity';
 import { DocumentStatus } from '../domain/enums/document-status.enum';
 import { DocumentService } from '../application/services/document.service';
 import { QuestionService } from '../../question/application/services/question.service';
-import { Question, QuestionStatus } from '../../question/domain/entities/question.entity';
+import { Question } from '../../question/domain/entities/question.entity';
 import { DocumentController } from './document.controller';
 
 function buildAdmin(): AuthenticatedUser {
@@ -31,9 +31,7 @@ function buildQuestion(): Question {
     '1',
     'work_log',
     { item_id: 'WRT-001', prompt: 'p', expected_register: 'formal', reference_keywords: ['a'] },
-    null,
     '1',
-    QuestionStatus.UNUSED,
     [{ id: '1', code: 'c1', description: '설명', weight: 1.5, displayOrder: 0 }],
     new Date(),
   );

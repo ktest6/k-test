@@ -14,21 +14,14 @@ export interface QuestionChecklistItem {
   displayOrder: number;
 }
 
-export enum QuestionStatus {
-  UNUSED = 'UNUSED',
-  USED = 'USED',
-}
-
+/** 회차 배정은 tb_exam_question(별도 모듈)에서 관리한다 — 문항 하나가 여러 회차에 재사용될 수 있어 1:1로 안 둔다. */
 export class Question {
   constructor(
     readonly id: string,
     readonly part: string,
     readonly content: QuestionContent,
-    /** NULL이면 아직 회차 미배정 — 회차 배정은 이 모듈 범위 밖의 별도 기능. */
-    readonly examId: string | null,
     /** 이 문항을 생성한 서류. 서류 없이 만들어졌으면 NULL. */
     readonly documentId: string | null,
-    readonly status: QuestionStatus,
     readonly checklistItems: QuestionChecklistItem[],
     readonly createdAt: Date,
   ) {}

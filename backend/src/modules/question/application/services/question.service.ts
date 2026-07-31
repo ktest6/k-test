@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { NotFoundDomainException } from '../../../../common/exceptions/domain.exception';
 import { Question } from '../../domain/entities/question.entity';
 import {
   CreateQuestionDraftInput,
@@ -18,5 +19,17 @@ export class QuestionService {
 
   findByDocumentId(documentId: string): Promise<Question[]> {
     return this.questionRepository.findByDocumentId(documentId);
+  }
+
+  async findById(id: string): Promise<Question> {
+    const question = await this.questionRepository.findById(id);
+    if (!question) {
+      throw new NotFoundDomainException(`문항(${id})을 찾을 수 없습니다.`);
+    }
+    return question;
+  }
+
+  findByIds(ids: string[]): Promise<Question[]> {
+    return this.questionRepository.findByIds(ids);
   }
 }
