@@ -19,6 +19,7 @@ import { SubmissionModule } from './modules/submission/submission.module';
 import { ScoringModule } from './modules/scoring/scoring.module';
 import { AiModule } from './modules/ai/ai.module';
 import { DocumentModule } from './modules/document/document.module';
+import { ExamQuestionModule } from './modules/exam-question/exam-question.module';
 import { VerificationsModule } from './modules/verifications/verifications.module';
 
 @Module({
@@ -43,6 +44,7 @@ import { VerificationsModule } from './modules/verifications/verifications.modul
     VerificationsModule,
     QuestionModule,
     DocumentModule,
+    ExamQuestionModule,
     SubmissionModule,
     ScoringModule,
     AiModule,
