@@ -18,7 +18,8 @@ const PASSWORD_SALT_ROUNDS = 10;
 export interface RegisterUserRequest {
   email: string;
   password: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   nationality: string;
   birthDate: string;
   idType: IdentityDocumentType;
@@ -31,7 +32,8 @@ export interface RegisterUserRequest {
 export interface RegisterAdminRequest {
   email: string;
   password: string;
-  name: string;
+  firstName: string;
+  lastName: string;
 }
 
 @Injectable()
@@ -69,7 +71,8 @@ export class UserService {
     const passwordHash = await bcrypt.hash(input.password, PASSWORD_SALT_ROUNDS);
     return this.userRepository.registerAdmin({
       email: input.email,
-      name: input.name,
+      firstName: input.firstName,
+      lastName: input.lastName,
       passwordHash,
     });
   }

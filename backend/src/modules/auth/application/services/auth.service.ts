@@ -37,7 +37,8 @@ export class AuthService {
     const user = await this.userService.register({
       email: dto.email,
       password: dto.password,
-      name: dto.name,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
       nationality: dto.nationality,
       birthDate: dto.birthDate,
       idType: dto.idType,
@@ -63,7 +64,8 @@ export class AuthService {
     const user = await this.userService.registerAdmin({
       email: dto.email,
       password: dto.password,
-      name: dto.name,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
     });
     return this.toAuthResponse(user);
   }

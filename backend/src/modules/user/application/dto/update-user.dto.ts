@@ -6,5 +6,11 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   @MinLength(1)
-  name?: string;
+  firstName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  lastName?: string;
 }

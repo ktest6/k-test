@@ -47,7 +47,7 @@ export class IdCardVerificationService {
     // TODO: FastAPI 배포되면 아래 두 줄을 지우고 주석 해제.
     //
     // const { examId } = await this.examSessionAccessService.assertOwnership(userId, dto.examSessionId);
-    // const user = await this.userService.findById(userId); // name/birthDate는 여기서만 필요
+    // const user = await this.userService.findById(userId); // firstName/lastName/birthDate는 여기서만 필요
     // const [idCardImage, faceImage] = await Promise.all([
     //   this.downloadImage(client, dto.idCardPath),
     //   this.downloadImage(client, dto.facePath),
@@ -56,7 +56,8 @@ export class IdCardVerificationService {
     // form.append('exam_id', examId);
     // form.append('examinee_id', userId);
     // form.append('captured_at', dto.capturedAt);
-    // form.append('name', user.name);
+    // form.append('first_name', user.firstName);
+    // form.append('last_name', user.lastName);
     // form.append('birth_date', user.birthDate ?? '');
     // form.append('source_image', idCardImage.buffer, {
     //   filename: idCardImage.filename,

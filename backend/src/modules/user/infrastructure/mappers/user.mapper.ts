@@ -6,7 +6,8 @@ export interface UserRow {
   user_id: number;
   email: string;
   password: string;
-  name: string;
+  first_name: string;
+  last_name: string;
   role: Role;
   nationality: string | null;
   birth_date: string | null;
@@ -25,7 +26,8 @@ export class UserMapper {
     return new User(
       String(row.user_id),
       row.email,
-      row.name,
+      row.first_name,
+      row.last_name,
       row.role,
       row.nationality,
       row.birth_date,

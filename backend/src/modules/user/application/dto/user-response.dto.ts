@@ -9,8 +9,11 @@ export class UserResponseDto {
   @ApiProperty()
   email: string;
 
-  @ApiProperty({ description: '영문성명 (여권 표기 기준)' })
-  name: string;
+  @ApiProperty({ description: '영문 이름 (여권 표기 기준)' })
+  firstName: string;
+
+  @ApiProperty({ description: '영문 성 (여권 표기 기준)' })
+  lastName: string;
 
   @ApiProperty({ enum: Role })
   role: Role;

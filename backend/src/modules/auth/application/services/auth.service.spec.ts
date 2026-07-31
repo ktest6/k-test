@@ -35,7 +35,8 @@ function buildAdminUser(): User {
   return new User(
     '1',
     'admin1@test.com',
-    '관리자',
+    'GILDONG',
+    'HONG',
     Role.ADMIN,
     null,
     null,
@@ -54,7 +55,8 @@ function buildDto(overrides: Partial<AdminSignUpDto> = {}): AdminSignUpDto {
   return {
     email: 'admin1@test.com',
     password: '12341234!!',
-    name: '관리자',
+    firstName: 'GILDONG',
+    lastName: 'HONG',
     adminSecret: 'correct-secret-value',
     ...overrides,
   };
@@ -99,7 +101,8 @@ describe('AuthService.adminSignUp', () => {
     expect(registerAdmin).toHaveBeenCalledWith({
       email: 'admin1@test.com',
       password: '12341234!!',
-      name: '관리자',
+      firstName: 'GILDONG',
+      lastName: 'HONG',
     });
     expect(result.accessToken).toBe('signed-token');
     expect(result.role).toBe(Role.ADMIN);
