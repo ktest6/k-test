@@ -24,11 +24,17 @@ export class SignUpDto {
   password: string;
 
   // 신원 (응시 당일 신분증 대조용 — 최소 항목만 수집)
-  @ApiProperty({ example: 'GILDONG HONG', description: '영문성명 (여권 표기 기준)' })
+  @ApiProperty({ example: 'GILDONG', description: '영문 이름 (여권 표기 기준)' })
   @IsString()
   @MinLength(1)
   @MaxLength(100)
-  name: string;
+  firstName: string;
+
+  @ApiProperty({ example: 'HONG', description: '영문 성 (여권 표기 기준)' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  lastName: string;
 
   @ApiProperty({ example: 'KOR', description: '국적' })
   @IsString()

@@ -7,7 +7,8 @@ function validPayload(): Record<string, unknown> {
   return {
     email: 'student@example.com',
     password: '12341234!!',
-    name: 'GILDONG HONG',
+    firstName: 'GILDONG',
+    lastName: 'HONG',
     nationality: 'KOR',
     birthDate: '1995-05-20',
     idType: IdentityDocumentType.PASSPORT,

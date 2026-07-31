@@ -29,7 +29,8 @@ export class SupabaseUserRepository implements UserRepository {
       .insert({
         email: input.email,
         password: input.passwordHash,
-        name: input.name,
+        first_name: input.firstName,
+        last_name: input.lastName,
         role: Role.USER,
         nationality: input.nationality,
         birth_date: input.birthDate,
@@ -55,7 +56,8 @@ export class SupabaseUserRepository implements UserRepository {
       .insert({
         email: input.email,
         password: input.passwordHash,
-        name: input.name,
+        first_name: input.firstName,
+        last_name: input.lastName,
         role: Role.ADMIN,
       })
       .select()
@@ -149,7 +151,10 @@ export class SupabaseUserRepository implements UserRepository {
     const client = this.supabaseService.getAdminClient();
     const { data, error } = await client
       .from(TABLE)
-      .update(input)
+      .update({
+        ...(input.firstName !== undefined && { first_name: input.firstName }),
+        ...(input.lastName !== undefined && { last_name: input.lastName }),
+      })
       .eq('user_id', Number(id))
       .select()
       .single<UserRow>();

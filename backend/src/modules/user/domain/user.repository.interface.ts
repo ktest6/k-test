@@ -4,7 +4,8 @@ import { IdentityDocumentType } from './enums/identity-document-type.enum';
 export interface RegisterUserInput {
   email: string;
   passwordHash: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   nationality: string;
   birthDate: string;
   idType: IdentityDocumentType;
@@ -17,11 +18,13 @@ export interface RegisterUserInput {
 export interface RegisterAdminInput {
   email: string;
   passwordHash: string;
-  name: string;
+  firstName: string;
+  lastName: string;
 }
 
 export interface UpdateUserProfileInput {
-  name?: string;
+  firstName?: string;
+  lastName?: string;
 }
 
 export interface UserCredentials {
