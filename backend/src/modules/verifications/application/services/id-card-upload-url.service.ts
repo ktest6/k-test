@@ -4,7 +4,7 @@ import { StorageUploadUrlService } from '../../../../infrastructure/supabase/sto
 import { IdCardFileType } from '../../domain/enums/id-card-file-type.enum';
 import { RequestIdCardUploadUrlDto } from '../dto/request-id-card-upload-url.dto';
 import { UploadUrlResponseDto } from '../dto/upload-url-response.dto';
-import { ExamSessionAccessService } from './exam-session-access.service';
+import { ExamAccessService } from './exam-access.service';
 
 const STORAGE_BUCKET = 'identity-docs';
 
@@ -36,14 +36,14 @@ const FILE_NAME_BY_FILE_TYPE: Record<IdCardFileType, string> = {
 export class IdCardUploadUrlService {
   constructor(
     private readonly storageUploadUrlService: StorageUploadUrlService,
-    private readonly examSessionAccessService: ExamSessionAccessService,
+    private readonly examAccessService: ExamAccessService,
   ) {}
 
   async createUploadUrl(
     userId: string,
     dto: RequestIdCardUploadUrlDto,
   ): Promise<UploadUrlResponseDto> {
-    await this.examSessionAccessService.assertOwnership(userId, dto.examSessionId);
+    await this.examAccessService.assertApplied(userId, dto.examId);
 
     if (!ALLOWED_CONTENT_TYPES_BY_FILE_TYPE[dto.fileType].includes(dto.contentType)) {
       throw new ConflictDomainException(
@@ -53,7 +53,7 @@ export class IdCardUploadUrlService {
 
     const extension = EXTENSION_BY_CONTENT_TYPE[dto.contentType];
     const fileName = FILE_NAME_BY_FILE_TYPE[dto.fileType];
-    const path = `${userId}/${dto.examSessionId}/${fileName}.${extension}`;
+    const path = `${userId}/${dto.examId}/${fileName}.${extension}`;
 
     return this.storageUploadUrlService.createSignedUploadUrl(STORAGE_BUCKET, path);
   }

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ExamModule } from '../exam/exam.module';
 import { ExamQuestionModule } from '../exam-question/exam-question.module';
+import { VerificationsModule } from '../verifications/verifications.module';
 import { EXAM_SESSION_REPOSITORY } from './domain/exam-session.repository.interface';
 import { ExamSessionQuestionService } from './application/services/exam-session-question.service';
 import { ExamSessionService } from './application/services/exam-session.service';
@@ -8,7 +9,7 @@ import { SupabaseExamSessionRepository } from './infrastructure/repositories/sup
 import { ExamSessionController } from './presentation/exam-session.controller';
 
 @Module({
-  imports: [ExamModule, ExamQuestionModule],
+  imports: [ExamModule, ExamQuestionModule, VerificationsModule],
   controllers: [ExamSessionController],
   providers: [
     ExamSessionService,
