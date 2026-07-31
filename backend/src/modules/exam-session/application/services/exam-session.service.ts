@@ -8,6 +8,7 @@ import { ExamApplicationService } from '../../../exam/application/services/exam-
 import { ExamService } from '../../../exam/application/services/exam.service';
 import { ExamStatus } from '../../../exam/domain/enums/exam-status.enum';
 import { computeExamStatus } from '../../../exam/domain/exam-status.util';
+import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
 import { ExamSession } from '../../domain/entities/exam-session.entity';
 import { SessionStatus } from '../../domain/enums/session-status.enum';
 import {
@@ -28,6 +29,7 @@ export class ExamSessionService {
     @Inject(EXAM_SESSION_REPOSITORY) private readonly examSessionRepository: ExamSessionRepository,
     private readonly examService: ExamService,
     private readonly examApplicationService: ExamApplicationService,
+    private readonly idCardVerificationService: IdCardVerificationService,
   ) {}
 
   async start(examId: string, userId: string): Promise<ExamSession> {
@@ -40,6 +42,11 @@ export class ExamSessionService {
     const applied = await this.examApplicationService.hasActiveApplication(examId, userId);
     if (!applied) {
       throw new ForbiddenDomainException('신청한 회차가 아닙니다.');
+    }
+
+    const verified = await this.idCardVerificationService.hasVerifiedExam(examId, userId);
+    if (!verified) {
+      throw new ForbiddenDomainException('본인인증을 먼저 완료해야 합니다.');
     }
 
     const existing = await this.examSessionRepository.findByUserAndExam(userId, examId);

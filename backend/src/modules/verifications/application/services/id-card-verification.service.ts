@@ -7,7 +7,7 @@ import { SupabaseService } from '../../../../infrastructure/supabase/supabase.se
 import { UserService } from '../../../user/application/services/user.service';
 import { VerifyIdCardDto } from '../dto/verify-id-card.dto';
 import { VerifyIdCardResponseDto } from '../dto/verify-id-card-response.dto';
-import { ExamSessionAccessService } from './exam-session-access.service';
+import { ExamAccessService } from './exam-access.service';
 
 /**
  * 시험 시작 전 본인인증(신분증-얼굴 대조). 이미지 자체는 프론트가
@@ -23,7 +23,7 @@ import { ExamSessionAccessService } from './exam-session-access.service';
 export class IdCardVerificationService {
   constructor(
     private readonly supabaseService: SupabaseService,
-    private readonly examSessionAccessService: ExamSessionAccessService,
+    private readonly examAccessService: ExamAccessService,
     private readonly userService: UserService,
     private readonly httpService: HttpService,
     @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>,
@@ -35,25 +35,24 @@ export class IdCardVerificationService {
     // 1) 전달받은 경로가 실제로 이 사용자 소유 폴더 아래인지 확인.
     // upload-url 발급 단계에서 이미 서버가 경로를 정해줬으므로(바꿔치기 불가),
     // 여기서는 그 경로가 그대로 전달됐는지 한 번 더 확인하는 방어 계층이다.
-    const expectedPrefix = `${userId}/${dto.examSessionId}/`;
+    const expectedPrefix = `${userId}/${dto.examId}/`;
     if (!dto.idCardPath.startsWith(expectedPrefix) || !dto.facePath.startsWith(expectedPrefix)) {
       throw new ForbiddenDomainException('본인 파일 경로가 아닙니다.');
     }
 
-    // 2) 세션 소유자 확인
-    await this.examSessionAccessService.assertOwnership(userId, dto.examSessionId);
+    // 2) 신청한 회차인지 확인
+    await this.examAccessService.assertApplied(userId, dto.examId);
 
     // 3) FastAPI(VM)로 얼굴 대조 요청
-    // TODO: FastAPI 배포되면 아래 두 줄을 지우고 주석 해제.
+    // TODO: FastAPI 배포되면 아래 줄을 지우고 주석 해제.
     //
-    // const { examId } = await this.examSessionAccessService.assertOwnership(userId, dto.examSessionId);
     // const user = await this.userService.findById(userId); // firstName/lastName/birthDate는 여기서만 필요
     // const [idCardImage, faceImage] = await Promise.all([
     //   this.downloadImage(client, dto.idCardPath),
     //   this.downloadImage(client, dto.facePath),
     // ]);
     // const form = new FormData();
-    // form.append('exam_id', examId);
+    // form.append('exam_id', dto.examId);
     // form.append('examinee_id', userId);
     // form.append('captured_at', dto.capturedAt);
     // form.append('first_name', user.firstName);
@@ -93,7 +92,8 @@ export class IdCardVerificationService {
 
     // 4) 결과 로그 저장
     await client.from('identity_logs').insert({
-      exam_session_id: Number(dto.examSessionId),
+      exam_id: Number(dto.examId),
+      user_id: Number(userId),
       id_card_path: dto.idCardPath,
       face_path: dto.facePath,
       matched,
@@ -107,5 +107,20 @@ export class IdCardVerificationService {
     // await client.storage.from('identity-docs').remove([dto.idCardPath, dto.facePath]);
 
     return { matched, confidence };
+  }
+
+  /** 시험 시작 전 게이트 체크(ExamSessionService.start)에서 쓰는 완료 여부 조회. */
+  async hasVerifiedExam(examId: string, userId: string): Promise<boolean> {
+    const client = this.supabaseService.getAdminClient();
+    const { data } = await client
+      .from('identity_logs')
+      .select('id')
+      .eq('exam_id', Number(examId))
+      .eq('user_id', Number(userId))
+      .eq('matched', true)
+      .limit(1)
+      .maybeSingle();
+
+    return data !== null;
   }
 }

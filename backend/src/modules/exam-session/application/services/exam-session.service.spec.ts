@@ -6,6 +6,7 @@ import {
 import { Exam } from '../../../exam/domain/entities/exam.entity';
 import { ExamApplicationService } from '../../../exam/application/services/exam-application.service';
 import { ExamService } from '../../../exam/application/services/exam.service';
+import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
 import { ExamSession } from '../../domain/entities/exam-session.entity';
 import { SessionStatus } from '../../domain/enums/session-status.enum';
 import { ExamSessionRepository } from '../../domain/exam-session.repository.interface';
@@ -53,6 +54,13 @@ function buildRepository(overrides: Partial<ExamSessionRepository> = {}) {
   };
 }
 
+function buildIdCardVerificationService(overrides: Partial<{ hasVerifiedExam: jest.Mock }> = {}) {
+  return {
+    hasVerifiedExam: jest.fn().mockResolvedValue(true),
+    ...overrides,
+  } as unknown as IdCardVerificationService;
+}
+
 describe('ExamSessionService.start', () => {
   it('rejects when the exam is not currently OPEN', async () => {
     const exam = buildExam({ openAt: new Date('2099-01-01T00:00:00.000Z') });
@@ -61,7 +69,12 @@ describe('ExamSessionService.start', () => {
       hasActiveApplication: jest.fn(),
     } as unknown as ExamApplicationService;
     const repository = buildRepository();
-    const service = new ExamSessionService(repository, examService, examApplicationService);
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
 
     await expect(service.start('1', '1')).rejects.toThrow(ConflictDomainException);
     expect(repository.create).not.toHaveBeenCalled();
@@ -73,7 +86,33 @@ describe('ExamSessionService.start', () => {
     const hasActiveApplication = jest.fn().mockResolvedValue(false);
     const examApplicationService = { hasActiveApplication } as unknown as ExamApplicationService;
     const repository = buildRepository();
-    const service = new ExamSessionService(repository, examService, examApplicationService);
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
+
+    await expect(service.start('1', '1')).rejects.toThrow(ForbiddenDomainException);
+    expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects when the caller has not completed identity verification', async () => {
+    const exam = buildExam();
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
+    const examApplicationService = {
+      hasActiveApplication: jest.fn().mockResolvedValue(true),
+    } as unknown as ExamApplicationService;
+    const repository = buildRepository();
+    const idCardVerificationService = buildIdCardVerificationService({
+      hasVerifiedExam: jest.fn().mockResolvedValue(false),
+    });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      idCardVerificationService,
+    );
 
     await expect(service.start('1', '1')).rejects.toThrow(ForbiddenDomainException);
     expect(repository.create).not.toHaveBeenCalled();
@@ -89,7 +128,12 @@ describe('ExamSessionService.start', () => {
     const repository = buildRepository({
       findByUserAndExam: jest.fn().mockResolvedValue(existing),
     });
-    const service = new ExamSessionService(repository, examService, examApplicationService);
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
 
     await expect(service.start('1', '1')).rejects.toThrow(ConflictDomainException);
     expect(repository.create).not.toHaveBeenCalled();
@@ -105,7 +149,12 @@ describe('ExamSessionService.start', () => {
     const repository = buildRepository({
       findByUserAndExam: jest.fn().mockResolvedValue(existing),
     });
-    const service = new ExamSessionService(repository, examService, examApplicationService);
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
 
     const result = await service.start('1', '1');
 
@@ -121,7 +170,12 @@ describe('ExamSessionService.start', () => {
     } as unknown as ExamApplicationService;
     const created = buildSession();
     const repository = buildRepository({ create: jest.fn().mockResolvedValue(created) });
-    const service = new ExamSessionService(repository, examService, examApplicationService);
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
 
     const result = await service.start('1', '1');
 
@@ -135,7 +189,12 @@ describe('ExamSessionService.getStatus', () => {
     const examService = {} as unknown as ExamService;
     const examApplicationService = {} as unknown as ExamApplicationService;
     const repository = buildRepository();
-    const service = new ExamSessionService(repository, examService, examApplicationService);
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
 
     await expect(service.getStatus('1', '1')).rejects.toThrow(NotFoundDomainException);
   });
@@ -145,7 +204,12 @@ describe('ExamSessionService.getStatus', () => {
     const examService = {} as unknown as ExamService;
     const examApplicationService = {} as unknown as ExamApplicationService;
     const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
-    const service = new ExamSessionService(repository, examService, examApplicationService);
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
 
     await expect(service.getStatus('1', '1')).rejects.toThrow(ForbiddenDomainException);
   });
@@ -156,7 +220,12 @@ describe('ExamSessionService.getStatus', () => {
     const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
     const examApplicationService = {} as unknown as ExamApplicationService;
     const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
-    const service = new ExamSessionService(repository, examService, examApplicationService);
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
 
     const result = await service.getStatus('1', '1');
 
@@ -170,7 +239,12 @@ describe('ExamSessionService.getStatus', () => {
     const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
     const examApplicationService = {} as unknown as ExamApplicationService;
     const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
-    const service = new ExamSessionService(repository, examService, examApplicationService);
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
 
     const result = await service.getStatus('1', '1');
 
@@ -185,7 +259,12 @@ describe('ExamSessionService.getStatus', () => {
     const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
     const examApplicationService = {} as unknown as ExamApplicationService;
     const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
-    const service = new ExamSessionService(repository, examService, examApplicationService);
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
 
     const result = await service.getStatus('1', '1');
 

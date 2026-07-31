@@ -5,10 +5,10 @@ import { IdCardFileType } from '../../domain/enums/id-card-file-type.enum';
 const ALLOWED_CONTENT_TYPES = ['image/jpeg', 'image/png', 'application/pdf'] as const;
 
 export class RequestIdCardUploadUrlDto {
-  @ApiProperty({ description: '응시 세션 ID (tb_exam_session.exam_session_id)', example: '1' })
+  @ApiProperty({ description: '응시 회차 ID (tb_exam.exam_id)', example: '1' })
   @IsString()
   @MinLength(1)
-  examSessionId: string;
+  examId: string;
 
   @ApiProperty({ enum: IdCardFileType, description: '신분증/수험표인지 웹캠 캡처인지' })
   @IsEnum(IdCardFileType)
