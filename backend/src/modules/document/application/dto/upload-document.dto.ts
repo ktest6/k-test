@@ -1,5 +1,5 @@
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
-import { IsInt, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsOptional, IsString, MinLength } from 'class-validator';
 
 export class UploadDocumentDto {
   @ApiProperty({
@@ -20,6 +20,6 @@ export class UploadDocumentDto {
       '업로드 시점에 이미 회차를 알고 있으면 미리 지정. 생성되는 문항의 exam_id는 이 값과 무관하게 항상 NULL이며(회차 배정은 별도 기능), 여기 넘긴 값은 문서 메타데이터에만 보관된다.',
   })
   @IsOptional()
-  @IsInt()
-  examId?: number;
+  @IsString()
+  examId?: string;
 }
