@@ -10,6 +10,9 @@ FastAPI 애플리케이션 실행 진입점.
 
 from fastapi import FastAPI
 
+from app.api.earphone_detection import (
+    router as earphone_detection_router,
+)
 from app.api.identity import router as identity_router
 from app.api.monitoring import router as monitoring_router
 
@@ -43,4 +46,5 @@ def health_check() -> dict[str, str]:
 
 
 app.include_router(identity_router)
+app.include_router(earphone_detection_router)
 app.include_router(monitoring_router)
