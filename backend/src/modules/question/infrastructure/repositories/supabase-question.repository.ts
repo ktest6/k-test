@@ -1,36 +1,58 @@
 import { Injectable } from '@nestjs/common';
-import { NotFoundDomainException } from '../../../../common/exceptions/domain.exception';
+import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
-import { Question } from '../../domain/entities/question.entity';
-import { QuestionType } from '../../domain/enums/question-type.enum';
 import {
-  CreateQuestionInput,
+  Question,
+  QuestionChecklistItem,
+  QuestionContent,
+  QuestionStatus,
+} from '../../domain/entities/question.entity';
+import {
+  CreateQuestionDraftInput,
   QuestionRepository,
-  UpdateQuestionInput,
 } from '../../domain/question.repository.interface';
 
-const TABLE = 'questions';
+const QUESTION_TABLE = 'tb_question';
+const CHECKLIST_TABLE = 'tb_question_checklist_item';
 
 interface QuestionRow {
-  id: string;
-  test_id: string;
-  type: QuestionType;
-  content: string;
-  choices: string[] | null;
-  correct_answer: string | null;
-  points: number;
+  question_id: number;
+  part: string;
+  content: QuestionContent;
+  exam_id: number | null;
+  document_id: number | null;
+  status: QuestionStatus;
   created_at: string;
 }
 
-function toDomain(row: QuestionRow): Question {
+interface ChecklistItemRow {
+  checklist_item_id: number;
+  question_id: number;
+  code: string;
+  description: string;
+  weight: number;
+  display_order: number;
+}
+
+function toChecklistDomain(row: ChecklistItemRow): QuestionChecklistItem {
+  return {
+    id: String(row.checklist_item_id),
+    code: row.code,
+    description: row.description,
+    weight: Number(row.weight),
+    displayOrder: row.display_order,
+  };
+}
+
+function toDomain(row: QuestionRow, checklistItems: QuestionChecklistItem[]): Question {
   return new Question(
-    row.id,
-    row.test_id,
-    row.type,
+    String(row.question_id),
+    row.part,
     row.content,
-    row.choices,
-    row.correct_answer,
-    row.points,
+    row.exam_id !== null ? String(row.exam_id) : null,
+    row.document_id !== null ? String(row.document_id) : null,
+    row.status,
+    checklistItems,
     new Date(row.created_at),
   );
 }
@@ -39,66 +61,91 @@ function toDomain(row: QuestionRow): Question {
 export class SupabaseQuestionRepository implements QuestionRepository {
   constructor(private readonly supabaseService: SupabaseService) {}
 
-  async create(input: CreateQuestionInput): Promise<Question> {
+  async bulkCreateDrafts(
+    documentId: string,
+    items: CreateQuestionDraftInput[],
+  ): Promise<Question[]> {
     const client = this.supabaseService.getAdminClient();
-    const { data, error } = await client
-      .from(TABLE)
-      .insert({
-        test_id: input.testId,
-        type: input.type,
-        content: input.content,
-        choices: input.choices ?? null,
-        correct_answer: input.correctAnswer ?? null,
-        points: input.points,
-      })
+
+    const { data: questionRows, error } = await client
+      .from(QUESTION_TABLE)
+      .insert(
+        items.map((item) => ({
+          part: item.part,
+          content: item.content,
+          document_id: Number(documentId),
+        })),
+      )
       .select()
-      .single<QuestionRow>();
-
-    if (error || !data) {
-      throw new NotFoundDomainException(error?.message ?? '문제 생성에 실패했습니다.');
-    }
-    return toDomain(data);
-  }
-
-  async findById(id: string): Promise<Question | null> {
-    const client = this.supabaseService.getAdminClient();
-    const { data } = await client.from(TABLE).select('*').eq('id', id).maybeSingle<QuestionRow>();
-    return data ? toDomain(data) : null;
-  }
-
-  async update(id: string, input: UpdateQuestionInput): Promise<Question> {
-    const client = this.supabaseService.getAdminClient();
-    const update: Record<string, unknown> = {};
-    if (input.content !== undefined) update.content = input.content;
-    if (input.choices !== undefined) update.choices = input.choices;
-    if (input.correctAnswer !== undefined) update.correct_answer = input.correctAnswer;
-    if (input.points !== undefined) update.points = input.points;
-
-    const { data, error } = await client
-      .from(TABLE)
-      .update(update)
-      .eq('id', id)
-      .select()
-      .single<QuestionRow>();
-
-    if (error || !data) {
-      throw new NotFoundDomainException(`문제(${id})를 찾을 수 없습니다.`);
-    }
-    return toDomain(data);
-  }
-
-  async delete(id: string): Promise<void> {
-    const client = this.supabaseService.getAdminClient();
-    await client.from(TABLE).delete().eq('id', id);
-  }
-
-  async listByTestId(testId: string): Promise<Question[]> {
-    const client = this.supabaseService.getAdminClient();
-    const { data } = await client
-      .from(TABLE)
-      .select('*')
-      .eq('test_id', testId)
       .returns<QuestionRow[]>();
-    return (data ?? []).map(toDomain);
+
+    if (error || !questionRows) {
+      throw new ConflictDomainException(error?.message ?? '문항 생성에 실패했습니다.');
+    }
+
+    const checklistPayload = questionRows.flatMap((row, index) =>
+      items[index].checklist.map((c, checklistIndex) => ({
+        question_id: row.question_id,
+        code: c.code,
+        description: c.description,
+        weight: c.weight,
+        display_order: checklistIndex,
+      })),
+    );
+
+    const { data: checklistRows, error: checklistError } = await client
+      .from(CHECKLIST_TABLE)
+      .insert(checklistPayload)
+      .select()
+      .returns<ChecklistItemRow[]>();
+
+    if (checklistError || !checklistRows) {
+      throw new ConflictDomainException(
+        checklistError?.message ?? '문항 체크리스트 생성에 실패했습니다.',
+      );
+    }
+
+    return questionRows.map((row) =>
+      toDomain(
+        row,
+        checklistRows.filter((c) => c.question_id === row.question_id).map(toChecklistDomain),
+      ),
+    );
+  }
+
+  async findByDocumentId(documentId: string): Promise<Question[]> {
+    const client = this.supabaseService.getAdminClient();
+
+    const { data: questionRows } = await client
+      .from(QUESTION_TABLE)
+      .select('*')
+      .eq('document_id', Number(documentId))
+      .is('deleted_at', null)
+      .order('question_id', { ascending: true })
+      .returns<QuestionRow[]>();
+
+    if (!questionRows || questionRows.length === 0) {
+      return [];
+    }
+
+    const { data: checklistRows } = await client
+      .from(CHECKLIST_TABLE)
+      .select('*')
+      .in(
+        'question_id',
+        questionRows.map((row) => row.question_id),
+      )
+      .is('deleted_at', null)
+      .order('display_order', { ascending: true })
+      .returns<ChecklistItemRow[]>();
+
+    return questionRows.map((row) =>
+      toDomain(
+        row,
+        (checklistRows ?? [])
+          .filter((c) => c.question_id === row.question_id)
+          .map(toChecklistDomain),
+      ),
+    );
   }
 }

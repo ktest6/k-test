@@ -1,11 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { NotFoundDomainException } from '../../../../common/exceptions/domain.exception';
 import { Question } from '../../domain/entities/question.entity';
 import {
-  CreateQuestionInput,
+  CreateQuestionDraftInput,
   QUESTION_REPOSITORY,
   QuestionRepository,
-  UpdateQuestionInput,
 } from '../../domain/question.repository.interface';
 
 @Injectable()
@@ -14,27 +12,11 @@ export class QuestionService {
     @Inject(QUESTION_REPOSITORY) private readonly questionRepository: QuestionRepository,
   ) {}
 
-  create(input: CreateQuestionInput): Promise<Question> {
-    return this.questionRepository.create(input);
+  bulkCreateDrafts(documentId: string, items: CreateQuestionDraftInput[]): Promise<Question[]> {
+    return this.questionRepository.bulkCreateDrafts(documentId, items);
   }
 
-  async findById(id: string): Promise<Question> {
-    const question = await this.questionRepository.findById(id);
-    if (!question) {
-      throw new NotFoundDomainException(`문제(${id})를 찾을 수 없습니다.`);
-    }
-    return question;
-  }
-
-  update(id: string, input: UpdateQuestionInput): Promise<Question> {
-    return this.questionRepository.update(id, input);
-  }
-
-  delete(id: string): Promise<void> {
-    return this.questionRepository.delete(id);
-  }
-
-  listByTestId(testId: string): Promise<Question[]> {
-    return this.questionRepository.listByTestId(testId);
+  findByDocumentId(documentId: string): Promise<Question[]> {
+    return this.questionRepository.findByDocumentId(documentId);
   }
 }
