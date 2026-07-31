@@ -21,7 +21,7 @@ export class DocumentService {
 
   async upload(uploaderId: string, dto: UploadDocumentDto): Promise<Document> {
     const fileName = dto.fileName ?? dto.filePath.split('/').pop() ?? dto.filePath;
-    const examId = dto.examId !== undefined ? String(dto.examId) : undefined;
+    const examId = dto.examId;
 
     const document = await this.documentRepository.create({
       filePath: dto.filePath,

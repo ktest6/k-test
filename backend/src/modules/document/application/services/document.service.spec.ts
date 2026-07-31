@@ -79,7 +79,7 @@ describe('DocumentService.upload', () => {
     const emit = jest.fn();
     const eventEmitter = { emit } as unknown as EventEmitter2;
     const service = new DocumentService(repository, eventEmitter);
-    const dto: UploadDocumentDto = { filePath: 'documents/x.pdf', examId: 2 };
+    const dto: UploadDocumentDto = { filePath: 'documents/x.pdf', examId: '2' };
 
     await service.upload('1', dto);
 
