@@ -18,4 +18,6 @@ export interface QuestionRepository {
   /** 문서 하나로 생성된 문항 여러 개(+체크리스트)를 한 번에 만든다. */
   bulkCreateDrafts(documentId: string, items: CreateQuestionDraftInput[]): Promise<Question[]>;
   findByDocumentId(documentId: string): Promise<Question[]>;
+  findById(id: string): Promise<Question | null>;
+  findByIds(ids: string[]): Promise<Question[]>;
 }
