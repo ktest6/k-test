@@ -9,7 +9,26 @@
 
 ## 백엔드 연동 (이것만 보시면 됩니다)
 
-엔드포인트는 2개입니다. **문항이 끝날 때마다 `/score`, 시험이 끝나면 `/finalize`.**
+시험 흐름은 엔드포인트 2개입니다. **문항이 끝날 때마다 `/score`, 시험이 끝나면 `/finalize`.**
+관리자가 안전 문서로 맞춤 문항을 만드는 흐름은 `/generate-items`, `/verify-items` 입니다(아래 별도 절).
+
+### 인증 — `X-API-Key` 헤더
+
+서버에 API 키가 설정돼 있으면 **모든 POST 요청**에 헤더를 붙여야 합니다.
+
+```http
+POST /score
+X-API-Key: (전달받은 키)
+```
+
+| 서버 상태 | POST 요청 | 확인 방법 |
+|---|---|---|
+| 키가 설정됨 | `X-API-Key` 필수. 없거나 틀리면 **401** | `GET /health` 의 `auth_enabled` 가 `true` |
+| 키가 없음 (지금) | 헤더 없이 그대로 호출 가능 (개발 모드) | `auth_enabled` 가 `false` |
+
+- `GET /health`, `GET /features`, `/docs` 는 **어느 쪽에서도 열려 있습니다.**
+- 401 응답의 `detail` 에 한국어로 사유가 들어 있습니다(헤더가 없는지, 값이 틀린지 구분됩니다).
+- 지금은 키를 넣지 않은 상태라 연동 테스트가 막히지 않습니다. **운영 전환 시 키를 전달드립니다.**
 
 ### `POST /score` — 문항 하나 채점
 
@@ -77,11 +96,105 @@
 
 **응답**: `overall_score`, `overall_grade`, `percentile`, `subscores[]`, `mode_results[]`(말하기/쓰기 각각), `cross_mode_check`(말하기·쓰기 등급 차이 — 부정행위 교차검증 신호)
 
+---
+
+## 문항 생성 (관리자 흐름)
+
+관리자가 올린 **안전 문서 텍스트**로 쓰기 문항 초안을 만듭니다. 시험 중에 부르는 창구가 아닙니다.
+
+```
+[관리자] 문서 업로드
+   |  (백엔드) 파일 저장 · PDF -> 텍스트 추출 · document_id 발급
+   v
+POST /generate-items      <- 우리 몫
+   |  전처리 -> 생성 1회 -> 검증 관문 5개 -> draft 문항 + 폐기 보고
+   v
+   |  (백엔드) draft 저장 / (프론트) 승인 화면 / (관리자) 승인 클릭
+   v
+[응시자] 시험 -> POST /score -> POST /finalize   <- 기존 그대로. 변경 없음
+```
+
+### `POST /generate-items`
+
+```json
+{
+  "document_id": "doc-0001",
+  "document_text": "(주)K-테스트 식품공장 안전수칙 ... (문서 전문)",
+  "document_title": "식품공장 안전보건 수칙",
+  "options": { "item_count": 3, "workplace_name": "(주)K-테스트 식품공장" }
+}
+```
+
+| 필드 | 필수 | 설명 |
+|---|---|---|
+| `document_id` | O | 백엔드가 발급한 문서 식별자. 응답에 그대로 돌려줍니다 |
+| `document_text` | O | 문서 전문. **PDF 추출 결과를 그대로** 보내면 됩니다(머리글·쪽번호 정리는 우리가 합니다) |
+| `options.item_count` | | 만들 문항 수 (1~10, 기본 3). 폐기가 있으면 이보다 적게 나옵니다 |
+| `options.item_types` | | 문항 유형을 좁히고 싶을 때. 비우면 5유형 전부 |
+| `options.item_id_prefix` | | 문항 id 앞글자 (기본 `GEN`) |
+| `options.workplace_name` | | 지시문에 쓸 사업장 이름 |
+
+**응답 주요 필드**
+
+| 필드 | 설명 |
+|---|---|
+| `items[]` | 통과한 문항. **`/score` 의 `item` 에 그대로 넣을 수 있습니다** |
+| `items[].status` | 언제나 `"draft"` — 사람이 승인해야 시험에 낼 수 있습니다 |
+| `items[].citation` | 문항 전체의 근거. `matched_text`, `start`, `end` |
+| `items[].checklist[].citation` | 체크리스트 항목마다의 근거 |
+| `dropped[]` | 버린 문항. `reason`(코드값) + `detail`(사람이 읽는 사유) |
+| `counts` | `requested / returned_by_model / kept / dropped / truncated / drop_rate` |
+| `source_text` | 정제된 문서 전문. **인용 위치(start/end)의 기준입니다** |
+| `meta.source_text_sha256` | 문서 지문. 재검증 때 대조합니다 |
+
+| 상태 코드 | 언제 |
+|---|---|
+| 400 | 문서가 500자 미만 / 30,000자 초과 / `mode: speaking` |
+| 503 | LLM 을 쓸 수 없음. **채점과 달리 대체 경로가 없습니다** |
+| 200 | 문항이 0개여도 오류가 아닙니다. `items: []` + `dropped` + 경고 |
+
+> ### 백엔드에 꼭 부탁드립니다
+>
+> **응답을 저장할 때 필드를 지우지 마세요.** `citation` 을 버리면 승인 화면에서 근거를 보여줄 수 없고,
+> 그 순간 이 기능은 "AI가 만든 문제를 그냥 믿는 서비스"가 됩니다.
+> `source_text` 도 함께 보관해 주세요. 우리는 무상태라 아무것도 저장하지 않습니다.
+>
+> - 문서 길이가 넘치면 **자르지 않고 400 으로 거절**합니다. 자르면 관리자가 보낸 문서와 문항이 나온 문서가 달라집니다.
+> - `reference_keywords` 는 관리자에게만 보여주세요(응시자에게는 정답 힌트입니다).
+> - 확정된 문항은 불변으로 다뤄 주세요. 고치면 **새 `item_id`** 를 발급해야 채점 근거를 설명할 수 있습니다.
+
+### `POST /verify-items` — 관리자가 고친 문항 재검증
+
+승인 화면에서 문구를 고치면 인용 근거가 깨질 수 있습니다. **LLM 을 부르지 않으므로** 몇 번을 눌러도 같은 답이 나옵니다.
+
+```json
+{
+  "source_text": "(/generate-items 가 돌려준 정제 텍스트 그대로)",
+  "source_text_sha256": "(meta.source_text_sha256)",
+  "items": [ "(고친 문항들)" ]
+}
+```
+
+응답: `all_ok`, `results[].ok`, `results[].failures[]`. **`ok` 가 `false` 인 문항은 확정하지 마세요.**
+
+### 승인 화면에 필요한 것 (프론트)
+
+1. 문항 지시문 (응시자가 볼 그대로) 2. 체크리스트 + 가중치
+3. **항목마다 근거 인용** (`citation.matched_text`) — 클릭하면 문서의 `start`~`end` 구간 하이라이트
+4. **폐기된 문항 수와 사유** — "AI가 3개 중 1개를 스스로 버렸다"가 보여야 이 기능이 설명됩니다
+5. `reference_keywords` 는 관리자에게만  6. 문항별 [승인] / [거부] / [수정]
+
+---
+
 ### 구현 상태
 
 | | 상태 |
 |---|---|
 | 쓰기 채점 (`mode: writing`) | 연동 가능 |
+| 문항 생성 (`/generate-items`) | 연동 가능. 실제 KOSHA 문서로 실호출 확인 |
+| 문항 재검증 (`/verify-items`) | 연동 가능 |
+| API 키 인증 | 코드 완료. 키를 넣는 순간 켜짐 (지금은 꺼진 상태) |
+| 말하기 문항 생성 | 미구현 (`mode: speaking` 은 400) |
 | 최종 등급 (`/finalize`) | 연동 가능 |
 | 말하기 채점 (`mode: speaking`) | 텍스트(STT 전사본)를 넣으면 동작. **음성 파일 입력은 미구현** |
 | 발화 전달력 (`delivery`) | 미채점. Azure Pronunciation Assessment 도입 전이라 비중 0 |
@@ -130,6 +243,12 @@ assessment/
 │   │   ├── client.py      temperature 0 · JSON 강제 래퍼
 │   │   ├── citation.py    원문에 없는 인용을 폐기하는 검증
 │   │   └── transcript.py  STT 전사 보정 + 보정 위치 기록
+│   ├── generation/      안전문서 -> 문항 초안 (채점 코드를 쓰기만 하고 고치지 않는다)
+│   │   ├── schema.py      생성 API 계약 (채점 ItemInfo 를 상속한다)
+│   │   ├── preprocess.py  머리글·쪽번호 제거 + 잘라낸 자리 표시
+│   │   ├── prompt.py      생성 프롬프트 전문 + 응답 형식표
+│   │   ├── validate.py    검증 관문 5개 (LLM 을 부르지 않는다)
+│   │   └── generate.py    전체 조립 + 폐기 보고
 │   ├── scoring/
 │   │   ├── schema.py      백엔드와의 REST 계약 (여기를 바꾸면 백엔드가 깨진다)
 │   │   ├── validity.py    채점 전 답안 유효성 가드 4종 (규칙만 쓴다)
@@ -138,8 +257,9 @@ assessment/
 │   │   └── finalize.py    시험 전체 최종 등급·백분위
 │   ├── resources/       어휘 등급 목록 등 데이터 파일
 │   └── api.py           FastAPI 엔드포인트
+│   ├── auth.py          API 키 문지기 (키가 있을 때만 잠근다)
 ├── scripts/             실행해서 눈으로 값을 확인하는 검증 스크립트
-└── tests/               pytest 회귀 방지 (111개)
+└── tests/               pytest 회귀 방지 (158개)
 ```
 
 자질을 추가할 때 **규칙 계산이면 `features/lexical.py`, 판단이 필요하면 `features/errors.py`** 입니다.
@@ -195,6 +315,16 @@ python scripts/check_guards.py --no-llm
 ```
 
 영어 답안·단어 반복 스팸·지시문 베끼기·초단답을 넣어 가드 적용 전후를 나란히 보여줍니다.
+
+### 안전문서로 문항을 만들어 보기 (실제 LLM 호출)
+
+```bash
+python scripts/extract_pdf.py 안전문서.pdf --pages 4-16 --out 안전문서.txt
+python scripts/check_generate.py --file 안전문서.txt --runs 3
+python scripts/check_generate.py                      # 붙어 있는 표본 문서로
+```
+
+문항·근거 인용·폐기 사유를 전부 펼쳐 보여주고, 회차별 폐기율과 생성 시간·토큰을 잽니다.
 
 ### 테스트
 
