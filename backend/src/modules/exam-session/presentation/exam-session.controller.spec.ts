@@ -158,8 +158,18 @@ describe('ExamSessionController.getQuestion', () => {
 
     const result = await controller.getQuestion('1', '3', buildUser());
 
-    expect(getQuestion).toHaveBeenCalledWith('1', '3', '1');
+    expect(getQuestion).toHaveBeenCalledWith('1', '3', '1', false);
     expect(result).toEqual({ id: '3', part: 'work_log', prompt: '프롬프트 3' });
+  });
+
+  it('tells the service the caller is an admin so ownership can be bypassed', async () => {
+    const getQuestion = jest.fn().mockResolvedValue(buildQuestion('3'));
+    const controller = buildController({}, { getQuestion });
+    const admin: AuthenticatedUser = { id: '9', email: 'admin@test.com', role: Role.ADMIN };
+
+    await controller.getQuestion('1', '3', admin);
+
+    expect(getQuestion).toHaveBeenCalledWith('1', '3', '9', true);
   });
 });
 

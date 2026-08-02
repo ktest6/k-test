@@ -24,7 +24,7 @@ export class ExamSessionQuestionService {
   ) {}
 
   async listQuestions(examSessionId: string, userId: string): Promise<Question[]> {
-    const examId = await this.getOwnedSessionExamId(examSessionId, userId);
+    const examId = await this.getSessionExamId(examSessionId, userId, false);
     const questions = await this.examQuestionService.listAssignedQuestions(examId);
 
     return [...questions].sort((a, b) =>
@@ -32,8 +32,14 @@ export class ExamSessionQuestionService {
     );
   }
 
-  async getQuestion(examSessionId: string, questionId: string, userId: string): Promise<Question> {
-    const examId = await this.getOwnedSessionExamId(examSessionId, userId);
+  /** isAdmin이면 세션 소유자가 아니어도 조회를 허용한다(관리자는 항상 조회 가능). */
+  async getQuestion(
+    examSessionId: string,
+    questionId: string,
+    userId: string,
+    isAdmin = false,
+  ): Promise<Question> {
+    const examId = await this.getSessionExamId(examSessionId, userId, isAdmin);
     const questions = await this.examQuestionService.listAssignedQuestions(examId);
 
     const question = questions.find((q) => q.id === questionId);
@@ -43,12 +49,16 @@ export class ExamSessionQuestionService {
     return question;
   }
 
-  private async getOwnedSessionExamId(examSessionId: string, userId: string): Promise<string> {
+  private async getSessionExamId(
+    examSessionId: string,
+    userId: string,
+    isAdmin: boolean,
+  ): Promise<string> {
     const session = await this.examSessionRepository.findById(examSessionId);
     if (!session) {
       throw new NotFoundDomainException(`응시 세션(${examSessionId})을 찾을 수 없습니다.`);
     }
-    if (session.userId !== userId) {
+    if (!isAdmin && session.userId !== userId) {
       throw new ForbiddenDomainException('세션 소유자가 아닙니다.');
     }
     return session.examId;
