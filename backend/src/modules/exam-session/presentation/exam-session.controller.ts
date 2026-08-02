@@ -1,12 +1,18 @@
-import { Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiCommonErrorResponses } from '../../../common/decorators/api-common-error-responses.decorator';
 import { ApiStandardResponse } from '../../../common/decorators/api-standard-response.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
+import { AnswerResponseDto } from '../application/dto/answer-response.dto';
 import { ExamSessionStatusResponseDto } from '../application/dto/exam-session-status-response.dto';
+import { SaveAnswerDto } from '../application/dto/save-answer.dto';
 import { SessionQuestionResponseDto } from '../application/dto/session-question-response.dto';
 import { StartExamSessionResponseDto } from '../application/dto/start-exam-session-response.dto';
+import {
+  AnswerWithScoreResult,
+  ExamSessionAnswerService,
+} from '../application/services/exam-session-answer.service';
 import { ExamSessionQuestionService } from '../application/services/exam-session-question.service';
 import { ExamSessionService } from '../application/services/exam-session.service';
 
@@ -18,6 +24,7 @@ export class ExamSessionController {
   constructor(
     private readonly examSessionService: ExamSessionService,
     private readonly examSessionQuestionService: ExamSessionQuestionService,
+    private readonly examSessionAnswerService: ExamSessionAnswerService,
   ) {}
 
   @Post('exams/:id/sessions')
@@ -97,5 +104,53 @@ export class ExamSessionController {
       user.id,
     );
     return { id: question.id, part: question.part, prompt: question.content.prompt };
+  }
+
+  @Post('exam-sessions/:examSessionId/questions/:questionId/answer')
+  @ApiOperation({
+    summary: '답안 제출(음성/쓰기)',
+    description:
+      '문항별 답안을 저장한다. 이미 저장된 답안이 있으면 덮어쓴다. 진행중인 세션이 아니면 409.',
+  })
+  @ApiStandardResponse(AnswerResponseDto, { status: 201, message: '답안 저장 완료' })
+  async saveAnswer(
+    @Param('examSessionId') examSessionId: string,
+    @Param('questionId') questionId: string,
+    @Body() dto: SaveAnswerDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<AnswerResponseDto> {
+    const result = await this.examSessionAnswerService.save(
+      examSessionId,
+      questionId,
+      user.id,
+      dto,
+    );
+    return this.toAnswerResponse(result);
+  }
+
+  @Get('exam-sessions/:examSessionId/questions/:questionId/answer')
+  @ApiOperation({ summary: '답안·채점 진행 상태 조회' })
+  @ApiStandardResponse(AnswerResponseDto, { message: '답안 조회 성공' })
+  async getAnswer(
+    @Param('examSessionId') examSessionId: string,
+    @Param('questionId') questionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<AnswerResponseDto> {
+    const result = await this.examSessionAnswerService.get(examSessionId, questionId, user.id);
+    return this.toAnswerResponse(result);
+  }
+
+  private toAnswerResponse(result: AnswerWithScoreResult): AnswerResponseDto {
+    return {
+      id: result.answer.id,
+      questionId: result.answer.questionId,
+      type: result.answer.type,
+      contentText: result.answer.contentText,
+      audioFileUrl: result.answer.audioFileUrl,
+      status: result.answer.status,
+      modifiedAt: result.answer.modifiedAt,
+      graded: result.graded,
+      score: result.score,
+    };
   }
 }

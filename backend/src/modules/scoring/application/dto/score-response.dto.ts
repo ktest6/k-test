@@ -5,14 +5,11 @@ export class ScoreResponseDto {
   id: string;
 
   @ApiProperty()
-  submissionId: string;
+  answerId: string;
+
+  @ApiProperty({ type: Object })
+  rawResponse: Record<string, unknown>;
 
   @ApiProperty()
-  totalScore: number;
-
-  @ApiProperty()
-  maxScore: number;
-
-  @ApiProperty()
-  gradedAt: Date;
+  createdAt: Date;
 }

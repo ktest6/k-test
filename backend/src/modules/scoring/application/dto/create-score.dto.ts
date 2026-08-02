@@ -1,18 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsInt, IsUUID, Min } from 'class-validator';
+import { IsObject, IsString, MinLength } from 'class-validator';
 
 export class CreateScoreDto {
-  @ApiProperty()
-  @IsUUID()
-  submissionId: string;
+  @ApiProperty({ description: '채점 대상 답안 ID (tb_answers.answer_id)', example: '1' })
+  @IsString()
+  @MinLength(1)
+  answerId: string;
 
-  @ApiProperty()
-  @IsInt()
-  @Min(0)
-  totalScore: number;
-
-  @ApiProperty()
-  @IsInt()
-  @Min(0)
-  maxScore: number;
+  @ApiProperty({ description: '채점 서비스 응답 원본 (형식 미고정)', type: Object })
+  @IsObject()
+  rawResponse: Record<string, unknown>;
 }

@@ -1,21 +1,25 @@
 import { Module } from '@nestjs/common';
+import { AnswerModule } from '../answer/answer.module';
 import { ExamModule } from '../exam/exam.module';
 import { ExamQuestionModule } from '../exam-question/exam-question.module';
+import { ScoringModule } from '../scoring/scoring.module';
 import { VerificationsModule } from '../verifications/verifications.module';
 import { EXAM_SESSION_REPOSITORY } from './domain/exam-session.repository.interface';
+import { ExamSessionAnswerService } from './application/services/exam-session-answer.service';
 import { ExamSessionQuestionService } from './application/services/exam-session-question.service';
 import { ExamSessionService } from './application/services/exam-session.service';
 import { SupabaseExamSessionRepository } from './infrastructure/repositories/supabase-exam-session.repository';
 import { ExamSessionController } from './presentation/exam-session.controller';
 
 @Module({
-  imports: [ExamModule, ExamQuestionModule, VerificationsModule],
+  imports: [ExamModule, ExamQuestionModule, VerificationsModule, AnswerModule, ScoringModule],
   controllers: [ExamSessionController],
   providers: [
     ExamSessionService,
     ExamSessionQuestionService,
+    ExamSessionAnswerService,
     { provide: EXAM_SESSION_REPOSITORY, useClass: SupabaseExamSessionRepository },
   ],
-  exports: [ExamSessionService, ExamSessionQuestionService],
+  exports: [ExamSessionService, ExamSessionQuestionService, ExamSessionAnswerService],
 })
 export class ExamSessionModule {}

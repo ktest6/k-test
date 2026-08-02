@@ -1,14 +1,13 @@
 import { Score } from './entities/score.entity';
 
 export interface RecordScoreInput {
-  submissionId: string;
-  totalScore: number;
-  maxScore: number;
+  answerId: string;
+  rawResponse: Record<string, unknown>;
 }
 
 export const SCORING_REPOSITORY = Symbol('SCORING_REPOSITORY');
 
 export interface ScoringRepository {
   record(input: RecordScoreInput): Promise<Score>;
-  findBySubmissionId(submissionId: string): Promise<Score | null>;
+  findByAnswerId(answerId: string): Promise<Score | null>;
 }

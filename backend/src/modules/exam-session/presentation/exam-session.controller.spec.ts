@@ -1,8 +1,12 @@
 import { Role } from '../../../common/enums/role.enum';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
+import { Answer } from '../../answer/domain/entities/answer.entity';
+import { AnswerStatus } from '../../answer/domain/enums/answer-status.enum';
+import { AnswerType } from '../../answer/domain/enums/answer-type.enum';
 import { Question } from '../../question/domain/entities/question.entity';
 import { ExamSession } from '../domain/entities/exam-session.entity';
 import { SessionStatus } from '../domain/enums/session-status.enum';
+import { ExamSessionAnswerService } from '../application/services/exam-session-answer.service';
 import { ExamSessionQuestionService } from '../application/services/exam-session-question.service';
 import { ExamSessionService } from '../application/services/exam-session.service';
 import { ExamSessionController } from './exam-session.controller';
@@ -41,6 +45,19 @@ function buildQuestion(id: string): Question {
   );
 }
 
+function buildAnswer(overrides: Partial<{ id: string; questionId: string }> = {}): Answer {
+  return new Answer(
+    overrides.id ?? '1',
+    '1',
+    overrides.questionId ?? '1',
+    AnswerType.TEXT,
+    '내용',
+    null,
+    AnswerStatus.DRAFT,
+    new Date('2026-06-01T00:00:00.000Z'),
+  );
+}
+
 function buildController(
   sessionOverrides: Partial<{
     start: jest.Mock;
@@ -49,6 +66,10 @@ function buildController(
   questionOverrides: Partial<{
     listQuestions: jest.Mock;
     getQuestion: jest.Mock;
+  }> = {},
+  answerOverrides: Partial<{
+    save: jest.Mock;
+    get: jest.Mock;
   }> = {},
 ) {
   const sessionService = {
@@ -61,7 +82,12 @@ function buildController(
     getQuestion: jest.fn(),
     ...questionOverrides,
   } as unknown as ExamSessionQuestionService;
-  return new ExamSessionController(sessionService, questionService);
+  const answerService = {
+    save: jest.fn(),
+    get: jest.fn(),
+    ...answerOverrides,
+  } as unknown as ExamSessionAnswerService;
+  return new ExamSessionController(sessionService, questionService, answerService);
 }
 
 describe('ExamSessionController.start', () => {
@@ -134,5 +160,43 @@ describe('ExamSessionController.getQuestion', () => {
 
     expect(getQuestion).toHaveBeenCalledWith('1', '3', '1');
     expect(result).toEqual({ id: '3', part: 'work_log', prompt: '프롬프트 3' });
+  });
+});
+
+describe('ExamSessionController.saveAnswer', () => {
+  it('delegates to ExamSessionAnswerService.save and maps the response', async () => {
+    const answer = buildAnswer();
+    const save = jest.fn().mockResolvedValue({ answer, graded: false, score: null });
+    const controller = buildController({}, {}, { save });
+    const dto = { type: AnswerType.TEXT, contentText: '내용' };
+
+    const result = await controller.saveAnswer('1', '1', dto, buildUser());
+
+    expect(save).toHaveBeenCalledWith('1', '1', '1', dto);
+    expect(result).toEqual({
+      id: '1',
+      questionId: '1',
+      type: AnswerType.TEXT,
+      contentText: '내용',
+      audioFileUrl: null,
+      status: AnswerStatus.DRAFT,
+      modifiedAt: answer.modifiedAt,
+      graded: false,
+      score: null,
+    });
+  });
+});
+
+describe('ExamSessionController.getAnswer', () => {
+  it('delegates to ExamSessionAnswerService.get and includes the grading status', async () => {
+    const answer = buildAnswer();
+    const get = jest.fn().mockResolvedValue({ answer, graded: true, score: { total: 90 } });
+    const controller = buildController({}, {}, { get });
+
+    const result = await controller.getAnswer('1', '1', buildUser());
+
+    expect(get).toHaveBeenCalledWith('1', '1', '1');
+    expect(result.graded).toBe(true);
+    expect(result.score).toEqual({ total: 90 });
   });
 });
