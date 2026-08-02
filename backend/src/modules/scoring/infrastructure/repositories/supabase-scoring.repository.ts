@@ -1,26 +1,24 @@
 import { Injectable } from '@nestjs/common';
-import { NotFoundDomainException } from '../../../../common/exceptions/domain.exception';
+import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import { Score } from '../../domain/entities/score.entity';
 import { RecordScoreInput, ScoringRepository } from '../../domain/scoring.repository.interface';
 
-const TABLE = 'scores';
+const TABLE = 'tb_score';
 
 interface ScoreRow {
-  id: string;
-  submission_id: string;
-  total_score: number;
-  max_score: number;
-  graded_at: string;
+  score_id: number;
+  answer_id: number;
+  raw_response: Record<string, unknown>;
+  created_at: string;
 }
 
 function toDomain(row: ScoreRow): Score {
   return new Score(
-    row.id,
-    row.submission_id,
-    row.total_score,
-    row.max_score,
-    new Date(row.graded_at),
+    String(row.score_id),
+    String(row.answer_id),
+    row.raw_response,
+    new Date(row.created_at),
   );
 }
 
@@ -33,29 +31,25 @@ export class SupabaseScoringRepository implements ScoringRepository {
     const { data, error } = await client
       .from(TABLE)
       .upsert(
-        {
-          submission_id: input.submissionId,
-          total_score: input.totalScore,
-          max_score: input.maxScore,
-          graded_at: new Date().toISOString(),
-        },
-        { onConflict: 'submission_id' },
+        { answer_id: Number(input.answerId), raw_response: input.rawResponse },
+        { onConflict: 'answer_id' },
       )
       .select()
       .single<ScoreRow>();
 
     if (error || !data) {
-      throw new NotFoundDomainException(error?.message ?? '채점 결과 등록에 실패했습니다.');
+      throw new ConflictDomainException(error?.message ?? '채점 결과 등록에 실패했습니다.');
     }
     return toDomain(data);
   }
 
-  async findBySubmissionId(submissionId: string): Promise<Score | null> {
+  async findByAnswerId(answerId: string): Promise<Score | null> {
     const client = this.supabaseService.getAdminClient();
     const { data } = await client
       .from(TABLE)
       .select('*')
-      .eq('submission_id', submissionId)
+      .eq('answer_id', Number(answerId))
+      .is('deleted_at', null)
       .maybeSingle<ScoreRow>();
     return data ? toDomain(data) : null;
   }

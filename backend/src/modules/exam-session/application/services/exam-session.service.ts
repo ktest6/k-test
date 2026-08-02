@@ -86,4 +86,25 @@ export class ExamSessionService {
 
     return { session, status, remainingSeconds };
   }
+
+  /** 답안 저장처럼 "지금 실제로 응시 중"이어야만 허용되는 동작들의 공통 게이트. */
+  async assertActiveSession(examSessionId: string, userId: string): Promise<ExamSession> {
+    const session = await this.examSessionRepository.findById(examSessionId);
+    if (!session) {
+      throw new NotFoundDomainException(`응시 세션(${examSessionId})을 찾을 수 없습니다.`);
+    }
+    if (session.userId !== userId) {
+      throw new ForbiddenDomainException('세션 소유자가 아닙니다.');
+    }
+    if (session.status !== SessionStatus.INPROGRESS) {
+      throw new ConflictDomainException('이미 종료된 시험입니다.');
+    }
+
+    const exam = await this.examService.findById(session.examId);
+    if (Date.now() > exam.closeAt.getTime()) {
+      throw new ConflictDomainException('이미 종료된 시험입니다.');
+    }
+
+    return session;
+  }
 }

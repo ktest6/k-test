@@ -272,3 +272,83 @@ describe('ExamSessionService.getStatus', () => {
     expect(result.remainingSeconds).toBe(0);
   });
 });
+
+describe('ExamSessionService.assertActiveSession', () => {
+  it('rejects when the session does not exist', async () => {
+    const examService = {} as unknown as ExamService;
+    const examApplicationService = {} as unknown as ExamApplicationService;
+    const repository = buildRepository();
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
+
+    await expect(service.assertActiveSession('1', '1')).rejects.toThrow(NotFoundDomainException);
+  });
+
+  it('rejects when the caller is not the session owner', async () => {
+    const session = buildSession({ userId: '2' });
+    const examService = {} as unknown as ExamService;
+    const examApplicationService = {} as unknown as ExamApplicationService;
+    const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
+
+    await expect(service.assertActiveSession('1', '1')).rejects.toThrow(ForbiddenDomainException);
+  });
+
+  it('rejects when the session is already SUBMITTED', async () => {
+    const session = buildSession({ status: SessionStatus.SUBMITTED });
+    const examService = {} as unknown as ExamService;
+    const examApplicationService = {} as unknown as ExamApplicationService;
+    const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
+
+    await expect(service.assertActiveSession('1', '1')).rejects.toThrow(ConflictDomainException);
+  });
+
+  it('rejects when INPROGRESS but past the exam close time', async () => {
+    const session = buildSession({ status: SessionStatus.INPROGRESS });
+    const exam = buildExam({ closeAt: new Date('2020-01-01T00:00:00.000Z') });
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
+    const examApplicationService = {} as unknown as ExamApplicationService;
+    const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
+
+    await expect(service.assertActiveSession('1', '1')).rejects.toThrow(ConflictDomainException);
+  });
+
+  it('returns the session when INPROGRESS and still within the exam period', async () => {
+    const session = buildSession({ status: SessionStatus.INPROGRESS });
+    const exam = buildExam({ closeAt: new Date(Date.now() + 3600_000) });
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
+    const examApplicationService = {} as unknown as ExamApplicationService;
+    const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
+
+    const result = await service.assertActiveSession('1', '1');
+
+    expect(result).toBe(session);
+  });
+});

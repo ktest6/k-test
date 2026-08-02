@@ -1,9 +1,8 @@
 export class Score {
   constructor(
     readonly id: string,
-    readonly submissionId: string,
-    readonly totalScore: number,
-    readonly maxScore: number,
-    readonly gradedAt: Date,
+    readonly answerId: string,
+    readonly rawResponse: Record<string, unknown>,
+    readonly createdAt: Date,
   ) {}
 }

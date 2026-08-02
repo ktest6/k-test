@@ -23,10 +23,10 @@ export class ScoringController {
     return this.scoringService.record(dto);
   }
 
-  @Get(':submissionId')
-  @ApiOperation({ summary: '응시별 채점 결과 조회' })
+  @Get(':answerId')
+  @ApiOperation({ summary: '답안별 채점 결과 조회' })
   @ApiStandardResponse(ScoreResponseDto, { message: '채점 결과 조회 성공' })
-  findBySubmission(@Param('submissionId') submissionId: string): Promise<ScoreResponseDto> {
-    return this.scoringService.findBySubmissionId(submissionId);
+  findByAnswer(@Param('answerId') answerId: string): Promise<ScoreResponseDto> {
+    return this.scoringService.getByAnswerId(answerId);
   }
 }
