@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiCommonErrorResponses } from '../../../common/decorators/api-common-error-responses.decorator';
 import { ApiStandardResponse } from '../../../common/decorators/api-standard-response.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { Role } from '../../../common/enums/role.enum';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { AnswerResponseDto } from '../application/dto/answer-response.dto';
 import { ExamSessionStatusResponseDto } from '../application/dto/exam-session-status-response.dto';
@@ -91,7 +92,10 @@ export class ExamSessionController {
   }
 
   @Get('exam-sessions/:examSessionId/questions/:questionId')
-  @ApiOperation({ summary: '문항 상세 조회' })
+  @ApiOperation({
+    summary: '문항 상세 조회',
+    description: '관리자는 세션 소유자가 아니어도 항상 조회할 수 있다.',
+  })
   @ApiStandardResponse(SessionQuestionResponseDto, { message: '문항 조회 성공' })
   async getQuestion(
     @Param('examSessionId') examSessionId: string,
@@ -102,6 +106,7 @@ export class ExamSessionController {
       examSessionId,
       questionId,
       user.id,
+      user.role === Role.ADMIN,
     );
     return { id: question.id, part: question.part, prompt: question.content.prompt };
   }

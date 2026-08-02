@@ -144,4 +144,19 @@ describe('ExamSessionQuestionService.getQuestion', () => {
 
     expect(result).toBe(target);
   });
+
+  it('allows an admin to bypass the ownership check', async () => {
+    const repository = buildRepository({
+      findById: jest.fn().mockResolvedValue(buildSession({ userId: '2' })),
+    });
+    const target = buildQuestion('2');
+    const examQuestionService = {
+      listAssignedQuestions: jest.fn().mockResolvedValue([target]),
+    } as unknown as ExamQuestionService;
+    const service = new ExamSessionQuestionService(repository, examQuestionService);
+
+    const result = await service.getQuestion('1', '2', '1', true);
+
+    expect(result).toBe(target);
+  });
 });
