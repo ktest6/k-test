@@ -57,6 +57,14 @@ from .scoring.schema import (
     ScoreRequest,
     ScoreResponse,
 )
+from .speech.audio import (
+    DOWNLOAD_TIMEOUT_S,
+    FORMAT_TO_MIME,
+    MAX_AUDIO_BYTES,
+    AudioRequestError,
+)
+from .speech.gemini_stt import DEFAULT_STT_MODEL, GeminiStt
+from .speech.port import SttUnavailable
 
 # 서버가 켜질 때 예열한 결과를 적어 두는 곳. /health 에서 확인할 수 있게 남긴다.
 _warmup_info: dict = {"done": False, "elapsed_ms": None}
@@ -131,6 +139,12 @@ def health() -> dict:
         # 문항 생성 모듈이 어떤 모델을 쓰는지. 채점 모델과 다르다
         "generation_version": GENERATION_VERSION,
         "llm_model_generation": DEFAULT_GENERATION_MODEL,
+        # 음성 답안을 받아쓰는 쪽. 지금은 Azure 계정이 없어 Gemini 로 대신하고 있고,
+        # 나중에 바뀌면 이 값이 'azure' 로 바뀐다(응답 형식은 그대로다)
+        "stt_provider": GeminiStt.provider_name,
+        "stt_model": DEFAULT_STT_MODEL,
+        "stt_available": GeminiStt().available,
+        "stt_provisional": True,
         # 인증이 켜져 있는지. False 면 개발 모드라 POST 가 전부 열려 있다는 뜻이다.
         # 운영 서버에서 이 값이 false 로 보이면 키가 안 들어간 것이다
         "auth_enabled": auth_enabled(),
@@ -232,6 +246,35 @@ def feature_catalog() -> dict:
                 "meta.answer_valid 가 false 다. 기준값은 전부 임시값이다."
             ),
         },
+        # 말하기 음성 입력(POST /score 의 audio 필드) 계약.
+        # 백엔드가 크기·형식 한도를 코드에 베껴 넣지 않고 여기서 읽어 쓸 수 있게 열어 둔다
+        "speech_input": {
+            "request_field": "audio",
+            "enabled_by": "audio.url (말하기 답안에만 적용)",
+            "answer_text_must_be_empty": True,
+            "allowed_formats": sorted(FORMAT_TO_MIME),
+            "max_bytes": MAX_AUDIO_BYTES,
+            "download_timeout_s": DOWNLOAD_TIMEOUT_S,
+            "url_schemes": ["http", "https"],
+            "provider": GeminiStt.provider_name,
+            "model": DEFAULT_STT_MODEL,
+            "provider_provisional": True,
+            "meta_fields": [
+                "stt_provider",
+                "stt_model",
+                "audio_duration_ms",
+                "stt_transcript",
+            ],
+            "failure_codes": {
+                "400": "요청이 성립하지 않는다(쓰기에 음성 첨부 / 글과 음성이 함께 옴 / 형식·크기 위반)",
+                "503": "받아쓰지 못했다. 대체 경로가 없다",
+            },
+            "note": (
+                "Azure 발음평가 도입 전이라 받아쓰기만 하고 발음은 채점하지 않는다"
+                "(delivery 영역 비중 0). 받아쓰기가 학습자 오류를 표준형으로 "
+                "고쳐 적는 경우가 실측됐으므로 문법 점수가 실제보다 높게 나올 수 있다."
+            ),
+        },
         # 문항 생성(POST /generate-items)의 문서 길이 한계.
         # 백엔드가 이 숫자를 코드에 베껴 넣지 않고 여기서 읽어 쓸 수 있게 열어 둔다.
         # 길이를 넘긴 문서는 조용히 잘리지 않고 400 으로 거절된다
@@ -274,10 +317,26 @@ def score(request: ScoreRequest) -> ScoreResponse:
     실제로 같은 답안이 LLM이 살아 있을 때 70.58점, 대체 경로에서 79.66점이었다.
     warnings 를 읽어서 판단하지 말고 이 값 하나만 보면 된다.
     (자세한 사유는 meta.reliability 와 meta.reliability_reason 에 있다)
+
+    말하기 답안은 글 대신 음성 파일 주소(audio.url)를 보낼 수 있다.
+    그러면 우리가 받아써서 그 글을 채점하고, 받아쓴 글과 쓴 모델을 meta 에 남긴다.
+
+    실패 처리 (받아쓰기만 예외를 던진다)
+      400  쓰기 답안에 음성을 붙였다 / answer_text 와 audio 를 둘 다 보냈다 /
+           읽을 수 없는 형식이거나 파일이 너무 크다
+      503  음성을 글자로 옮기지 못했다. **채점과 달리 대체 경로가 없다** —
+           못 알아들은 말을 지어내면 응시자가 하지 않은 말로 점수를 받게 된다
     """
     # 계산도 조립도 전부 파이프라인에 맡긴다. 이 창구에는 채점 규칙을 두지 않는다
-    # (전사 보정을 부를지 말지도 요청을 보고 파이프라인이 정한다)
-    return score_submission(request)
+    # (전사 보정을 부를지 말지, 음성을 받아쓸지 말지도 요청을 보고 파이프라인이 정한다)
+    try:
+        return score_submission(request)
+    except AudioRequestError as exc:
+        # 요청 자체가 성립하지 않는다. 다시 보내도 같은 결과이므로 400 이다
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except SttUnavailable as exc:
+        # 받아쓰기에는 대체 경로가 없다. 잘못된 글로 채점하느니 못 했다고 알린다
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post(

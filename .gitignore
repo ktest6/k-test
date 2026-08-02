@@ -53,3 +53,7 @@ CLAUDE.md
 .DS_Store
 Thumbs.db
 *.swp
+
+# ---------- 확인용 스크립트가 만드는 임시 음성 파일 ----------
+# check_speech.py 가 시험용 wav 를 여기에 만든다. 결과물이 아니라 부산물이다.
+assessment/.check_speech/

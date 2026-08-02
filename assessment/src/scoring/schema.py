@@ -307,13 +307,55 @@ class ScoringMeta(BaseModel):
         ),
     )
 
+    # --- 음성 파일을 받아썼을 때만 채우는 값 (전부 나중에 추가했고 기본값이 있다) ---
+    # 음성을 안 보내면 전부 null 이라 지금까지의 응답과 똑같다.
+    #
+    # 왜 남기는가:
+    # 말하기 점수는 '응시자가 말한 것'이 아니라 '기계가 받아쓴 글'에 매겨진다.
+    # 어느 기계가 받아썼는지와 그 글이 무엇이었는지가 남지 않으면
+    # 응시자가 "나는 그렇게 말하지 않았다"고 할 때 짚어 줄 것이 없다.
+    stt_provider: str | None = Field(
+        default=None,
+        description=(
+            "음성을 글자로 옮긴 제공자 이름(예: 'gemini'). "
+            "음성을 안 보냈으면 null 이다. 나중에 Azure 로 바뀌면 이 값이 바뀐다"
+        ),
+    )
+    stt_model: str | None = Field(
+        default=None,
+        description="받아쓰기에 실제로 쓴 모델 이름. 같은 음성을 다시 채점할 때 대조하는 값이다",
+    )
+    audio_duration_ms: int | None = Field(
+        default=None,
+        description=(
+            "받아쓴 음성의 길이(밀리초). wav 는 파일에서 직접 잰 값이고, "
+            "다른 형식은 요청이 알려 준 값이다. 알 수 없으면 null 이다"
+        ),
+    )
+    stt_transcript: str | None = Field(
+        default=None,
+        description=(
+            "받아쓴 글 전문. 이 글이 곧 채점 대상이 된 answer_text 다. "
+            "음성으로 채점한 결과를 설명하려면 이 값이 반드시 보관돼야 한다"
+        ),
+    )
+
 
 class ScoreRequest(BaseModel):
     """백엔드 -> 채점 모델 입력. (고정 계약)"""
 
     submission_id: str = Field(description="답안 식별자")
     mode: Mode
-    answer_text: str = Field(description="채점할 답안 텍스트. 말하기는 STT 전사 결과")
+    # 기본값이 "" 인 이유:
+    # 음성 파일(audio)만 보내는 호출이 생겼기 때문이다. 그때는 우리가 전사해서 이 자리를 채운다.
+    # 값을 넣어 보내면 지금까지와 똑같이 그 글을 채점한다(기존 호출은 하나도 안 바뀐다).
+    answer_text: str = Field(
+        default="",
+        description=(
+            "채점할 답안 텍스트. 말하기는 STT 전사 결과. "
+            "audio 를 보내는 경우에는 비워 두고, 그러면 전사 결과가 이 자리에 들어간다"
+        ),
+    )
     item: "ItemInfo"
     options: "ScoreOptions" = Field(default_factory=lambda: ScoreOptions())
     transcript: "TranscriptInput | None" = Field(
@@ -321,6 +363,13 @@ class ScoreRequest(BaseModel):
         description=(
             "말하기 답안의 STT 전사 보정 설정. 안 보내면 보정을 하지 않고 "
             "지금까지와 똑같이 answer_text 하나로만 채점한다(기존 호출은 그대로 동작한다)"
+        ),
+    )
+    audio: "AudioInput | None" = Field(
+        default=None,
+        description=(
+            "말하기 답안의 음성 파일 위치. 보내면 우리가 받아써서 채점한다. "
+            "안 보내면 지금까지와 똑같이 answer_text 로만 채점한다(기존 호출은 그대로 동작한다)"
         ),
     )
 
@@ -376,6 +425,36 @@ class TranscriptInput(BaseModel):
         description=(
             "응시자 국적(예: '베트남', '네팔'). 어떤 소리를 음성 인식기가 "
             "헷갈렸을지 짐작하는 데만 쓴다. 없으면 없는 대로 보정한다"
+        ),
+    )
+
+
+class AudioInput(BaseModel):
+    """말하기 답안의 음성 파일이 어디 있는지 알려 주는 값. (나중에 추가한 필드)
+
+    파일 자체를 요청에 담지 않고 주소만 받는다.
+    음성 파일은 백엔드가 Object Storage 에 저장하고, 우리는 그것을 내려받아 읽기만 한다.
+    (우리는 아무것도 저장하지 않는다)
+
+    이 값을 보내면 answer_text 는 비워 둔다. 우리가 받아쓴 글이 그 자리에 들어간다.
+    둘 다 보내면 어느 쪽을 채점해야 할지 알 수 없으므로 거절한다.
+    """
+
+    url: str = Field(
+        description="음성 파일 주소. http/https 만 받는다(서버 안의 파일 경로는 받지 않는다)",
+    )
+    format: str | None = Field(
+        default=None,
+        description=(
+            "음성 형식(wav/webm/mp3/m4a/ogg). 안 보내면 주소 끝의 확장자와 "
+            "서버가 알려 준 형식으로 우리가 알아낸다"
+        ),
+    )
+    duration_ms: int | None = Field(
+        default=None,
+        description=(
+            "녹음 길이(밀리초). 아는 값이 있으면 보낸다. "
+            "wav 는 우리가 파일에서 직접 재므로 안 보내도 된다"
         ),
     )
 
