@@ -13,8 +13,9 @@ from __future__ import annotations
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 
+from .auth import API_KEY_HEADER, auth_enabled, require_api_key
 from .features.errors import ERROR_TYPES, COMMON_ERROR_TYPES, WRITING_ONLY_ERROR_TYPES
 from .features.lexical import (
     KIWI_FEATURE_IDS,
@@ -22,7 +23,18 @@ from .features.lexical import (
     extract_lexical_features,
     is_default_vocab_list,
 )
-from .llm.client import GeminiClient, client_for_errors
+from .generation.generate import GenerationRequestError, generate_items, verify_items
+from .generation.llm import DEFAULT_GENERATION_MODEL
+from .generation.schema import (
+    GENERATION_VERSION,
+    MAX_DOCUMENT_CHARS,
+    MIN_DOCUMENT_CHARS,
+    GenerateItemsRequest,
+    GenerateItemsResponse,
+    VerifyItemsRequest,
+    VerifyItemsResponse,
+)
+from .llm.client import GeminiClient, LLMUnavailable, client_for_errors
 from .scoring.combine import DEFAULT_WEIGHTS
 from .scoring.finalize import finalize_session
 from .scoring.pipeline import score_submission
@@ -45,6 +57,14 @@ from .scoring.schema import (
     ScoreRequest,
     ScoreResponse,
 )
+from .speech.audio import (
+    DOWNLOAD_TIMEOUT_S,
+    FORMAT_TO_MIME,
+    MAX_AUDIO_BYTES,
+    AudioRequestError,
+)
+from .speech.gemini_stt import DEFAULT_STT_MODEL, GeminiStt
+from .speech.port import SttUnavailable
 
 # 서버가 켜질 때 예열한 결과를 적어 두는 곳. /health 에서 확인할 수 있게 남긴다.
 _warmup_info: dict = {"done": False, "elapsed_ms": None}
@@ -86,7 +106,11 @@ app = FastAPI(
         "말하기(STT 전사 텍스트)와 쓰기가 이 엔드포인트를 함께 쓴다. "
         "문항이 끝날 때마다 POST /score 로 채점하고, 시험이 끝나면 "
         "POST /finalize 로 최종 등급을 낸다. "
-        "점수는 언제나 근거(evidence)와 함께 반환된다."
+        "점수는 언제나 근거(evidence)와 함께 반환된다. "
+        "관리자가 올린 안전 문서로 쓰기 문항 초안을 만들려면 POST /generate-items 를 쓴다. "
+        "만들어진 문항은 전부 문서 인용 근거를 달고 나오며, 근거를 대지 못한 문항은 "
+        "응답에 실리지 않고 폐기 수로만 보고된다. "
+        "서버에 API 키가 설정돼 있으면 모든 POST 요청에 X-API-Key 헤더가 필요하다."
     ),
     lifespan=lifespan,
 )
@@ -112,6 +136,19 @@ def health() -> dict:
         "weights_profile": DEFAULT_WEIGHTS.profile,
         "weights_provisional": DEFAULT_WEIGHTS.provisional,
         "vocab_list_provisional": is_default_vocab_list(),
+        # 문항 생성 모듈이 어떤 모델을 쓰는지. 채점 모델과 다르다
+        "generation_version": GENERATION_VERSION,
+        "llm_model_generation": DEFAULT_GENERATION_MODEL,
+        # 음성 답안을 받아쓰는 쪽. 지금은 Azure 계정이 없어 Gemini 로 대신하고 있고,
+        # 나중에 바뀌면 이 값이 'azure' 로 바뀐다(응답 형식은 그대로다)
+        "stt_provider": GeminiStt.provider_name,
+        "stt_model": DEFAULT_STT_MODEL,
+        "stt_available": GeminiStt().available,
+        "stt_provisional": True,
+        # 인증이 켜져 있는지. False 면 개발 모드라 POST 가 전부 열려 있다는 뜻이다.
+        # 운영 서버에서 이 값이 false 로 보이면 키가 안 들어간 것이다
+        "auth_enabled": auth_enabled(),
+        "auth_header": API_KEY_HEADER,
         # 예열이 끝났는지. False 인데 채점이 느리다면 예열이 안 걸린 것이다
         "warmed_up": _warmup_info["done"],
         "warmup_ms": _warmup_info["elapsed_ms"],
@@ -209,6 +246,47 @@ def feature_catalog() -> dict:
                 "meta.answer_valid 가 false 다. 기준값은 전부 임시값이다."
             ),
         },
+        # 말하기 음성 입력(POST /score 의 audio 필드) 계약.
+        # 백엔드가 크기·형식 한도를 코드에 베껴 넣지 않고 여기서 읽어 쓸 수 있게 열어 둔다
+        "speech_input": {
+            "request_field": "audio",
+            "enabled_by": "audio.url (말하기 답안에만 적용)",
+            "answer_text_must_be_empty": True,
+            "allowed_formats": sorted(FORMAT_TO_MIME),
+            "max_bytes": MAX_AUDIO_BYTES,
+            "download_timeout_s": DOWNLOAD_TIMEOUT_S,
+            "url_schemes": ["http", "https"],
+            "provider": GeminiStt.provider_name,
+            "model": DEFAULT_STT_MODEL,
+            "provider_provisional": True,
+            "meta_fields": [
+                "stt_provider",
+                "stt_model",
+                "audio_duration_ms",
+                "stt_transcript",
+            ],
+            "failure_codes": {
+                "400": "요청이 성립하지 않는다(쓰기에 음성 첨부 / 글과 음성이 함께 옴 / 형식·크기 위반)",
+                "503": "받아쓰지 못했다. 대체 경로가 없다",
+            },
+            "note": (
+                "Azure 발음평가 도입 전이라 받아쓰기만 하고 발음은 채점하지 않는다"
+                "(delivery 영역 비중 0). 받아쓰기가 학습자 오류를 표준형으로 "
+                "고쳐 적는 경우가 실측됐으므로 문법 점수가 실제보다 높게 나올 수 있다."
+            ),
+        },
+        # 문항 생성(POST /generate-items)의 문서 길이 한계.
+        # 백엔드가 이 숫자를 코드에 베껴 넣지 않고 여기서 읽어 쓸 수 있게 열어 둔다.
+        # 길이를 넘긴 문서는 조용히 잘리지 않고 400 으로 거절된다
+        "item_generation": {
+            "generation_version": GENERATION_VERSION,
+            "min_document_chars": MIN_DOCUMENT_CHARS,
+            "max_document_chars": MAX_DOCUMENT_CHARS,
+            "measured_after": "전처리(머리글·쪽번호 제거) 후 글자 수",
+            "long_document_policy": "자르지 않고 400 으로 거절한다",
+            "status_of_generated_items": "draft",
+            "requires_human_approval": True,
+        },
         # 등급 커트라인을 백엔드가 알 필요는 없지만, 확인용으로 열어 둔다.
         # 이 값들은 앵커 답안 기반이 아니라 임시값이다
         "grade_cutoffs": {grade: cutoff for cutoff, grade in DEFAULT_WEIGHTS.grade_cutoffs},
@@ -216,7 +294,13 @@ def feature_catalog() -> dict:
     }
 
 
-@app.post("/score", response_model=ScoreResponse, summary="문항 하나 채점")
+@app.post(
+    "/score",
+    response_model=ScoreResponse,
+    summary="문항 하나 채점",
+    # 서버에 API 키가 설정돼 있을 때만 잠긴다. 없으면 지금까지처럼 그냥 열린다
+    dependencies=[Depends(require_api_key)],
+)
 def score(request: ScoreRequest) -> ScoreResponse:
     """답안 텍스트와 문항 정보를 받아 종합 점수·영역별 점수·근거를 돌려준다.
 
@@ -233,13 +317,34 @@ def score(request: ScoreRequest) -> ScoreResponse:
     실제로 같은 답안이 LLM이 살아 있을 때 70.58점, 대체 경로에서 79.66점이었다.
     warnings 를 읽어서 판단하지 말고 이 값 하나만 보면 된다.
     (자세한 사유는 meta.reliability 와 meta.reliability_reason 에 있다)
+
+    말하기 답안은 글 대신 음성 파일 주소(audio.url)를 보낼 수 있다.
+    그러면 우리가 받아써서 그 글을 채점하고, 받아쓴 글과 쓴 모델을 meta 에 남긴다.
+
+    실패 처리 (받아쓰기만 예외를 던진다)
+      400  쓰기 답안에 음성을 붙였다 / answer_text 와 audio 를 둘 다 보냈다 /
+           읽을 수 없는 형식이거나 파일이 너무 크다
+      503  음성을 글자로 옮기지 못했다. **채점과 달리 대체 경로가 없다** —
+           못 알아들은 말을 지어내면 응시자가 하지 않은 말로 점수를 받게 된다
     """
     # 계산도 조립도 전부 파이프라인에 맡긴다. 이 창구에는 채점 규칙을 두지 않는다
-    # (전사 보정을 부를지 말지도 요청을 보고 파이프라인이 정한다)
-    return score_submission(request)
+    # (전사 보정을 부를지 말지, 음성을 받아쓸지 말지도 요청을 보고 파이프라인이 정한다)
+    try:
+        return score_submission(request)
+    except AudioRequestError as exc:
+        # 요청 자체가 성립하지 않는다. 다시 보내도 같은 결과이므로 400 이다
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except SttUnavailable as exc:
+        # 받아쓰기에는 대체 경로가 없다. 잘못된 글로 채점하느니 못 했다고 알린다
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-@app.post("/finalize", response_model=FinalizeResponse, summary="시험 전체 최종 등급")
+@app.post(
+    "/finalize",
+    response_model=FinalizeResponse,
+    summary="시험 전체 최종 등급",
+    dependencies=[Depends(require_api_key)],
+)
 def finalize(request: FinalizeRequest) -> FinalizeResponse:
     """문항별 채점 결과를 모아 시험 하나의 최종 등급과 백분위를 낸다.
 
@@ -250,3 +355,66 @@ def finalize(request: FinalizeRequest) -> FinalizeResponse:
     빠진 문항은 warnings 와 item_coverage 에 남기고 남은 문항으로 다시 계산한다.
     """
     return finalize_session(request)
+
+
+# ---------------------------------------------------------------------------
+# 문항 생성 (관리자가 올린 안전 문서 -> 쓰기 문항 초안)
+#
+# 시험 중에 부르는 창구가 아니다. 시험 전에 관리자가 한 번 부르고,
+# 만들어진 문항은 사람이 승인해야 시험에 쓸 수 있다.
+# ---------------------------------------------------------------------------
+
+
+@app.post(
+    "/generate-items",
+    response_model=GenerateItemsResponse,
+    summary="안전 문서에서 쓰기 문항 초안 만들기",
+    dependencies=[Depends(require_api_key)],
+)
+def generate_items_endpoint(request: GenerateItemsRequest) -> GenerateItemsResponse:
+    """관리자가 올린 안전 문서 텍스트로 쓰기 문항 초안을 만든다.
+
+    무상태다. 문서를 요청에 담아 받고 우리는 아무것도 저장하지 않는다.
+    파일 저장과 PDF → 텍스트 추출은 파일을 가진 백엔드가 하고, 여기는 텍스트만 받는다.
+
+    ※ 응답의 문항은 전부 status="draft"(초안)다 ※
+    기계 관문 다섯 개는 통과했지만 사람이 아직 보지 않았다는 뜻이다.
+    관리자 승인 없이 시험에 내면 안 된다.
+
+    ※ 응답을 저장할 때 필드를 지우지 말 것 ※
+    citation 을 버리면 승인 화면에서 근거를 보여 줄 수 없고,
+    그 순간 이 기능은 'AI 가 만든 문제를 그냥 믿는 서비스'가 된다.
+    source_text 도 함께 보관해야 한다. 인용 위치(start/end)의 기준이 되는 글이다.
+
+    실패 처리
+      400  문서가 너무 짧거나 길다 / 말하기 문항을 요청했다
+      503  LLM 을 쓸 수 없다. **채점과 달리 대체 경로가 없다** —
+           규칙만으로 문항을 지어낼 수는 없으므로 죽으면 죽었다고 말한다
+      200  문항이 0개여도 오류가 아니다. items=[] 와 폐기 사유를 돌려준다
+    """
+    try:
+        return generate_items(request)
+    except GenerationRequestError as exc:
+        # 요청 자체가 성립하지 않는 경우. 문항을 하나도 만들지 않고 즉시 막는다
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LLMUnavailable as exc:
+        # 생성에는 대체 경로가 없다. 잘못된 문항을 내놓느니 못 만들었다고 알린다
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post(
+    "/verify-items",
+    response_model=VerifyItemsResponse,
+    summary="관리자가 고친 문항 재검증",
+    dependencies=[Depends(require_api_key)],
+)
+def verify_items_endpoint(request: VerifyItemsRequest) -> VerifyItemsResponse:
+    """승인 화면에서 관리자가 고친 문항이 아직 검증을 통과하는지 다시 확인한다.
+
+    **LLM 을 부르지 않는다.** 관문은 전부 규칙 계산이라 몇 번을 눌러도 같은 답이 나온다.
+    관리자가 체크리스트 문구를 고치면 인용 근거가 깨질 수 있는데,
+    재검증할 자리가 없으면 '승인자가 손대는 순간 근거 보장이 사라진다'는 말이 맞아 버린다.
+
+    백엔드 사용 규칙: `ok` 가 false 인 문항은 시험에 낼 수 있는 상태로 바꾸지 않는다.
+    """
+    return verify_items(request)

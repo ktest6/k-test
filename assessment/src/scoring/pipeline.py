@@ -28,6 +28,7 @@ from __future__ import annotations
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from ..features.checklist import ChecklistJudgeResult, judge_checklist
 from ..features.errors import ErrorExtractionResult, extract_error_features
@@ -51,6 +52,10 @@ from .schema import (
     SubScore,
 )
 from .validity import ValidityReport, check_answer_validity
+
+if TYPE_CHECKING:  # 타입을 적기 위해서만 읽는다. 실행할 때는 speech 를 불러오지 않는다
+    from ..speech.intake import AudioResolution
+    from ..speech.port import SttPort
 
 # 내용·과제 수행 영역이 쓰는 자질.
 # 이 자질들만 보정본 기준으로 다시 계산해서 갈아 끼운다.
@@ -217,11 +222,31 @@ def _resolve_transcript(
     )
 
 
+def _stt_meta_fields(audio: "AudioResolution | None") -> dict:
+    """음성을 받아썼을 때만 채우는 meta 값들을 만든다.
+
+    음성이 없으면 빈 값이라 응답은 지금까지와 완전히 같다.
+
+    받아쓴 글(stt_transcript)까지 남기는 이유:
+    말하기 점수는 응시자가 낸 소리가 아니라 기계가 받아쓴 글에 매겨진다.
+    그 글이 남지 않으면 "왜 이 점수인가"에 답할 수 없다.
+    """
+    if audio is None:
+        return {}
+    return {
+        "stt_provider": audio.provider,
+        "stt_model": audio.model,
+        "audio_duration_ms": audio.audio_duration_ms,
+        "stt_transcript": audio.text,
+    }
+
+
 def _invalid_response(
     request: ScoreRequest,
     report: ValidityReport,
     warnings: list[str],
     timings: dict[str, float],
+    audio: "AudioResolution | None" = None,
 ) -> ScoreResponse:
     """가드에 걸린 답안을 '채점 무효'로 돌려준다.
 
@@ -281,6 +306,10 @@ def _invalid_response(
         answer_valid=False,
         validity_flags=report.flags,
         validity_reason=report.reason,
+        # 음성으로 들어온 답안이 가드에 걸린 경우에도 받아쓴 글을 남긴다.
+        # 이 글이 없으면 '응시자가 이상하게 말한 것'인지 '받아쓰기가 실패한 것'인지
+        # 나중에 가릴 수 없다
+        **_stt_meta_fields(audio),
     )
 
     return ScoreResponse(
@@ -453,6 +482,7 @@ def score_submission(
     request: ScoreRequest,
     client: GeminiClient | None = None,
     transcript: TranscriptContext | None = None,
+    stt: "SttPort | None" = None,
 ) -> ScoreResponse:
     """답안 하나를 채점해서 종합 점수 + 영역별 점수 + 근거를 돌려준다.
 
@@ -465,12 +495,36 @@ def score_submission(
 
     맨 앞에서 답안 유효성 가드를 돌린다. 한국어가 아니거나 지시문을 베낀 답안은
     여기서 걸러서 채점 무효(overall_score=None)로 돌려주고 LLM은 부르지 않는다.
+
+    요청에 음성 파일(request.audio)이 붙어 있으면 그보다도 앞에서 받아쓴다.
+    **받아쓰기만 예외를 던진다.** 못 알아들은 음성을 그럴듯한 문장으로 지어내면
+    응시자가 하지도 않은 말로 점수를 받게 되므로 대체 경로를 두지 않았다
+    (요청이 틀렸으면 AudioRequestError, 못 받아썼으면 SttUnavailable 이 올라간다).
+    stt 를 넘기면 그것으로 받아쓴다(테스트가 네트워크 없이 도는 자리).
     """
     timings: dict[str, float] = {}
     warnings: list[str] = []
 
     # 키가 없으면 available 이 False 인 클라이언트가 만들어진다(예외는 나지 않는다)
     client = client or GeminiClient()
+
+    # -1단계: 음성 답안이면 채점하기 전에 글로 옮긴다.
+    # 채점은 언제나 '글'을 본다는 규칙을 지키려고 여기서 끝내고 answer_text 에 넣는다.
+    # (speech 를 이 자리에서 불러오는 이유: 음성을 안 쓰는 채점에서는
+    #  내려받기 라이브러리까지 읽을 일이 없게 하려는 것이다)
+    audio_resolution: "AudioResolution | None" = None
+    if request.audio is not None:
+        from ..speech.intake import resolve_audio_answer
+
+        audio_resolution = resolve_audio_answer(request, stt=stt)
+        if audio_resolution is not None:
+            # 받아쓴 글을 answer_text 자리에 넣은 요청으로 바꿔 든다.
+            # 원래 요청을 고치지 않고 사본을 만드는 이유는, 부르는 쪽이 넘긴 값이
+            # 우리 때문에 바뀌면 그쪽에서 무슨 일이 일어났는지 알 수 없기 때문이다
+            request = request.model_copy(update={"answer_text": audio_resolution.text})
+            warnings.extend(audio_resolution.warnings)
+            timings["stt_ms"] = audio_resolution.elapsed_ms
+
     # 오류 자질만 상위 모델로 본다. 나머지(전사 보정·체크리스트)는 기본 모델 그대로다
     error_client = client_for_errors(client)
     use_llm = request.options.use_llm
@@ -489,7 +543,7 @@ def score_submission(
     if not validity.valid:
         for check in validity.hard_failures:
             warnings.append(f"[채점 무효] {check.reason}")
-        return _invalid_response(request, validity, warnings, timings)
+        return _invalid_response(request, validity, warnings, timings, audio_resolution)
 
     # 1단계: 전사 보정. 부르는 쪽이 이미 만들어 넘겼으면 그것을 그대로 쓴다
     # (직접 넘긴 값이 항상 우선이다. 테스트와 데모가 보정 결과를 손으로 지정할 수 있어야 한다)
@@ -605,6 +659,9 @@ def score_submission(
             transcript.corrected_text if correction_applied else None
         ),
         transcript_diff=list(transcript.diff_evidence) if transcript else [],
+        # 음성으로 들어온 답안이면 어느 기계가 무엇으로 받아썼는지를 남긴다.
+        # 음성이 없으면 전부 빈 값이라 지금까지의 응답과 똑같다
+        **_stt_meta_fields(audio_resolution),
     )
 
     return ScoreResponse(
