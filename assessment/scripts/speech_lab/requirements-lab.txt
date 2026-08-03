@@ -1,0 +1,21 @@
+# GPU 서버(Colab · RunPod)에서 LoRA 학습을 돌리기 위한 목록.
+# 여기 있는 것은 **실험용**이며, 채점 서버가 쓰는 assessment/requirements.txt 와 별개다.
+# 채점 서버에는 이 무거운 것들을 절대 올리지 않는다(도커 이미지가 몇 GB 로 불어난다).
+#
+#   pip install -r requirements-lab.txt
+#
+# torch 는 여기 적지 않았다. Colab·RunPod 에는 그래픽카드에 맞는 torch 가
+# 이미 깔려 있고, 여기서 다시 깔면 오히려 버전이 어긋나 GPU 를 못 쓰게 된다.
+# 아무것도 없는 서버라면 https://pytorch.org 에서 그 서버의 CUDA 판을 먼저 깐다.
+
+transformers>=4.44        # Whisper 모델 본체와 학습 도구
+peft>=0.11                # LoRA (작은 판만 덧대어 배우는 방법)
+datasets>=2.20            # 라벨 JSONL 을 학습용 표로 읽는다
+accelerate>=0.33          # GPU 에 계산을 흩어 주는 도구 (Trainer 가 요구한다)
+soundfile>=0.12           # wav 읽기
+librosa>=0.10             # 촘촘함(샘플레이트)이 다를 때만 쓰는 변환기
+jiwer>=3.0                # 글자·단어 오류율 계산 (평가용)
+
+# 발음 표기 갈래(--variant mdd)를 만들 때만 필요하다.
+# 윈도우에서는 설치가 안 되고 리눅스에서만 깔린다(까닭은 make_labels.py 참고).
+g2pk>=0.9.4
