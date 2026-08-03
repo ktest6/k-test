@@ -8,6 +8,8 @@ exceptions.py
 - 시험 모니터링 예외
 - AWS Rekognition 예외
 - 이미지 검증 예외
+- 신청 정보 검증 예외
+- 신분증 OCR 예외
 """
 
 
@@ -29,3 +31,15 @@ class RekognitionAPIError(ProctoringError):
 
 class InvalidImageError(ProctoringError):
     """입력 이미지가 유효하지 않을 때 발생하는 예외."""
+
+
+class DocumentReadError(IdentityVerificationError):
+    """신분증에서 정보를 읽을 수 없을 때 발생하는 예외."""
+
+
+class UnsupportedDocumentError(DocumentReadError):
+    """지원하지 않는 신분증 종류일 때 발생하는 예외."""
+
+
+class ApplicantVerificationError(IdentityVerificationError):
+    """신청 정보 검증 중 발생하는 예외."""
