@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
 import { Answer } from '../../domain/entities/answer.entity';
 import {
@@ -7,10 +8,14 @@ import {
   SaveAnswerInput,
 } from '../../domain/answer.repository.interface';
 import { AnswerType } from '../../domain/enums/answer-type.enum';
+import { ANSWER_SAVED_EVENT, AnswerSavedEvent } from '../../domain/events/answer-saved.event';
 
 @Injectable()
 export class AnswerService {
-  constructor(@Inject(ANSWER_REPOSITORY) private readonly answerRepository: AnswerRepository) {}
+  constructor(
+    @Inject(ANSWER_REPOSITORY) private readonly answerRepository: AnswerRepository,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   async save(input: SaveAnswerInput): Promise<Answer> {
     if (input.type === AnswerType.TEXT && !input.contentText) {
@@ -19,7 +24,21 @@ export class AnswerService {
     if (input.type === AnswerType.AUDIO && !input.audioFileUrl) {
       throw new ConflictDomainException('음성 답안은 파일 경로가 필요합니다.');
     }
-    return this.answerRepository.save(input);
+
+    const answer = await this.answerRepository.save(input);
+
+    this.eventEmitter.emit(
+      ANSWER_SAVED_EVENT,
+      new AnswerSavedEvent(
+        answer.id,
+        answer.questionId,
+        answer.type,
+        answer.contentText,
+        answer.audioFileUrl,
+      ),
+    );
+
+    return answer;
   }
 
   findBySessionAndQuestion(examSessionId: string, questionId: string): Promise<Answer | null> {
