@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { QuestionMode } from '../../../question/domain/enums/question-mode.enum';
 
 /**
  * 응시자에게 보여줄 문항 — 관리자용(AssignedQuestionResponseDto)과 달리
@@ -25,10 +26,9 @@ export class SessionQuestionResponseDto {
   imageUrl: string | null;
 
   @ApiPropertyOptional({
-    type: String,
+    enum: QuestionMode,
     nullable: true,
-    description:
-      '기대하는 답안 방식 — writing(쓰기) | speaking(말하기). 값이 없는 기존 문항은 null',
+    description: '기대하는 답안 방식. 값이 없는 기존 문항은 null',
   })
-  mode: string | null;
+  mode: QuestionMode | null;
 }
