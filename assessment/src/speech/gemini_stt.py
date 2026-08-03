@@ -39,6 +39,39 @@ Azure 는 발음 평가(정확도·유창성 점수)를 함께 주지만 Gemini 
 => '말하기에서 표기 수준의 오류를 채점 대상으로 삼는 것이 맞는가'는
    프롬프트가 아니라 채점 설계에서 답할 문제다(scoring-design 스킬 참고).
    Azure 로 바꿀 때 이 항목을 가장 먼저 다시 재야 한다.
+
+──────────────────────────────────────────────────────────────────────
+무음에 대고 모범답안을 지어낸 사고와 그 수리 (2026-08-02)
+──────────────────────────────────────────────────────────────────────
+소리가 전혀 없는 wav(4초, 전부 0)를 말하기 답안으로 넣었더니
+받아쓰기가 문항 지시문을 힌트 삼아 이런 글을 지어냈다.
+
+    "어... 반장님 저기 기계가 갑자기 멈추었어요. 그래서 제가 전원 버튼을
+     다시 눌러 봤는데 그래도 안 움직여요. 이제 어떻게 하면 좋을까요?"
+
+이 글이 채점을 그대로 통과해 **78.07점 B** 가 나왔다.
+아무 말도 하지 않은 응시자가 B를 받는 길이었다.
+
+그래서 세 겹으로 막는다. 이 순서대로 지나야 점수가 나온다.
+
+  1겹 (LLM 무관) 소리 크기를 직접 잰다. 무음이면 **부르지도 않는다**
+                 -> loudness.py / 아래 transcribe() 의 관문 1
+  2겹 (지시)     "말이 없으면 has_speech=false" 를 받아 온다
+                 -> prompt.py + RESPONSE_SCHEMA
+  3겹 (교차검증) 글이 나왔는데 소리가 너무 작았으면 그 글을 버린다
+                 -> 아래 transcribe() 의 관문 3
+
+**셋 중 무음을 실제로 막는 것은 1겹뿐이다.** 이것을 실측으로 확인해 두었다.
+지시를 강하게 고쳐 쓴 뒤에도 같은 무음 wav 에 대해 모델은 이렇게 답했다.
+    {"has_speech": true, "transcript": "어... 반장님 저기 기계가 갑자기 멈추었어요"}
+소리가 없는데 '말이 있었다'고 답하고 답안까지 지어낸 것이다.
+그러므로 2겹(지시)은 무음 방어로 믿으면 안 되고, 1겹이 작동하지 않는 경우
+(= 소리를 잴 수 없는 압축 형식)에만 남는 보조로 봐야 한다.
+3겹은 1겹의 기준값을 아슬아슬하게 넘긴 '거의 무음'을 위한 것이다.
+
+여기서 나오는 결론 하나: **압축 형식(mp3·m4a·webm·ogg)의 무음은 아직 막히지 않는다.**
+소리를 재려면 파일을 풀어야 하고 그러려면 ffmpeg 가 필요하다.
+지금 응시 녹음이 wav 로 들어오므로 급하지 않지만, 형식이 바뀌면 먼저 닫아야 할 구멍이다.
 """
 
 from __future__ import annotations
@@ -49,6 +82,12 @@ import time
 from ..llm.client import GeminiClient, LLMUnavailable, classify_failure
 from ..scoring.schema import AudioInput
 from .audio import FetchedAudio, fetch_audio
+from .loudness import (
+    is_silent,
+    is_too_quiet_for_speech,
+    silence_message,
+    too_quiet_message,
+)
 from .port import SttPort, SttUnavailable, Transcription
 
 #: 받아쓰기에 쓰는 모델. 채점·생성과 따로 둔다.
@@ -64,11 +103,16 @@ STT_TIMEOUT_MS = 90_000
 #: 받아쓴 글의 길이 상한. 넉넉하다 — 1분 발화가 대략 300자 안팎이다.
 STT_MAX_OUTPUT_TOKENS = 4096
 
-#: 받아쓴 결과를 담는 형식. 자유 문장이 아니라 이 모양으로만 받는다
+#: 받아쓴 결과를 담는 형식. 자유 문장이 아니라 이 모양으로만 받는다.
+#: has_speech 를 함께 받는 이유: 빈 문자열만으로는 '말이 없었다'와
+#: '받아쓰기가 실패했다'를 구별할 수 없어서, 모델이 스스로 밝히게 한다.
 RESPONSE_SCHEMA = {
     "type": "OBJECT",
-    "properties": {"transcript": {"type": "STRING"}},
-    "required": ["transcript"],
+    "properties": {
+        "has_speech": {"type": "BOOLEAN"},
+        "transcript": {"type": "STRING"},
+    },
+    "required": ["has_speech", "transcript"],
 }
 
 
@@ -111,27 +155,42 @@ class GeminiStt(SttPort):
     def transcribe(self, audio: AudioInput, item_prompt: str = "") -> Transcription:
         """음성 파일 하나를 받아써서 글과 그 내력을 돌려준다.
 
-        순서는 셋뿐이다.
-          1) 내려받는다 (크기·형식 관문을 여기서 지난다)
-          2) Gemini 에 음성과 지시문을 함께 보낸다
-          3) 받은 글이 비어 있지 않은지 확인하고 돌려준다
+        순서는 다섯이고, 그중 셋이 '지어낸 글을 막는' 관문이다.
+          1) 내려받는다 (크기·형식 관문을 여기서 지난다. 소리 크기도 여기서 재진다)
+          2) **관문 1** 무음이면 Gemini 를 부르지 않고 여기서 끝낸다
+          3) Gemini 에 음성과 지시문을 함께 보낸다
+          4) **관문 2** 모델이 '말이 없었다'고 하거나 빈 글이면 실패로 다룬다
+          5) **관문 3** 글이 나왔어도 소리가 너무 작았으면 그 글을 버린다
         """
         started = time.perf_counter()
 
         # 1) 파일을 손에 넣는다. 못 읽는 형식이나 너무 큰 파일은 여기서 막힌다
         fetched = fetch_audio(audio, http_client=self._http_client)
 
-        # 2) 받아쓴다
-        text, usage = self._call_gemini(fetched, item_prompt)
+        # 2) 관문 1 — 소리가 없는 녹음은 LLM 에게 물어보지도 않는다.
+        #    물어보면 모델이 문항 지시문을 힌트 삼아 모범답안을 지어낸다(실측).
+        #    여기는 파일 안의 숫자만 보는 계산이라 모델이 무엇을 하든 결과가 같다.
+        #    (wav 만 잴 수 있다. 압축 형식은 loudness 가 None 이라 그냥 지나간다)
+        if is_silent(fetched.loudness):
+            raise SttUnavailable(silence_message(fetched.loudness))
 
-        # 3) 빈 글은 실패로 다룬다.
+        # 3) 받아쓴다
+        text, has_speech, usage = self._call_gemini(fetched, item_prompt)
+
+        # 4) 관문 2 — 모델이 스스로 '말소리가 없었다'고 답한 경우와, 빈 글이 온 경우.
         #    빈 글을 그대로 넘기면 뒤 단계가 '아무 말도 안 한 답안'으로 채점해 버리는데,
         #    그것은 응시자가 말을 안 한 것과 받아쓰기가 실패한 것을 뒤섞는 일이다
-        if not text.strip():
+        if not has_speech or not text.strip():
             raise SttUnavailable(
                 "음성에서 말을 하나도 옮겨 적지 못했다. "
                 "녹음이 비어 있거나 소리가 너무 작은지 확인해야 한다."
             )
+
+        # 5) 관문 3 — 글은 나왔는데 소리는 사람 말이라기에 너무 작았던 경우.
+        #    관문 1을 아슬아슬하게 넘긴 '거의 무음'에서 모범답안이 나오는 길을 막는다.
+        #    소리와 글이 서로 어긋나면 글이 아니라 소리를 믿는다
+        if is_too_quiet_for_speech(fetched.loudness):
+            raise SttUnavailable(too_quiet_message(fetched.loudness, text))
 
         elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
         return Transcription(
@@ -149,8 +208,8 @@ class GeminiStt(SttPort):
 
     def _call_gemini(
         self, fetched: FetchedAudio, item_prompt: str
-    ) -> tuple[str, dict[str, int | None]]:
-        """음성을 실제로 보내고 받아쓴 글을 꺼낸다.
+    ) -> tuple[str, bool, dict[str, int | None]]:
+        """음성을 실제로 보내고 (받아쓴 글, 말이 있었는지, 토큰 사용량)을 꺼낸다.
 
         채점 쪽 클라이언트의 generate_json 을 쓰지 않고 여기서 직접 부르는 이유:
         그 함수는 '글'만 보내도록 만들어져 있어서 음성 조각을 실을 자리가 없다.
@@ -198,22 +257,28 @@ class GeminiStt(SttPort):
                 f"음성을 글자로 옮기지 못했다. {classify_failure(exc)}", detail=str(exc)
             ) from exc
 
-        return self._read_transcript(response), self._read_usage(response)
+        text, has_speech = self._read_transcript(response)
+        return text, has_speech, self._read_usage(response)
 
     @staticmethod
-    def _read_transcript(response) -> str:
-        """응답에서 받아쓴 글만 꺼낸다.
+    def _read_transcript(response) -> tuple[str, bool]:
+        """응답에서 받아쓴 글과 '말이 있었는지'를 꺼낸다.
 
         JSON 으로 받기로 했지만 형식이 깨져 오는 일이 실제로 있다.
         그때 통째로 버리면 멀쩡히 받아쓴 글까지 잃으므로,
         JSON 으로 안 읽히면 온 글을 그대로 받아쓴 글로 본다.
         (없는 값을 지어내는 것이 아니라, 모델이 준 글에서 껍데기만 벗기는 일이다)
+
+        has_speech 를 못 읽었을 때는 True 로 본다.
+        '모델이 안 알려 줬다'를 '말이 없었다'로 바꿔 읽으면 멀쩡한 답안이
+        버려지기 때문이다. 무음을 막는 진짜 관문은 소리 크기 쪽(loudness.py)이라
+        이 값은 보조로만 쓴다.
         """
         import json
 
         text = (getattr(response, "text", "") or "").strip()
         if not text:
-            return ""
+            return "", True
 
         try:
             parsed = json.loads(text)
@@ -221,15 +286,19 @@ class GeminiStt(SttPort):
             # 앞뒤에 ```json 같은 군더더기가 붙은 경우를 한 번 더 시도한다
             first = text.find("{")
             if first == -1:
-                return text
+                return text, True
             try:
                 parsed, _ = json.JSONDecoder().raw_decode(text[first:])
             except json.JSONDecodeError:
-                return text
+                return text, True
 
         if isinstance(parsed, dict):
-            return str(parsed.get("transcript", "") or "")
-        return text
+            transcript = str(parsed.get("transcript", "") or "")
+            # 값이 아예 없으면 True(모름)로 두고, 있으면 그대로 참/거짓으로 읽는다
+            raw_flag = parsed.get("has_speech", True)
+            has_speech = bool(raw_flag) if raw_flag is not None else True
+            return transcript, has_speech
+        return text, True
 
     @staticmethod
     def _read_usage(response) -> dict[str, int | None]:

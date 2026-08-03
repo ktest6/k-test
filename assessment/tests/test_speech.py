@@ -11,6 +11,9 @@
   3. **관문이 실제로 막는다.**
      크기·형식·주소 관문을 지나야 받아쓰기가 시작된다.
   4. **음성을 안 보내는 기존 요청은 하나도 안 바뀐다.**
+  5. **말이 없는 녹음으로는 점수가 나오지 않는다.** (2026-08-02 추가)
+     무음 wav 를 넣었더니 받아쓰기가 문항 지시문을 힌트 삼아 모범답안을
+     지어내서 78.07점 B 가 나왔다. 세 겹 관문이 각각 도는지 여기서 못 박는다.
 
 이 테스트는 **네트워크를 한 번도 쓰지 않는다.**
 받아쓰기는 미리 답을 정해 둔 가짜를 꽂고, 파일 내려받기는 httpx 의
@@ -46,7 +49,15 @@ from src.speech.audio import (
     measure_wav_duration_ms,
     resolve_format,
 )
+from src.speech.gemini_stt import GeminiStt
 from src.speech.intake import resolve_audio_answer
+from src.speech.loudness import (
+    SILENCE_RMS,
+    SPEECH_FLOOR_RMS,
+    is_silent,
+    is_too_quiet_for_speech,
+    measure_wav_loudness,
+)
 from src.speech.port import SttPort, SttUnavailable, Transcription
 
 # ---------------------------------------------------------------------------
@@ -82,6 +93,36 @@ def make_wav(seconds: float = 1.0, framerate: int = 24000) -> bytes:
         handle.setframerate(framerate)
         # 2바이트짜리 칸을 초당 framerate 개만큼 채운다
         handle.writeframes(b"\x00\x00" * int(framerate * seconds))
+    return buffer.getvalue()
+
+
+def make_tone_wav(
+    amplitude: int,
+    seconds: float = 1.0,
+    framerate: int = 24000,
+    silent_head_s: float = 0.0,
+) -> bytes:
+    """소리 크기를 정해서 wav 를 만든다. 무음 관문을 시험하는 재료다.
+
+    사람 목소리 대신 단순한 '삐-' 소리를 쓴다. 관문이 보는 것은 낱말이 아니라
+    소리의 크기뿐이라 이것으로 충분하고, 네트워크 없이 언제든 같은 값이 나온다.
+
+    silent_head_s 를 주면 앞에 조용한 구간을 붙인다
+    (긴 침묵 끝에 한마디 한 답안을 흉내 내는 자리).
+    """
+    import math
+
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(framerate)
+        frames = bytearray(b"\x00\x00" * int(framerate * silent_head_s))
+        for index in range(int(framerate * seconds)):
+            # 440Hz 짜리 물결 하나. 크기(amplitude)만 우리가 정한다
+            value = int(amplitude * math.sin(2 * math.pi * 440 * index / framerate))
+            frames += int(value).to_bytes(2, "little", signed=True)
+        handle.writeframes(bytes(frames))
     return buffer.getvalue()
 
 
@@ -568,3 +609,270 @@ def test_채점_코드는_받아쓰기_모델을_직접_부르지_않는다():
     assert scoring_offenders == ["pipeline.py"], (
         f"speech 배선이 pipeline.py 밖으로 번졌다: {scoring_offenders}"
     )
+
+
+# ---------------------------------------------------------------------------
+# 7. 무음 관문 — 말이 없는 녹음으로 점수가 나오지 않는가 (2026-08-02 사고 수리)
+# ---------------------------------------------------------------------------
+#
+# 실제로 일어난 일: 소리가 전혀 없는 wav 를 말하기 답안으로 보냈더니
+# 받아쓰기가 문항 지시문을 힌트 삼아 모범답안을 지어냈고 78.07점 B 가 나왔다.
+# 아래 테스트들은 그 길이 다시 열리지 않게 막아 둔 못이다.
+
+
+class ExplodingClient:
+    """부르면 터지는 가짜 LLM 클라이언트.
+
+    '무음이면 LLM 을 부르지 않는다'를 말이 아니라 사실로 확인하는 장치다.
+    관문이 제대로 막으면 이 클래스는 한 번도 불리지 않는다.
+    """
+
+    available = True
+
+    def _ensure_client(self):
+        raise AssertionError("무음인데 받아쓰기 모델을 불렀다 — 관문 1이 뚫렸다")
+
+
+def serve_bytes(payload: bytes) -> httpx.Client:
+    """정해 둔 wav 를 내려주는 가짜 통신로."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=payload, headers={"content-type": "audio/wav"})
+
+    return mock_http(handler)
+
+
+def test_소리_크기를_파일에서_직접_잰다():
+    """무음과 발화가 숫자로 구별되는지부터 확인한다."""
+    silent = measure_wav_loudness(make_wav(seconds=1.0))
+    assert silent is not None
+    assert silent.peak_window_rms == 0.0
+
+    # 크기 8000 짜리 물결의 실효값은 약 5657 이다(8000 / 루트2)
+    loud = measure_wav_loudness(make_tone_wav(amplitude=8000))
+    assert 5000 < loud.peak_window_rms < 6000
+
+    # wav 가 아니면 재지 못한다. 그때는 관문을 건너뛴다(못 재는 것과 무음은 다르다)
+    assert measure_wav_loudness(b"this is not a wav file") is None
+
+
+def test_어떤_비트수의_wav_든_같은_눈금으로_잰다():
+    """녹음 형식마다 소리를 적는 방식이 다르다. 그것을 하나의 눈금으로 맞춘다.
+
+    특히 8비트 wav 는 '소리 없음'을 0 이 아니라 128 로 적는다.
+    그 사실을 빼먹으면 **무음 파일이 아주 시끄러운 소리로 잡혀서**
+    무음 관문을 그대로 통과한다. 그 실수를 여기서 막는다.
+    """
+    import math
+
+    def make_wav_of_width(width: int, amplitude_ratio: float, channels: int = 1) -> bytes:
+        rate = 24000
+        peak = {1: 127, 2: 32767, 3: 8388607, 4: 2147483647}[width]
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as handle:
+            handle.setnchannels(channels)
+            handle.setsampwidth(width)
+            handle.setframerate(rate)
+            frames = bytearray()
+            for index in range(int(rate * 0.5)):
+                value = int(peak * amplitude_ratio * math.sin(2 * math.pi * 440 * index / rate))
+                for _ in range(channels):
+                    if width == 1:
+                        # 8비트는 0~255 로 적고 128 이 소리 없음이다
+                        frames.append((value + 128) & 0xFF)
+                    else:
+                        frames += value.to_bytes(width, "little", signed=True)
+            handle.writeframes(bytes(frames))
+        return buffer.getvalue()
+
+    # 최대 크기의 1/4 짜리 소리는 어느 비트수로 적어도 같은 값(약 5,793)이 나와야 한다
+    for width in (1, 2, 3, 4):
+        loudness = measure_wav_loudness(make_wav_of_width(width, 0.25))
+        assert 5500 < loudness.peak_window_rms < 6000, f"{width * 8}비트에서 값이 어긋난다"
+
+    # 갈래가 둘(스테레오)이어도 같다
+    assert 5500 < measure_wav_loudness(make_wav_of_width(2, 0.25, channels=2)).peak_window_rms
+
+    # 8비트 무음(전부 128)이 시끄러운 소리로 잡히면 안 된다
+    assert is_silent(measure_wav_loudness(make_wav_of_width(1, 0.0)))
+
+
+def test_긴_침묵_끝의_한마디는_무음으로_보지_않는다():
+    """전체 평균만 보면 안 되는 이유를 값으로 못 박는다.
+
+    30초 침묵 뒤에 1초만 말한 답안은 전체 평균이 확 낮아지지만,
+    가장 시끄러웠던 0.1초를 보면 말이 있었다는 것이 드러난다.
+    """
+    payload = make_tone_wav(amplitude=8000, seconds=1.0, silent_head_s=30.0)
+    loudness = measure_wav_loudness(payload)
+
+    # 전체 평균은 침묵에 희석돼 크게 낮아진다
+    assert loudness.overall_rms < 1200
+    # 그래도 가장 큰 구간은 발화 수준 그대로다
+    assert loudness.peak_window_rms > 5000
+    assert is_silent(loudness) is False
+    assert is_too_quiet_for_speech(loudness) is False
+
+
+def test_기준값은_실측_발화보다_한참_아래에_있다():
+    """오탐(정상 발화를 막는 것)이 나지 않는지 숫자로 확인한다.
+
+    실측(2026-08-02): 정상 TTS 발화의 '가장 큰 0.1초'는 8,519~13,318 이었다.
+    기준값이 그 근처로 올라오면 조용히 말한 응시자가 0점을 받게 된다.
+    """
+    assert SILENCE_RMS < SPEECH_FLOOR_RMS
+    # 가장 조용했던 실측 발화(8,519)의 100분의 1도 안 되는 자리에 있어야 한다
+    assert SPEECH_FLOOR_RMS < 8519 / 100
+
+
+def test_무음_wav_는_LLM_을_부르지도_않고_막힌다():
+    """관문 1. 여기가 이 사고의 진짜 수리 지점이다.
+
+    LLM 에게 물어보는 순간 지시문을 힌트로 답을 지어내므로,
+    물어보기 전에 파일 안의 숫자만으로 끝내야 한다.
+    """
+    with serve_bytes(make_wav(seconds=4.0)) as client:
+        stt = GeminiStt(client=ExplodingClient(), http_client=client)
+        with pytest.raises(SttUnavailable) as caught:
+            stt.transcribe(
+                AudioInput(url="https://x.test/silence.wav"),
+                item_prompt=ITEM.prompt,
+            )
+
+    message = str(caught.value)
+    # 사유가 사람 말로 나가고, 판정 근거가 된 측정값이 함께 남는다
+    assert "소리를 찾지 못했다" in message
+    assert "가장 큰 0.1초 구간" in message
+
+
+def test_모델이_말이_없었다고_하면_채점하지_않는다(monkeypatch):
+    """관문 2. 소리는 재지 못했더라도 모델이 밝히면 그것을 따른다."""
+
+    def fake_call(self, fetched, item_prompt):
+        # 지어낸 글이 함께 와도 has_speech 가 거짓이면 버린다
+        return "어... 반장님 기계가 갑자기 멈추었어요.", False, {}
+
+    monkeypatch.setattr(GeminiStt, "_call_gemini", fake_call)
+
+    with serve_bytes(make_tone_wav(amplitude=8000)) as client:
+        stt = GeminiStt(client=ExplodingClient(), http_client=client)
+        with pytest.raises(SttUnavailable) as caught:
+            stt.transcribe(AudioInput(url="https://x.test/a.wav"))
+    assert "옮겨 적지 못했다" in str(caught.value)
+
+
+def test_소리가_너무_작은데_글이_나오면_지어낸_것으로_본다(monkeypatch):
+    """관문 3. 소리와 글이 어긋나면 글이 아니라 소리를 믿는다."""
+
+    def fake_call(self, fetched, item_prompt):
+        return "반장님, 기계가 멈췄습니다. 어떻게 할까요?", True, {}
+
+    monkeypatch.setattr(GeminiStt, "_call_gemini", fake_call)
+
+    # 관문 1(15)은 넘지만 발화 바닥값(60)에는 못 미치는 크기다
+    # (크기 40 짜리 물결의 실효값은 약 28)
+    payload = make_tone_wav(amplitude=40)
+    assert is_silent(measure_wav_loudness(payload)) is False
+
+    with serve_bytes(payload) as client:
+        stt = GeminiStt(client=ExplodingClient(), http_client=client)
+        with pytest.raises(SttUnavailable) as caught:
+            stt.transcribe(AudioInput(url="https://x.test/quiet.wav"))
+
+    message = str(caught.value)
+    assert "너무 작아서" in message
+    # 무엇을 버렸는지가 근거로 남아야 나중에 원인을 가릴 수 있다
+    assert "기계가 멈췄습니다" in message
+
+
+def test_정상_크기의_음성은_관문을_그대로_통과한다(monkeypatch):
+    """오탐 확인. 관문을 세 겹 세웠어도 멀쩡한 답안은 지나가야 한다."""
+
+    def fake_call(self, fetched, item_prompt):
+        return SPOKEN_TEXT, True, {"input": 800, "output": 50}
+
+    monkeypatch.setattr(GeminiStt, "_call_gemini", fake_call)
+
+    with serve_bytes(make_tone_wav(amplitude=8000, seconds=2.0)) as client:
+        stt = GeminiStt(client=ExplodingClient(), http_client=client)
+        result = stt.transcribe(AudioInput(url="https://x.test/a.wav"))
+
+    assert result.text == SPOKEN_TEXT
+    assert result.audio_duration_ms == 2000
+
+
+def test_압축_형식은_소리_관문을_건너뛴다(monkeypatch):
+    """mp3·m4a 는 풀어 봐야 소리를 볼 수 있어서 우리가 재지 못한다.
+
+    남아 있는 구멍이라는 사실을 코드로 적어 둔다.
+    이 형식들은 관문 2(모델이 말 없음을 밝히는 것)에만 기댄다.
+    """
+
+    def fake_call(self, fetched, item_prompt):
+        # 소리를 재지 못했으므로 loudness 가 비어 있어야 한다
+        assert fetched.loudness is None
+        return SPOKEN_TEXT, True, {}
+
+    monkeypatch.setattr(GeminiStt, "_call_gemini", fake_call)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, content=b"fake-mp3-bytes", headers={"content-type": "audio/mpeg"}
+        )
+
+    with mock_http(handler) as client:
+        stt = GeminiStt(client=ExplodingClient(), http_client=client)
+        result = stt.transcribe(AudioInput(url="https://x.test/a.mp3"))
+    assert result.text == SPOKEN_TEXT
+
+
+def test_JSON_이_깨져_와도_받아쓴_글을_잃지_않는다():
+    """has_speech 를 못 읽었을 때 '말이 없었다'로 바꿔 읽으면 멀쩡한 답안이 버려진다."""
+
+    class FakeResponse:
+        text = "반장님 기계가 멈췄습니다"  # JSON 껍데기 없이 글만 온 경우
+
+    text, has_speech = GeminiStt._read_transcript(FakeResponse())
+    assert text == "반장님 기계가 멈췄습니다"
+    assert has_speech is True
+
+    class FakeJsonResponse:
+        text = '{"has_speech": false, "transcript": ""}'
+
+    text, has_speech = GeminiStt._read_transcript(FakeJsonResponse())
+    assert text == ""
+    assert has_speech is False
+
+
+def test_받아쓰기_지시문이_외국어_발화를_지우지_않게_돼_있다():
+    """한 번 데인 자리를 못 박는다 (2026-08-02 실측).
+
+    "말소리가 없으면 false" 만 적었더니 모델이 **영어 발화까지 false** 로 답했다.
+    외국어로 답한 응시자는 낮은 점수를 받아야 하는데 아예 미채점(503)이 돼 버린다.
+    지시문에서 이 규칙이 빠지면 그 사고가 그대로 돌아온다.
+    """
+    from src.speech.prompt import SYSTEM_INSTRUCTION, build_transcription_prompt
+
+    assert "한국어가 아니어도" in SYSTEM_INSTRUCTION
+    assert "has_speech 는 true" in SYSTEM_INSTRUCTION
+
+    # 문항 지시문을 참고로 붙일 때, 그것으로 답을 메우지 말라는 경고가 함께 간다
+    built = build_transcription_prompt("기계가 멈췄습니다. 반장님에게 보고하세요.")
+    assert "말하지 않은 사람이 점수를 받게 된다" in built
+
+
+def test_API_무음_음성은_503_으로_나간다(monkeypatch):
+    """백엔드가 보는 계약: 무음은 400 이 아니라 503(그 문항 미채점)이다.
+
+    요청 자체는 틀리지 않았고, 다시 녹음하면 되는 상황이기 때문이다.
+    """
+    silent_wav = make_wav(seconds=4.0)
+
+    def build_silent_stt():
+        return GeminiStt(client=ExplodingClient(), http_client=serve_bytes(silent_wav))
+
+    monkeypatch.setattr("src.speech.intake.build_default_stt", build_silent_stt)
+    response = client.post("/score", json=base_payload(options={"use_llm": False}))
+
+    assert response.status_code == 503
+    assert "소리를 찾지 못했다" in response.json()["detail"]

@@ -9,6 +9,10 @@
   3. 내려받기는 30초까지         — 응답 없는 서버를 하염없이 기다리지 않는다
   4. 형식은 5가지만              — 우리가 실제로 읽을 수 있는 형식만 받는다
 
+여기서는 소리 크기도 함께 재 둔다(wav 만 가능하다, loudness.py 참고).
+재기만 하고 막지는 않는다 — 무음을 막는 판단은 받아쓰기 구현(gemini_stt.py)이
+LLM 을 부르기 직전에 한다. 이 파일은 '파일을 손에 넣는 일'만 맡는다.
+
 여기서 정한 값은 전부 **근거가 있는 값이 아니라 첫 기준값**이다.
 실제 응시 녹음 길이가 정해지면 다시 잡아야 한다.
 (참고: 11초짜리 24kHz wav 가 약 0.5MB 였다. 20MB 면 대략 7분 분량이다)
@@ -29,6 +33,7 @@ from urllib.parse import urlparse
 import httpx
 
 from ..scoring.schema import AudioInput
+from .loudness import Loudness, measure_wav_loudness
 
 #: 내려받을 수 있는 최대 크기. 이보다 크면 받다가 끊는다
 MAX_AUDIO_BYTES = 20 * 1024 * 1024
@@ -90,6 +95,8 @@ class FetchedAudio:
     duration_ms: int | None = None
     #: 사람이 알아야 할 것
     warnings: list[str] = None  # type: ignore[assignment]
+    #: 소리 크기 측정값. wav 가 아니거나 압축돼 있으면 None(관문을 건너뛴다)
+    loudness: Loudness | None = None
 
     def __post_init__(self) -> None:
         if self.warnings is None:
@@ -251,12 +258,14 @@ def fetch_audio(
                 "녹음 길이가 필요하면 audio.duration_ms 로 알려 줘야 한다."
             )
 
+    # 소리 크기를 여기서 재 둔다. wav 가 아니면 None 이고, 그러면 무음 관문이 없다
     return FetchedAudio(
         data=data,
         audio_format=audio_format,
         mime_type=FORMAT_TO_MIME[audio_format],
         duration_ms=duration_ms,
         warnings=warnings,
+        loudness=measure_wav_loudness(data) if audio_format == "wav" else None,
     )
 
 
@@ -290,4 +299,5 @@ def load_local_audio(path: str | Path, declared_format: str | None = None) -> Fe
         audio_format=audio_format,
         mime_type=FORMAT_TO_MIME[audio_format],
         duration_ms=measure_wav_duration_ms(data) if audio_format == "wav" else None,
+        loudness=measure_wav_loudness(data) if audio_format == "wav" else None,
     )
