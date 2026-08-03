@@ -140,8 +140,8 @@ describe('ExamSessionController.listQuestions', () => {
 
     expect(listQuestions).toHaveBeenCalledWith('1', '1');
     expect(result).toEqual([
-      { id: '1', part: 'work_log', prompt: '프롬프트 1' },
-      { id: '2', part: 'work_log', prompt: '프롬프트 2' },
+      { id: '1', part: 'work_log', prompt: '프롬프트 1', imageUrl: null },
+      { id: '2', part: 'work_log', prompt: '프롬프트 2', imageUrl: null },
     ]);
     result.forEach((dto) => {
       expect(dto).not.toHaveProperty('checklistItems');
@@ -159,7 +159,30 @@ describe('ExamSessionController.getQuestion', () => {
     const result = await controller.getQuestion('1', '3', buildUser());
 
     expect(getQuestion).toHaveBeenCalledWith('1', '3', '1', false);
-    expect(result).toEqual({ id: '3', part: 'work_log', prompt: '프롬프트 3' });
+    expect(result).toEqual({ id: '3', part: 'work_log', prompt: '프롬프트 3', imageUrl: null });
+  });
+
+  it('exposes imageUrl for picture-description questions', async () => {
+    const question = new Question(
+      '4',
+      'picture_description',
+      {
+        item_id: 'PIC-001',
+        prompt: '그림을 보고 상황을 설명하세요.',
+        expected_register: 'formal',
+        reference_keywords: [],
+        image_url: 'question-assets/pic-001.png',
+      },
+      null,
+      [],
+      new Date(),
+    );
+    const getQuestion = jest.fn().mockResolvedValue(question);
+    const controller = buildController({}, { getQuestion });
+
+    const result = await controller.getQuestion('1', '4', buildUser());
+
+    expect(result.imageUrl).toBe('question-assets/pic-001.png');
   });
 
   it('tells the service the caller is an admin so ownership can be bypassed', async () => {

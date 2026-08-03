@@ -4,6 +4,8 @@ export interface QuestionContent {
   prompt: string;
   expected_register: string;
   reference_keywords: string[];
+  /** 그림 묘사 등 이미지를 함께 보여줘야 하는 문항의 이미지 경로. 없으면 undefined. */
+  image_url?: string;
 }
 
 export interface QuestionChecklistItem {

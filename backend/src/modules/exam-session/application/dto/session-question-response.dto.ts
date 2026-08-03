@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
  * 응시자에게 보여줄 문항 — 관리자용(AssignedQuestionResponseDto)과 달리
@@ -9,9 +9,18 @@ export class SessionQuestionResponseDto {
   @ApiProperty()
   id: string;
 
-  @ApiProperty({ description: '문항 세부 유형 (work_log, messenger_report 등)' })
+  @ApiProperty({
+    description: '문항 세부 유형 (work_log, messenger_report, picture_description 등)',
+  })
   part: string;
 
   @ApiProperty({ description: '문항 지문' })
   prompt: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: '그림 묘사 등 이미지가 있는 문항의 이미지 경로. 없으면 null',
+  })
+  imageUrl: string | null;
 }

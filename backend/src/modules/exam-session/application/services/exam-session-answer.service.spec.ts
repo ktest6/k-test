@@ -1,4 +1,5 @@
 import { NotFoundDomainException } from '../../../../common/exceptions/domain.exception';
+import { StorageUploadUrlService } from '../../../../infrastructure/supabase/storage-upload-url.service';
 import { AnswerService } from '../../../answer/application/services/answer.service';
 import { Answer } from '../../../answer/domain/entities/answer.entity';
 import { AnswerStatus } from '../../../answer/domain/enums/answer-status.enum';
@@ -25,6 +26,17 @@ function buildQuestion(): Question {
   );
 }
 
+function buildStorageUploadUrlService(
+  overrides: Partial<{ createSignedUploadUrl: jest.Mock }> = {},
+) {
+  return {
+    createSignedUploadUrl: jest
+      .fn()
+      .mockResolvedValue({ path: '1/1/1.webm', signedUrl: 'https://signed', token: 'token' }),
+    ...overrides,
+  } as unknown as StorageUploadUrlService;
+}
+
 describe('ExamSessionAnswerService.save', () => {
   it('gates on assertActiveSession and question membership before saving', async () => {
     const assertActiveSession = jest.fn().mockResolvedValue(undefined);
@@ -41,6 +53,7 @@ describe('ExamSessionAnswerService.save', () => {
       examSessionQuestionService,
       answerService,
       scoringService,
+      buildStorageUploadUrlService(),
     );
 
     const result = await service.save('1', '1', '1', {
@@ -73,6 +86,7 @@ describe('ExamSessionAnswerService.save', () => {
       examSessionQuestionService,
       answerService,
       scoringService,
+      buildStorageUploadUrlService(),
     );
 
     await expect(
@@ -99,6 +113,7 @@ describe('ExamSessionAnswerService.get', () => {
       examSessionQuestionService,
       answerService,
       scoringService,
+      buildStorageUploadUrlService(),
     );
 
     const result = await service.get('1', '1', '1');
@@ -119,8 +134,62 @@ describe('ExamSessionAnswerService.get', () => {
       examSessionQuestionService,
       answerService,
       scoringService,
+      buildStorageUploadUrlService(),
     );
 
     await expect(service.get('1', '1', '1')).rejects.toThrow(NotFoundDomainException);
+  });
+});
+
+describe('ExamSessionAnswerService.createUploadUrl', () => {
+  it('gates on assertActiveSession and question membership, then issues a signed URL scoped to session/question', async () => {
+    const assertActiveSession = jest.fn().mockResolvedValue(undefined);
+    const examSessionService = { assertActiveSession } as unknown as ExamSessionService;
+    const getQuestion = jest.fn().mockResolvedValue(buildQuestion());
+    const examSessionQuestionService = { getQuestion } as unknown as ExamSessionQuestionService;
+    const answerService = {} as unknown as AnswerService;
+    const scoringService = {} as unknown as ScoringService;
+    const createSignedUploadUrl = jest
+      .fn()
+      .mockResolvedValue({ path: '9/100/50.webm', signedUrl: 'https://signed', token: 'token' });
+    const storageUploadUrlService = buildStorageUploadUrlService({ createSignedUploadUrl });
+    const service = new ExamSessionAnswerService(
+      examSessionService,
+      examSessionQuestionService,
+      answerService,
+      scoringService,
+      storageUploadUrlService,
+    );
+
+    const result = await service.createUploadUrl('100', '50', '9', 'audio/webm');
+
+    expect(assertActiveSession).toHaveBeenCalledWith('100', '9');
+    expect(getQuestion).toHaveBeenCalledWith('100', '50', '9');
+    expect(createSignedUploadUrl).toHaveBeenCalledWith('answer-audio', '9/100/50.webm');
+    expect(result).toEqual({ path: '9/100/50.webm', signedUrl: 'https://signed', token: 'token' });
+  });
+
+  it('propagates a rejection from assertActiveSession without issuing a URL', async () => {
+    const assertActiveSession = jest.fn().mockRejectedValue(new Error('session not active'));
+    const examSessionService = { assertActiveSession } as unknown as ExamSessionService;
+    const getQuestion = jest.fn();
+    const examSessionQuestionService = { getQuestion } as unknown as ExamSessionQuestionService;
+    const answerService = {} as unknown as AnswerService;
+    const scoringService = {} as unknown as ScoringService;
+    const createSignedUploadUrl = jest.fn();
+    const storageUploadUrlService = buildStorageUploadUrlService({ createSignedUploadUrl });
+    const service = new ExamSessionAnswerService(
+      examSessionService,
+      examSessionQuestionService,
+      answerService,
+      scoringService,
+      storageUploadUrlService,
+    );
+
+    await expect(service.createUploadUrl('100', '50', '9', 'audio/webm')).rejects.toThrow(
+      'session not active',
+    );
+    expect(getQuestion).not.toHaveBeenCalled();
+    expect(createSignedUploadUrl).not.toHaveBeenCalled();
   });
 });
