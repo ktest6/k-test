@@ -22,6 +22,7 @@ import { AiModule } from './modules/ai/ai.module';
 import { DocumentModule } from './modules/document/document.module';
 import { ExamQuestionModule } from './modules/exam-question/exam-question.module';
 import { VerificationsModule } from './modules/verifications/verifications.module';
+import { MonitoringModule } from './modules/monitoring/monitoring.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { VerificationsModule } from './modules/verifications/verifications.modul
     SubmissionModule,
     ScoringModule,
     AiModule,
+    MonitoringModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
