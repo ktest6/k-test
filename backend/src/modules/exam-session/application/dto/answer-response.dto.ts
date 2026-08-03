@@ -12,10 +12,10 @@ export class AnswerResponseDto {
   @ApiProperty({ enum: AnswerType })
   type: AnswerType;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   contentText: string | null;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   audioFileUrl: string | null;
 
   @ApiProperty({ enum: AnswerStatus })

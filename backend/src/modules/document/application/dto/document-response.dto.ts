@@ -14,7 +14,11 @@ export class DocumentResponseDto {
   @ApiProperty({ enum: DocumentStatus })
   status: DocumentStatus;
 
-  @ApiPropertyOptional({ nullable: true, description: 'status=FAILED일 때만 값 있음' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'status=FAILED일 때만 값 있음',
+  })
   errorMessage: string | null;
 
   @ApiProperty()

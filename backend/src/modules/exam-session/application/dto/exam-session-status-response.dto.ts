@@ -16,6 +16,7 @@ export class ExamSessionStatusResponseDto {
   status: SessionStatus;
 
   @ApiProperty({
+    type: String,
     nullable: true,
     description: '마지막으로 진입한 문항 ID — 중단 후 재개 시 이 문항부터 다시 보여주면 된다.',
   })
