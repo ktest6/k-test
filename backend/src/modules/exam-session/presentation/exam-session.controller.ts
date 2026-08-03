@@ -6,7 +6,9 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Role } from '../../../common/enums/role.enum';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { AnswerResponseDto } from '../application/dto/answer-response.dto';
+import { AnswerUploadUrlResponseDto } from '../application/dto/answer-upload-url-response.dto';
 import { ExamSessionStatusResponseDto } from '../application/dto/exam-session-status-response.dto';
+import { RequestAnswerAudioUploadUrlDto } from '../application/dto/request-answer-audio-upload-url.dto';
 import { SaveAnswerDto } from '../application/dto/save-answer.dto';
 import { SessionQuestionResponseDto } from '../application/dto/session-question-response.dto';
 import { StartExamSessionResponseDto } from '../application/dto/start-exam-session-response.dto';
@@ -16,6 +18,7 @@ import {
 } from '../application/services/exam-session-answer.service';
 import { ExamSessionQuestionService } from '../application/services/exam-session-question.service';
 import { ExamSessionService } from '../application/services/exam-session.service';
+import { Question } from '../../question/domain/entities/question.entity';
 
 @ApiBearerAuth()
 @ApiTags('Exam Session')
@@ -84,11 +87,7 @@ export class ExamSessionController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<SessionQuestionResponseDto[]> {
     const questions = await this.examSessionQuestionService.listQuestions(examSessionId, user.id);
-    return questions.map((question) => ({
-      id: question.id,
-      part: question.part,
-      prompt: question.content.prompt,
-    }));
+    return questions.map((question) => this.toQuestionResponse(question));
   }
 
   @Get('exam-sessions/:examSessionId/questions/:questionId')
@@ -108,7 +107,29 @@ export class ExamSessionController {
       user.id,
       user.role === Role.ADMIN,
     );
-    return { id: question.id, part: question.part, prompt: question.content.prompt };
+    return this.toQuestionResponse(question);
+  }
+
+  @Post('exam-sessions/:examSessionId/questions/:questionId/answer/upload-url')
+  @ApiOperation({
+    summary: '답안 음성 업로드용 signed URL 발급',
+    description:
+      '말하기 답안 녹음 파일을 올릴 URL을 발급한다. 프론트는 이 URL로 Supabase Storage에 직접 업로드한 뒤, ' +
+      '응답의 path를 그대로 답안 제출(POST .../answer)의 audioFileUrl로 전달하면 된다.',
+  })
+  @ApiStandardResponse(AnswerUploadUrlResponseDto, { status: 201, message: '업로드 URL 발급 완료' })
+  createAnswerAudioUploadUrl(
+    @Param('examSessionId') examSessionId: string,
+    @Param('questionId') questionId: string,
+    @Body() dto: RequestAnswerAudioUploadUrlDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<AnswerUploadUrlResponseDto> {
+    return this.examSessionAnswerService.createUploadUrl(
+      examSessionId,
+      questionId,
+      user.id,
+      dto.contentType,
+    );
   }
 
   @Post('exam-sessions/:examSessionId/questions/:questionId/answer')
@@ -143,6 +164,15 @@ export class ExamSessionController {
   ): Promise<AnswerResponseDto> {
     const result = await this.examSessionAnswerService.get(examSessionId, questionId, user.id);
     return this.toAnswerResponse(result);
+  }
+
+  private toQuestionResponse(question: Question): SessionQuestionResponseDto {
+    return {
+      id: question.id,
+      part: question.part,
+      prompt: question.content.prompt,
+      imageUrl: question.content.image_url ?? null,
+    };
   }
 
   private toAnswerResponse(result: AnswerWithScoreResult): AnswerResponseDto {
