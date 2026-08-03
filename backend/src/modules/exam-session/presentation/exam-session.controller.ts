@@ -19,6 +19,7 @@ import {
 import { ExamSessionQuestionService } from '../application/services/exam-session-question.service';
 import { ExamSessionService } from '../application/services/exam-session.service';
 import { Question } from '../../question/domain/entities/question.entity';
+import { QuestionMode } from '../../question/domain/enums/question-mode.enum';
 
 @ApiBearerAuth()
 @ApiTags('Exam Session')
@@ -172,7 +173,7 @@ export class ExamSessionController {
       part: question.part,
       prompt: question.content.prompt,
       imageUrl: question.content.image_url ?? null,
-      mode: question.content.mode ?? null,
+      mode: (question.content.mode as QuestionMode | undefined) ?? null,
     };
   }
 
