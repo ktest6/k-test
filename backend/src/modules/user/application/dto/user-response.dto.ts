@@ -26,7 +26,7 @@ export class UserResponseDto {
   @ApiProperty()
   idNumber: string;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   companyCode: string | null;
 
   @ApiProperty()
@@ -38,7 +38,7 @@ export class UserResponseDto {
   @ApiProperty()
   loginAttempts: number;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: Date, nullable: true })
   lastLoginAt: Date | null;
 
   @ApiProperty()
