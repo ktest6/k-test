@@ -7,10 +7,12 @@ service.py
 1. 현재 프레임 이미지 검증
 2. AWS Rekognition DetectFaces 호출
 3. 얼굴 수 및 화면 이탈 상태 분석
-4. 필요한 경우 기준 얼굴과 현재 얼굴 비교
-5. Rule Engine으로 위험도 및 Decision 결정
-6. Event Engine으로 이벤트 생성 및 저장
-7. 모니터링 최종 결과 반환
+4. 시선 및 고개 방향 분석
+5. 연속 시선 이탈 상태 갱신
+6. 필요한 경우 기준 얼굴과 현재 얼굴 비교
+7. Rule Engine으로 위험도 및 Decision 결정
+8. Event Engine으로 이벤트 응답 구조 생성
+9. 모니터링 최종 결과 반환
 """
 
 from datetime import datetime
@@ -25,6 +27,12 @@ from modules.cheating_detection.face_detection import detect_faces
 from modules.cheating_detection.face_monitor import (
     EVENT_FACE_NORMAL,
     analyze_face_monitor,
+)
+from modules.cheating_detection.gaze_monitor import (
+    analyze_gaze_monitor,
+)
+from modules.cheating_detection.gaze_state import (
+    update_gaze_state,
 )
 from modules.cheating_detection.identity_monitor import (
     analyze_identity_monitor,
@@ -119,8 +127,8 @@ def analyze_monitoring_frame(
             이번 요청에서 중간 동일인 검사를 실행할지 여부.
 
     Returns:
-        얼굴 분석, 동일인 분석, Rule Engine,
-        Event Engine 결과를 포함한 딕셔너리.
+        얼굴, 시선, 동일인 분석 결과와
+        이벤트 요약 및 이벤트 목록을 포함한 딕셔너리.
     """
 
     try:
@@ -143,6 +151,38 @@ def analyze_monitoring_frame(
             detect_faces_response,
         )
 
+        gaze_monitor_result = analyze_gaze_monitor(
+            face_monitor_result=face_monitor_result,
+            eye_yaw_threshold=(
+                settings.gaze_eye_yaw_threshold
+            ),
+            eye_pitch_threshold=(
+                settings.gaze_eye_pitch_threshold
+            ),
+            head_yaw_threshold=(
+                settings.gaze_head_yaw_threshold
+            ),
+            head_pitch_threshold=(
+                settings.gaze_head_pitch_threshold
+            ),
+            minimum_eye_confidence=(
+                settings.gaze_minimum_eye_confidence
+            ),
+        )
+
+        gaze_state_result = update_gaze_state(
+            exam_id=exam_id,
+            examinee_id=examinee_id,
+            gaze_monitor_result=gaze_monitor_result,
+            elapsed_ms=elapsed_ms,
+            capture_sequence=capture_sequence,
+            persistent_count_threshold=(
+                settings.gaze_persistent_count_threshold
+            ),
+        )
+
+        gaze_monitor_result["state"] = gaze_state_result
+
         identity_monitor_result = None
 
         can_run_identity_check = should_run_identity_check(
@@ -163,6 +203,7 @@ def analyze_monitoring_frame(
 
         monitoring_results = {
             "face_monitor": face_monitor_result,
+            "gaze_monitor": gaze_monitor_result,
             "identity_monitor": identity_monitor_result,
         }
 
@@ -180,6 +221,19 @@ def analyze_monitoring_frame(
             rule_result=rule_result,
         )
 
+        face_monitor_response = {
+            "face_count": face_monitor_result.get(
+                "face_count",
+                0,
+            ),
+            "event_type": face_monitor_result.get(
+                "event_type",
+            ),
+            "message": face_monitor_result.get(
+                "message",
+            ),
+        }
+
         return {
             "exam_id": exam_id,
             "examinee_id": examinee_id,
@@ -187,14 +241,28 @@ def analyze_monitoring_frame(
             "captured_at": captured_at,
             "elapsed_ms": elapsed_ms,
             "capture_sequence": capture_sequence,
-            "face_monitor": face_monitor_result,
+            "face_monitor": face_monitor_response,
+            "gaze_monitor": gaze_monitor_result,
+            "object_monitor": None,
             "identity_check_requested": run_identity_check,
             "identity_check_executed": (
                 identity_monitor_result is not None
             ),
             "identity_monitor": identity_monitor_result,
-            "rule_result": rule_result,
-            "event_result": event_result,
+            "event_summary": event_result.get(
+                "event_summary",
+                {
+                    "event_detected": False,
+                    "event_count": 0,
+                    "severity": "NORMAL",
+                    "decision": "NONE",
+                    "create_clip": False,
+                },
+            ),
+            "events": event_result.get(
+                "events",
+                [],
+            ),
         }
 
     except MonitoringError:

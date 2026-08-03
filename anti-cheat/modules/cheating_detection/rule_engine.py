@@ -19,6 +19,7 @@ from modules.cheating_detection.face_monitor import (
     EVENT_FACE_OUT_OF_FRAME,
     EVENT_MULTIPLE_FACES,
 )
+from modules.cheating_detection.gaze_monitor import EVENT_GAZE_AWAY
 from modules.cheating_detection.identity_monitor import (
     EVENT_IDENTITY_MATCH,
     EVENT_IDENTITY_MISMATCH,
@@ -36,6 +37,13 @@ SEVERITY_HIGH = "HIGH"
 DECISION_NONE = "NONE"
 DECISION_RECORD_EVENT = "RECORD_EVENT"
 DECISION_CREATE_CLIP = "CREATE_CLIP"
+
+
+# 시선 이탈 Rule 정책
+EYE_ONLY_MEDIUM_COUNT = 2
+EYE_ONLY_HIGH_COUNT = 3
+EYE_AND_HEAD_HIGH_COUNT = 2
+HEAD_POSE_HIGH_COUNT = 2
 
 
 # 위험도 비교 우선순위
@@ -106,6 +114,149 @@ def evaluate_face_rules(
                 message="시험 화면에서 여러 명의 얼굴이 확인되었습니다.",
                 details={
                     "face_count": face_result.get("face_count", 0),
+                },
+            )
+        )
+
+    return applied_rules
+
+
+# 시선 및 고개 이탈 평가
+def evaluate_gaze_rules(
+    gaze_monitor_result: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """시선 및 고개 이탈 결과에 해당하는 규칙을 평가한다."""
+
+    applied_rules: list[dict[str, Any]] = []
+
+    if not isinstance(gaze_monitor_result, dict):
+        return applied_rules
+
+    if gaze_monitor_result.get("event_type") != EVENT_GAZE_AWAY:
+        return applied_rules
+
+    state = gaze_monitor_result.get("state")
+
+    if not isinstance(state, dict):
+        return applied_rules
+
+    eye_gaze_away = (
+        gaze_monitor_result.get("eye_gaze_away") is True
+    )
+    head_pose_away = (
+        gaze_monitor_result.get("head_pose_away") is True
+    )
+
+    if not eye_gaze_away and not head_pose_away:
+        return applied_rules
+
+    eye_and_head = eye_gaze_away and head_pose_away
+
+    if eye_and_head:
+        consecutive_count = state.get(
+            "consecutive_eye_and_head_count",
+            0,
+        )
+        gaze_type = "EYE_AND_HEAD"
+
+    elif eye_gaze_away:
+        consecutive_count = state.get(
+            "consecutive_eye_only_count",
+            0,
+        )
+        gaze_type = "EYE_ONLY"
+
+    else:
+        consecutive_count = state.get(
+            "consecutive_head_only_count",
+            0,
+        )
+        gaze_type = "HEAD_ONLY"
+
+    if (
+        not isinstance(consecutive_count, int)
+        or isinstance(consecutive_count, bool)
+        or consecutive_count < 1
+    ):
+        return applied_rules
+
+    consecutive_away_count = state.get(
+        "consecutive_away_count",
+        0,
+    )
+    away_duration_ms = state.get(
+        "away_duration_ms",
+        0,
+    )
+    direction = gaze_monitor_result.get("direction")
+
+    if eye_gaze_away:
+        if eye_and_head:
+            if consecutive_count >= EYE_AND_HEAD_HIGH_COUNT:
+                eye_severity = SEVERITY_HIGH
+                eye_decision = DECISION_CREATE_CLIP
+            else:
+                eye_severity = SEVERITY_MEDIUM
+                eye_decision = DECISION_RECORD_EVENT
+
+        elif consecutive_count >= EYE_ONLY_HIGH_COUNT:
+            eye_severity = SEVERITY_HIGH
+            eye_decision = DECISION_CREATE_CLIP
+
+        elif consecutive_count >= EYE_ONLY_MEDIUM_COUNT:
+            eye_severity = SEVERITY_MEDIUM
+            eye_decision = DECISION_RECORD_EVENT
+
+        else:
+            eye_severity = SEVERITY_LOW
+            eye_decision = DECISION_NONE
+
+        applied_rules.append(
+            create_rule_result(
+                rule_id="RULE_EYE_GAZE_AWAY",
+                event_type="EYE_GAZE_AWAY",
+                severity=eye_severity,
+                decision=eye_decision,
+                message="응시자의 시선이 정상 범위를 벗어났습니다.",
+                details={
+                    "direction": direction,
+                    "consecutive_count": consecutive_count,
+                    "consecutive_away_count": consecutive_away_count,
+                    "away_duration_ms": away_duration_ms,
+                    "eye_direction": gaze_monitor_result.get(
+                        "eye_direction",
+                        {},
+                    ),
+                    "gaze_type": gaze_type,
+                },
+            )
+        )
+
+    if head_pose_away:
+        if consecutive_count >= HEAD_POSE_HIGH_COUNT:
+            head_severity = SEVERITY_HIGH
+            head_decision = DECISION_CREATE_CLIP
+        else:
+            head_severity = SEVERITY_MEDIUM
+            head_decision = DECISION_RECORD_EVENT
+
+        applied_rules.append(
+            create_rule_result(
+                rule_id="RULE_HEAD_POSE_AWAY",
+                event_type="HEAD_POSE_AWAY",
+                severity=head_severity,
+                decision=head_decision,
+                message="응시자의 고개 방향이 정상 범위를 벗어났습니다.",
+                details={
+                    "direction": direction,
+                    "consecutive_count": consecutive_count,
+                    "consecutive_away_count": consecutive_away_count,
+                    "away_duration_ms": away_duration_ms,
+                    "head_pose": gaze_monitor_result.get(
+                        "head_pose",
+                        {},
+                    ),
+                    "gaze_type": gaze_type,
                 },
             )
         )
@@ -331,6 +482,10 @@ def evaluate_rules(
         "face_monitor",
     )
 
+    gaze_result = monitoring_results.get(
+        "gaze_monitor",
+    )
+
     identity_result = monitoring_results.get(
         "identity_monitor",
     )
@@ -342,6 +497,12 @@ def evaluate_rules(
     applied_rules.extend(
         evaluate_face_rules(
             face_result,
+        )
+    )
+
+    applied_rules.extend(
+        evaluate_gaze_rules(
+            gaze_result,
         )
     )
 
