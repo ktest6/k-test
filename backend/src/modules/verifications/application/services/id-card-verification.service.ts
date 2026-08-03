@@ -123,4 +123,20 @@ export class IdCardVerificationService {
 
     return data !== null;
   }
+
+  /** 모니터링(부정행위 감지)에서 동일인 검사용 기준 얼굴 이미지 경로가 필요할 때 쓴다. */
+  async getVerifiedFacePath(examId: string, userId: string): Promise<string | null> {
+    const client = this.supabaseService.getAdminClient();
+    const { data } = await client
+      .from('identity_logs')
+      .select('face_path')
+      .eq('exam_id', Number(examId))
+      .eq('user_id', Number(userId))
+      .eq('matched', true)
+      .order('verified_at', { ascending: false })
+      .limit(1)
+      .maybeSingle<{ face_path: string }>();
+
+    return data?.face_path ?? null;
+  }
 }

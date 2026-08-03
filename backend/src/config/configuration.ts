@@ -30,6 +30,10 @@ export interface AppConfig {
     /** 신분증-얼굴 대조를 맡는 FastAPI 서비스 베이스 URL. */
     url: string;
   };
+  monitoring: {
+    /** 부정행위 감지(웹캠 프레임 분석)를 맡는 모니터링 서비스 베이스 URL. */
+    url: string;
+  };
 }
 
 export const appConfig = registerAs('app', (): AppConfig => ({
@@ -65,5 +69,8 @@ export const appConfig = registerAs('app', (): AppConfig => ({
   },
   fastApi: {
     url: process.env.FASTAPI_URL ?? '',
+  },
+  monitoring: {
+    url: process.env.MONITORING_URL ?? '',
   },
 }));

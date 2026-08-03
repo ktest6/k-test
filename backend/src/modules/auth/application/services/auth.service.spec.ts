@@ -30,6 +30,7 @@ function buildConfig(signupSecret: string): AppConfig {
     },
     admin: { signupSecret },
     fastApi: { url: '' },
+    monitoring: { url: '' },
   };
 }
 
