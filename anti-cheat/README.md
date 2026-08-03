@@ -23,18 +23,18 @@ anti-cheat/
 │   │   │   └── 시험 시작 전 본인 인증 요청 수신
 │   │   │
 │   │   └── monitoring.py
-│   │       └── 시험 중 프레임 이미지 수신
+│   │       └── 시험 중 프레임 이미지 및 모니터링 요청 수신
 │   │
 │   ├── schemas/
 │   │   ├── identity.py
 │   │   │   └── 본인 인증 요청 및 응답 구조 정의
 │   │   │
 │   │   └── monitoring.py
-│   │       └── 모니터링 요청 및 응답 구조 정의
+│   │       └── 얼굴·시선·동일인·이벤트 모니터링 응답 구조 정의
 │   │
 │   └── core/
 │       └── config.py
-│           └── 얼굴 유사도 및 이벤트 Threshold 설정
+│           └── 얼굴 유사도, 시선·고개 방향 및 이벤트 Threshold 설정
 │
 ├── modules/
 │   ├── aws_rekognition/
@@ -50,26 +50,34 @@ anti-cheat/
 │   │
 │   ├── cheating_detection/
 │   │   ├── face_detection.py
-│   │   │   └── DetectFaces 호출 및 얼굴 정보 추출
+│   │   │   └── DetectFaces 호출 및 원본 얼굴 분석 결과 반환
 │   │   │
 │   │   ├── face_monitor.py
 │   │   │   └── 얼굴 화면 이탈 및 다중 인원 판단
+│   │   │
+│   │   ├── gaze_monitor.py
+│   │   │   └── Eye Direction과 Head Pose 기반 시선·고개 방향 분석
+│   │   │
+│   │   ├── gaze_state.py
+│   │   │   └── 시험·응시자별 연속 시선 및 고개 이탈 상태 관리
 │   │   │
 │   │   ├── identity_monitor.py
 │   │   │   └── 시험 중 기준 얼굴과 현재 얼굴 비교
 │   │   │
 │   │   ├── rule_engine.py
-│   │   │   └── 탐지 결과 평가, 위험도 및 Decision 결정
+│   │   │   └── 얼굴·시선·고개·동일인 탐지 결과 평가 및
+│   │   │       Severity·Decision 결정
 │   │   │
 │   │   ├── event_engine.py
-│   │   │   └── 이벤트 메타데이터 생성 및 JSON 로그 저장
+│   │   │   └── Rule 결과를 event_summary와 events 응답 구조로 변환
 │   │   │
 │   │   └── service.py
 │   │       └── 시험 중 프레임 분석 전체 흐름 관리
+│   │           DetectFaces 결과를 얼굴 및 시선 분석에서 재사용
 │   │
 │   └── common/
 │       ├── exceptions.py
-│       │   └── 공통 예외 정의
+│       │   └── 공통, 모니터링 및 시선 상태 예외 정의
 │       │
 │       └── image_validation.py
 │           └── 입력 이미지 bytes 검증
@@ -78,12 +86,18 @@ anti-cheat/
 │   ├── run_identity_verification.py
 │   │   └── 로컬 이미지 기반 본인 인증 테스트
 │   │
+│   ├── run_gaze_monitor.py
+│   │   └── 로컬 이미지 기반 시선·고개 방향 및 연속 상태 단독 테스트
+│   │
 │   └── run_monitoring.py
-│       └── 로컬 이미지 기반 시험 중 모니터링 테스트
+│       └── 이미지 폴더 기반 전체 모니터링 통합 테스트 및 JSON 결과 저장
 │
 ├── data/
+│   ├── gaze/
+│   │   └── 시선 추적 및 모니터링 테스트 이미지
+│   │
 │   └── logs/
-│       └── 시험별 본인 인증 및 모니터링 이벤트 JSON 저장
+│       └── 시험별 본인 인증 및 로컬 통합 테스트 JSON 저장
 │
 ├── requirements.txt
 ├── .env.example
