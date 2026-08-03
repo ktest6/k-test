@@ -21,6 +21,7 @@ function buildConfig(url = 'https://monitoring.internal'): AppConfig {
     jwt: { accessSecret: '', accessExpiresIn: '1h', refreshSecret: '', refreshExpiresIn: '14d' },
     admin: { signupSecret: '' },
     fastApi: { url: '' },
+    assessment: { url: '', apiKey: '' },
     monitoring: { url },
   };
 }
