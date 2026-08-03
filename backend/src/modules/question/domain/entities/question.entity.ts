@@ -6,6 +6,8 @@ export interface QuestionContent {
   reference_keywords: string[];
   /** 그림 묘사 등 이미지를 함께 보여줘야 하는 문항의 이미지 경로. 없으면 undefined. */
   image_url?: string;
+  /** 기대하는 답안 방식 — writing(쓰기) | speaking(말하기). AI 생성 세트의 mode를 그대로 물려받는다. */
+  mode?: string;
 }
 
 export interface QuestionChecklistItem {
