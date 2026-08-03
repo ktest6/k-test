@@ -63,6 +63,7 @@ describe('DocumentUploadedListener', () => {
           prompt: '작업일지를 쓰세요.',
           expected_register: 'formal',
           reference_keywords: ['작업'],
+          mode: 'writing',
         },
         checklist: [{ code: 'c1', description: '작업 기록', weight: 1 }],
       },

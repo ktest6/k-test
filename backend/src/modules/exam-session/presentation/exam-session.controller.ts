@@ -172,6 +172,7 @@ export class ExamSessionController {
       part: question.part,
       prompt: question.content.prompt,
       imageUrl: question.content.image_url ?? null,
+      mode: question.content.mode ?? null,
     };
   }
 

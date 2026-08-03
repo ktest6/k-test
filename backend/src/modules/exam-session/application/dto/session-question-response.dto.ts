@@ -23,4 +23,12 @@ export class SessionQuestionResponseDto {
     description: '그림 묘사 등 이미지가 있는 문항의 이미지 경로. 없으면 null',
   })
   imageUrl: string | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description:
+      '기대하는 답안 방식 — writing(쓰기) | speaking(말하기). 값이 없는 기존 문항은 null',
+  })
+  mode: string | null;
 }

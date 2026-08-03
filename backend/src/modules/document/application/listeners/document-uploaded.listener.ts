@@ -51,6 +51,7 @@ export class DocumentUploadedListener {
             prompt: item.prompt,
             expected_register: item.expectedRegister,
             reference_keywords: item.referenceKeywords,
+            mode: generated.mode,
           },
           checklist: item.checklist.map((c) => ({
             code: c.id,

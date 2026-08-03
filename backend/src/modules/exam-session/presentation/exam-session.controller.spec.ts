@@ -140,8 +140,8 @@ describe('ExamSessionController.listQuestions', () => {
 
     expect(listQuestions).toHaveBeenCalledWith('1', '1');
     expect(result).toEqual([
-      { id: '1', part: 'work_log', prompt: '프롬프트 1', imageUrl: null },
-      { id: '2', part: 'work_log', prompt: '프롬프트 2', imageUrl: null },
+      { id: '1', part: 'work_log', prompt: '프롬프트 1', imageUrl: null, mode: null },
+      { id: '2', part: 'work_log', prompt: '프롬프트 2', imageUrl: null, mode: null },
     ]);
     result.forEach((dto) => {
       expect(dto).not.toHaveProperty('checklistItems');
@@ -159,10 +159,16 @@ describe('ExamSessionController.getQuestion', () => {
     const result = await controller.getQuestion('1', '3', buildUser());
 
     expect(getQuestion).toHaveBeenCalledWith('1', '3', '1', false);
-    expect(result).toEqual({ id: '3', part: 'work_log', prompt: '프롬프트 3', imageUrl: null });
+    expect(result).toEqual({
+      id: '3',
+      part: 'work_log',
+      prompt: '프롬프트 3',
+      imageUrl: null,
+      mode: null,
+    });
   });
 
-  it('exposes imageUrl for picture-description questions', async () => {
+  it('exposes imageUrl and mode for picture-description questions', async () => {
     const question = new Question(
       '4',
       'picture_description',
@@ -172,6 +178,7 @@ describe('ExamSessionController.getQuestion', () => {
         expected_register: 'formal',
         reference_keywords: [],
         image_url: 'question-assets/pic-001.png',
+        mode: 'speaking',
       },
       null,
       [],
@@ -183,6 +190,7 @@ describe('ExamSessionController.getQuestion', () => {
     const result = await controller.getQuestion('1', '4', buildUser());
 
     expect(result.imageUrl).toBe('question-assets/pic-001.png');
+    expect(result.mode).toBe('speaking');
   });
 
   it('tells the service the caller is an admin so ownership can be bypassed', async () => {
