@@ -19,8 +19,8 @@ function buildConfig(overrides: Partial<{ url: string; apiKey: string }> = {}): 
     },
     jwt: { accessSecret: '', accessExpiresIn: '1h', refreshSecret: '', refreshExpiresIn: '14d' },
     admin: { signupSecret: '' },
-    fastApi: { url: '' },
     assessment: { url: 'https://assessment.internal', apiKey: '', ...overrides },
+    monitoring: { url: '' },
   };
 }
 

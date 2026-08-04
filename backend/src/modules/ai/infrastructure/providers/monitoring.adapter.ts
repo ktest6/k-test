@@ -61,7 +61,7 @@ export class MonitoringAdapter implements MonitoringProviderPort {
 
     const response = await firstValueFrom(
       this.httpService.post<RawAnalyzeResponse>(
-        `${this.config.fastApi.url}/monitoring/analyze`,
+        `${this.config.monitoring.url}/monitoring/analyze`,
         form,
         { headers: form.getHeaders() },
       ),

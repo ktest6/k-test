@@ -19,8 +19,8 @@ function buildConfig(): AppConfig {
     },
     jwt: { accessSecret: '', accessExpiresIn: '1h', refreshSecret: '', refreshExpiresIn: '14d' },
     admin: { signupSecret: '' },
-    fastApi: { url: 'https://fastapi.internal' },
     assessment: { url: '', apiKey: '' },
+    monitoring: { url: 'https://fastapi.internal' },
   };
 }
 
