@@ -27,7 +27,7 @@ export interface AppConfig {
     signupSecret: string;
   };
   fastApi: {
-    /** 신분증-얼굴 대조를 맡는 FastAPI 서비스 베이스 URL. */
+    /** 신분증-얼굴 대조/이어폰 감지/부정행위 감지(웹캠 프레임 분석)를 맡는 FastAPI 서비스 베이스 URL — 세 기능 모두 같은 서비스라 하나로 공유한다. */
     url: string;
   };
   assessment: {
@@ -35,10 +35,6 @@ export interface AppConfig {
     url: string;
     /** 설정돼 있으면 X-API-Key 헤더로 실어 보낸다. 비어있으면 헤더 자체를 안 보냄(assessment 서비스 개발 모드). */
     apiKey: string;
-  };
-  monitoring: {
-    /** 부정행위 감지(웹캠 프레임 분석)를 맡는 모니터링 서비스 베이스 URL. */
-    url: string;
   };
 }
 
@@ -79,8 +75,5 @@ export const appConfig = registerAs('app', (): AppConfig => ({
   assessment: {
     url: process.env.ASSESSMENT_URL ?? '',
     apiKey: process.env.ASSESSMENT_API_KEY ?? '',
-  },
-  monitoring: {
-    url: process.env.MONITORING_URL ?? '',
   },
 }));
