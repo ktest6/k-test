@@ -47,8 +47,7 @@ export class IdCardController {
     summary: '시험 시작 전 본인인증 (신분증-얼굴 대조)',
     description:
       '신분증/웹캠 이미지 자체는 프론트가 upload-url로 발급받은 signed URL로 Supabase Storage에 ' +
-      '직접 업로드한 뒤, 그 경로(idCardPath/facePath)만 이 API로 전달한다. ' +
-      'FastAPI 얼굴 대조 서비스가 아직 연동되지 않아 matched/confidence는 현재 항상 null로 반환된다.',
+      '직접 업로드한 뒤, 그 경로(idCardPath/facePath)만 이 API로 전달한다.',
   })
   @ApiStandardResponse(VerifyIdCardResponseDto, {
     status: 201,
