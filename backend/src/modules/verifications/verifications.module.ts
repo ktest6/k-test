@@ -1,5 +1,5 @@
-import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
+import { AiModule } from '../ai/ai.module';
 import { ExamModule } from '../exam/exam.module';
 import { UserModule } from '../user/user.module';
 import { ExamAccessService } from './application/services/exam-access.service';
@@ -8,7 +8,7 @@ import { IdCardVerificationService } from './application/services/id-card-verifi
 import { IdCardController } from './presentation/id-card.controller';
 
 @Module({
-  imports: [HttpModule, UserModule, ExamModule],
+  imports: [AiModule, UserModule, ExamModule],
   controllers: [IdCardController],
   providers: [ExamAccessService, IdCardUploadUrlService, IdCardVerificationService],
   exports: [IdCardVerificationService],
