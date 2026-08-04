@@ -29,8 +29,8 @@ function buildConfig(signupSecret: string): AppConfig {
       refreshExpiresIn: '14d',
     },
     admin: { signupSecret },
-    fastApi: { url: '' },
     assessment: { url: '', apiKey: '' },
+    monitoring: { url: '' },
   };
 }
 

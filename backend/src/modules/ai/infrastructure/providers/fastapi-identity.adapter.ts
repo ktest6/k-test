@@ -56,9 +56,13 @@ export class FastApiIdentityAdapter implements IdentityProviderPort {
     });
 
     const response = await firstValueFrom(
-      this.httpService.post<RawVerifyResponse>(`${this.config.fastApi.url}/identity/verify`, form, {
-        headers: form.getHeaders(),
-      }),
+      this.httpService.post<RawVerifyResponse>(
+        `${this.config.monitoring.url}/identity/verify`,
+        form,
+        {
+          headers: form.getHeaders(),
+        },
+      ),
     );
 
     const raw = response.data;

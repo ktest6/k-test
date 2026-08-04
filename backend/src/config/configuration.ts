@@ -26,8 +26,8 @@ export interface AppConfig {
     /** 관리자 계정 생성 시 요구하는 공유 비밀값 — 첫 관리자 부트스트랩용. */
     signupSecret: string;
   };
-  fastApi: {
-    /** 신분증-얼굴 대조/이어폰 감지/부정행위 감지(웹캠 프레임 분석)를 맡는 FastAPI 서비스 베이스 URL — 세 기능 모두 같은 서비스라 하나로 공유한다. */
+  monitoring: {
+    /** 신분증-얼굴 대조/이어폰 감지/부정행위 감지(웹캠 프레임 분석)를 맡는 서비스 베이스 URL — 세 기능 모두 같은 서비스라 하나로 공유한다. */
     url: string;
   };
   assessment: {
@@ -69,8 +69,8 @@ export const appConfig = registerAs('app', (): AppConfig => ({
   admin: {
     signupSecret: process.env.ADMIN_SIGNUP_SECRET ?? '',
   },
-  fastApi: {
-    url: process.env.FASTAPI_URL ?? '',
+  monitoring: {
+    url: process.env.MONITORING_URL ?? '',
   },
   assessment: {
     url: process.env.ASSESSMENT_URL ?? '',

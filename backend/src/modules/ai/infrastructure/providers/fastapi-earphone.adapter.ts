@@ -45,9 +45,13 @@ export class FastApiEarphoneAdapter implements EarphoneProviderPort {
     });
 
     const response = await firstValueFrom(
-      this.httpService.post<RawDetectResponse>(`${this.config.fastApi.url}/earphone/detect`, form, {
-        headers: form.getHeaders(),
-      }),
+      this.httpService.post<RawDetectResponse>(
+        `${this.config.monitoring.url}/earphone/detect`,
+        form,
+        {
+          headers: form.getHeaders(),
+        },
+      ),
     );
 
     const raw = response.data;

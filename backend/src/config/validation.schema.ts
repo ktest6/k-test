@@ -25,5 +25,5 @@ export const validationSchema = Joi.object({
 
   ADMIN_SIGNUP_SECRET: Joi.string().min(16).required(),
 
-  FASTAPI_URL: Joi.string().uri().required(),
+  MONITORING_URL: Joi.string().uri().required(),
 });
