@@ -31,7 +31,6 @@ function buildConfig(signupSecret: string): AppConfig {
     admin: { signupSecret },
     fastApi: { url: '' },
     assessment: { url: '', apiKey: '' },
-    monitoring: { url: '' },
   };
 }
 

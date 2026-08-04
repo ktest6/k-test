@@ -21,7 +21,6 @@ function buildConfig(overrides: Partial<{ url: string; apiKey: string }> = {}): 
     admin: { signupSecret: '' },
     fastApi: { url: '' },
     assessment: { url: 'https://assessment.internal', apiKey: '', ...overrides },
-    monitoring: { url: '' },
   };
 }
 

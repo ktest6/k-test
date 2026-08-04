@@ -21,7 +21,6 @@ function buildConfig(): AppConfig {
     admin: { signupSecret: '' },
     fastApi: { url: 'https://fastapi.internal' },
     assessment: { url: '', apiKey: '' },
-    monitoring: { url: '' },
   };
 }
 
