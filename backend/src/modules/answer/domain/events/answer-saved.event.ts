@@ -14,5 +14,6 @@ export class AnswerSavedEvent {
     readonly type: AnswerType,
     readonly contentText: string | null,
     readonly audioFileUrl: string | null,
+    readonly durationMs: number | null,
   ) {}
 }

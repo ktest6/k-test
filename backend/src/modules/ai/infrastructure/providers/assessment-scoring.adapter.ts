@@ -17,7 +17,7 @@ interface ScoreRequestBody {
     expected_register: string;
     checklist: { id: string; description: string; weight: number }[];
   };
-  audio?: { url: string };
+  audio?: { url: string; duration_ms?: number };
 }
 
 /**
@@ -47,7 +47,10 @@ export class AssessmentScoringAdapter implements ScoringProviderPort {
     };
 
     if (input.answerType === 'AUDIO' && input.audioFileUrl) {
-      body.audio = { url: this.toPublicAudioUrl(input.audioFileUrl) };
+      body.audio = {
+        url: this.toPublicAudioUrl(input.audioFileUrl),
+        ...(input.durationMs != null ? { duration_ms: input.durationMs } : {}),
+      };
     }
 
     const headers = this.config.assessment.apiKey

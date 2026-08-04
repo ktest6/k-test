@@ -15,6 +15,8 @@ export interface ScoreItemInput {
   contentText: string | null;
   /** AUDIO 답안일 때만 값 있음 — Storage 상의 경로(공개 URL 변환은 어댑터가 처리). */
   audioFileUrl: string | null;
+  /** AUDIO 답안일 때만 값 있을 수 있음 — wav가 아닌 포맷은 이 값이 있어야 assessment 응답에 duration이 남는다. */
+  durationMs: number | null;
   item: {
     itemId: string;
     prompt: string;
