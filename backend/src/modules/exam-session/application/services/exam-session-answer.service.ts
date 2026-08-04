@@ -93,7 +93,9 @@ export class ExamSessionAnswerService {
     const extension = AUDIO_EXTENSION_BY_CONTENT_TYPE[contentType];
     const path = `${userId}/${examSessionId}/${questionId}.${extension}`;
 
-    return this.storageUploadUrlService.createSignedUploadUrl(ANSWER_AUDIO_BUCKET, path);
+    return this.storageUploadUrlService.createSignedUploadUrl(ANSWER_AUDIO_BUCKET, path, {
+      upsert: true,
+    });
   }
 
   private async withScore(answer: Answer): Promise<AnswerWithScoreResult> {
