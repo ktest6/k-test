@@ -55,6 +55,8 @@ export class IdCardUploadUrlService {
     const fileName = FILE_NAME_BY_FILE_TYPE[dto.fileType];
     const path = `${userId}/${dto.examId}/${fileName}.${extension}`;
 
-    return this.storageUploadUrlService.createSignedUploadUrl(STORAGE_BUCKET, path);
+    return this.storageUploadUrlService.createSignedUploadUrl(STORAGE_BUCKET, path, {
+      upsert: true,
+    });
   }
 }

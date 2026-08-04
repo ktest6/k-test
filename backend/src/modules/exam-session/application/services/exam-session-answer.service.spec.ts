@@ -165,7 +165,9 @@ describe('ExamSessionAnswerService.createUploadUrl', () => {
 
     expect(assertActiveSession).toHaveBeenCalledWith('100', '9');
     expect(getQuestion).toHaveBeenCalledWith('100', '50', '9');
-    expect(createSignedUploadUrl).toHaveBeenCalledWith('answer-audio', '9/100/50.webm');
+    expect(createSignedUploadUrl).toHaveBeenCalledWith('answer-audio', '9/100/50.webm', {
+      upsert: true,
+    });
     expect(result).toEqual({ path: '9/100/50.webm', signedUrl: 'https://signed', token: 'token' });
   });
 
