@@ -87,6 +87,29 @@ describe('AnswerService.save', () => {
       }),
     );
   });
+
+  it('passes durationMs through to the emitted event when provided', async () => {
+    const saved = buildAnswer();
+    const repository = buildRepository({ save: jest.fn().mockResolvedValue(saved) });
+    const emit = jest.fn();
+    const eventEmitter = buildEventEmitter({ emit });
+    const service = new AnswerService(repository, eventEmitter);
+    const input = {
+      examSessionId: '1',
+      questionId: '1',
+      type: AnswerType.AUDIO,
+      contentText: null,
+      audioFileUrl: '1/1/1.webm',
+    };
+
+    await service.save(input, 11760);
+
+    expect(repository.save).toHaveBeenCalledWith(input);
+    expect(emit).toHaveBeenCalledWith(
+      ANSWER_SAVED_EVENT,
+      expect.objectContaining({ durationMs: 11760 }),
+    );
+  });
 });
 
 describe('AnswerService.findBySessionAndQuestion', () => {

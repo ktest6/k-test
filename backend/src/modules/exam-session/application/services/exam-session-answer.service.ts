@@ -26,6 +26,7 @@ export interface SaveAnswerInput {
   type: AnswerType;
   contentText?: string;
   audioFileUrl?: string;
+  durationMs?: number;
 }
 
 export interface AnswerWithScoreResult {
@@ -53,13 +54,16 @@ export class ExamSessionAnswerService {
     await this.examSessionService.assertActiveSession(examSessionId, userId);
     await this.examSessionQuestionService.getQuestion(examSessionId, questionId, userId);
 
-    const answer = await this.answerService.save({
-      examSessionId,
-      questionId,
-      type: input.type,
-      contentText: input.contentText ?? null,
-      audioFileUrl: input.audioFileUrl ?? null,
-    });
+    const answer = await this.answerService.save(
+      {
+        examSessionId,
+        questionId,
+        type: input.type,
+        contentText: input.contentText ?? null,
+        audioFileUrl: input.audioFileUrl ?? null,
+      },
+      input.durationMs ?? null,
+    );
 
     return this.withScore(answer);
   }

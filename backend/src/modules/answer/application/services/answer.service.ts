@@ -17,7 +17,7 @@ export class AnswerService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async save(input: SaveAnswerInput): Promise<Answer> {
+  async save(input: SaveAnswerInput, durationMs: number | null = null): Promise<Answer> {
     if (input.type === AnswerType.TEXT && !input.contentText) {
       throw new ConflictDomainException('텍스트 답안은 내용이 필요합니다.');
     }
@@ -35,6 +35,7 @@ export class AnswerService {
         answer.type,
         answer.contentText,
         answer.audioFileUrl,
+        durationMs,
       ),
     );
 

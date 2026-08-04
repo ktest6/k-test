@@ -63,14 +63,52 @@ describe('ExamSessionAnswerService.save', () => {
 
     expect(assertActiveSession).toHaveBeenCalledWith('1', '1');
     expect(getQuestion).toHaveBeenCalledWith('1', '1', '1');
-    expect(save).toHaveBeenCalledWith({
-      examSessionId: '1',
-      questionId: '1',
-      type: AnswerType.TEXT,
-      contentText: '내용',
-      audioFileUrl: null,
-    });
+    expect(save).toHaveBeenCalledWith(
+      {
+        examSessionId: '1',
+        questionId: '1',
+        type: AnswerType.TEXT,
+        contentText: '내용',
+        audioFileUrl: null,
+      },
+      null,
+    );
     expect(result).toEqual({ answer: saved, graded: false, score: null });
+  });
+
+  it('passes durationMs through to AnswerService.save when provided', async () => {
+    const assertActiveSession = jest.fn().mockResolvedValue(undefined);
+    const examSessionService = { assertActiveSession } as unknown as ExamSessionService;
+    const getQuestion = jest.fn().mockResolvedValue(buildQuestion());
+    const examSessionQuestionService = { getQuestion } as unknown as ExamSessionQuestionService;
+    const save = jest.fn().mockResolvedValue(buildAnswer());
+    const answerService = { save } as unknown as AnswerService;
+    const findByAnswerId = jest.fn().mockResolvedValue(null);
+    const scoringService = { findByAnswerId } as unknown as ScoringService;
+    const service = new ExamSessionAnswerService(
+      examSessionService,
+      examSessionQuestionService,
+      answerService,
+      scoringService,
+      buildStorageUploadUrlService(),
+    );
+
+    await service.save('1', '1', '1', {
+      type: AnswerType.AUDIO,
+      audioFileUrl: '1/1/1.webm',
+      durationMs: 11760,
+    });
+
+    expect(save).toHaveBeenCalledWith(
+      {
+        examSessionId: '1',
+        questionId: '1',
+        type: AnswerType.AUDIO,
+        contentText: null,
+        audioFileUrl: '1/1/1.webm',
+      },
+      11760,
+    );
   });
 
   it('propagates a rejection from assertActiveSession without saving', async () => {

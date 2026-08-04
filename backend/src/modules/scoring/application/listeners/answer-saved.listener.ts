@@ -42,6 +42,7 @@ export class AnswerSavedListener {
         answerType: event.type === AnswerType.AUDIO ? 'AUDIO' : 'TEXT',
         contentText: event.contentText,
         audioFileUrl: event.audioFileUrl,
+        durationMs: event.durationMs,
         item: {
           itemId: question.content.item_id,
           prompt: question.content.prompt,

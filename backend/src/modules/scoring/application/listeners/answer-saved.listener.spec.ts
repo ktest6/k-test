@@ -42,7 +42,14 @@ describe('AnswerSavedListener.handle', () => {
     const score = jest.fn().mockResolvedValue(rawResponse);
     const scoringProvider = { score } as unknown as ScoringProviderPort;
     const listener = new AnswerSavedListener(questionService, scoringService, scoringProvider);
-    const event = new AnswerSavedEvent('500', '50', AnswerType.AUDIO, null, '12/100/50.webm');
+    const event = new AnswerSavedEvent(
+      '500',
+      '50',
+      AnswerType.AUDIO,
+      null,
+      '12/100/50.webm',
+      11760,
+    );
 
     await listener.handle(event);
 
@@ -52,6 +59,7 @@ describe('AnswerSavedListener.handle', () => {
       answerType: 'AUDIO',
       contentText: null,
       audioFileUrl: '12/100/50.webm',
+      durationMs: 11760,
       item: {
         itemId: 'PIC-001',
         prompt: '그림을 보고 상황을 설명하세요.',
@@ -72,7 +80,7 @@ describe('AnswerSavedListener.handle', () => {
       score: jest.fn().mockRejectedValue(new Error('assessment unreachable')),
     } as unknown as ScoringProviderPort;
     const listener = new AnswerSavedListener(questionService, scoringService, scoringProvider);
-    const event = new AnswerSavedEvent('500', '50', AnswerType.TEXT, '내용', null);
+    const event = new AnswerSavedEvent('500', '50', AnswerType.TEXT, '내용', null, null);
 
     await expect(listener.handle(event)).resolves.toBeUndefined();
     expect(record).not.toHaveBeenCalled();
@@ -85,7 +93,7 @@ describe('AnswerSavedListener.handle', () => {
     const scoringService = { record: jest.fn() } as unknown as ScoringService;
     const scoringProvider = { score: jest.fn() } as unknown as ScoringProviderPort;
     const listener = new AnswerSavedListener(questionService, scoringService, scoringProvider);
-    const event = new AnswerSavedEvent('500', '50', AnswerType.TEXT, '내용', null);
+    const event = new AnswerSavedEvent('500', '50', AnswerType.TEXT, '내용', null, null);
 
     await expect(listener.handle(event)).resolves.toBeUndefined();
   });

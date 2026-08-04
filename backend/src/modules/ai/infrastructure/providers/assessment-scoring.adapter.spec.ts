@@ -25,12 +25,14 @@ function buildConfig(overrides: Partial<{ url: string; apiKey: string }> = {}): 
   };
 }
 
-function buildAudioInput(): ScoreItemInput {
+function buildAudioInput(overrides: Partial<ScoreItemInput> = {}): ScoreItemInput {
   return {
     answerId: '500',
     answerType: 'AUDIO',
     contentText: null,
     audioFileUrl: '12/100/50.webm',
+    durationMs: null,
+    ...overrides,
     item: {
       itemId: 'PIC-001',
       prompt: '그림을 보고 상황을 설명하세요.',
@@ -78,6 +80,7 @@ describe('AssessmentScoringAdapter.score', () => {
       answerType: 'TEXT',
       contentText: '오늘 작업일지입니다.',
       audioFileUrl: null,
+      durationMs: null,
       item: {
         itemId: 'WRT-001',
         prompt: '작업일지를 쓰세요.',
@@ -91,6 +94,28 @@ describe('AssessmentScoringAdapter.score', () => {
     const [, body] = post.mock.calls[0] as [string, Record<string, unknown>];
     expect(body).toMatchObject({ mode: 'writing', answer_text: '오늘 작업일지입니다.' });
     expect(body).not.toHaveProperty('audio');
+  });
+
+  it('includes audio.duration_ms when the input has one (non-wav formats need it)', async () => {
+    const post = jest.fn().mockReturnValue(of({ data: {} }));
+    const httpService = { post } as unknown as HttpService;
+    const adapter = new AssessmentScoringAdapter(httpService, buildConfig());
+
+    await adapter.score(buildAudioInput({ durationMs: 11760 }));
+
+    const [, body] = post.mock.calls[0] as [string, Record<string, unknown>];
+    expect(body).toMatchObject({ audio: { duration_ms: 11760 } });
+  });
+
+  it('omits audio.duration_ms when the input has none', async () => {
+    const post = jest.fn().mockReturnValue(of({ data: {} }));
+    const httpService = { post } as unknown as HttpService;
+    const adapter = new AssessmentScoringAdapter(httpService, buildConfig());
+
+    await adapter.score(buildAudioInput());
+
+    const [, body] = post.mock.calls[0] as [string, { audio: Record<string, unknown> }];
+    expect(body.audio).not.toHaveProperty('duration_ms');
   });
 
   it('adds the X-API-Key header when configured', async () => {
