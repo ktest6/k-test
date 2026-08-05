@@ -7,6 +7,7 @@ exceptions.py
 - 본인 인증 예외
 - 시험 모니터링 예외
 - 이어폰 탐지 예외
+- 시선 상태 관리 예외
 - AWS Rekognition 예외
 - 이미지 검증 예외
 """
@@ -26,6 +27,10 @@ class MonitoringError(ProctoringError):
 
 class EarphoneDetectionError(ProctoringError):
     """이어폰 탐지 처리 중 발생하는 예외."""
+
+
+class GazeStateError(MonitoringError):
+    """시선 상태 관리 중 발생하는 예외."""
 
 
 class RekognitionAPIError(ProctoringError):

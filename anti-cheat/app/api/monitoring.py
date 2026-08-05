@@ -81,15 +81,6 @@ async def analyze_frame(
             ),
         )
 
-    if run_identity_check and reference_image is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "중간 동일인 검사를 실행하려면 "
-                "기준 얼굴 이미지가 필요합니다."
-            ),
-        )
-
     try:
         current_image_bytes = await current_image.read()
 

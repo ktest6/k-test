@@ -5,9 +5,49 @@ monitoring.py
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+FaceEventType = Literal[
+    "FACE_NORMAL",
+    "FACE_OUT_OF_FRAME",
+    "MULTIPLE_FACES",
+]
+
+GazeEventType = Literal[
+    "GAZE_NORMAL",
+    "GAZE_AWAY",
+    "GAZE_UNCERTAIN",
+    "GAZE_NOT_ANALYZED",
+]
+
+GazeDirection = Literal[
+    "CENTER",
+    "LEFT",
+    "RIGHT",
+    "UP",
+    "DOWN",
+    "UP_LEFT",
+    "UP_RIGHT",
+    "DOWN_LEFT",
+    "DOWN_RIGHT",
+    "UNKNOWN",
+]
+
+EventSeverity = Literal[
+    "NORMAL",
+    "LOW",
+    "MEDIUM",
+    "HIGH",
+]
+
+EventDecision = Literal[
+    "NONE",
+    "RECORD_EVENT",
+    "CREATE_CLIP",
+]
 
 
 class IdentityMonitorResult(BaseModel):
@@ -21,67 +61,76 @@ class IdentityMonitorResult(BaseModel):
     message: str
 
 
-class FaceMonitorResult(BaseModel):
-    """얼굴 감지 및 인원 판정 결과."""
+class FaceMonitorResponse(BaseModel):
+    """외부 응답용 얼굴 감지 및 인원 판정 결과."""
 
-    face_count: int
-    face_details: list[dict[str, Any]]
-    event_type: str
+    face_count: int = Field(ge=0)
+    event_type: FaceEventType
     message: str
 
 
-class AppliedRule(BaseModel):
-    """Rule Engine에서 적용된 개별 규칙."""
+class EyeDirectionResponse(BaseModel):
+    """눈 시선 방향 분석 결과."""
 
-    rule_id: str
-    event_type: str
-    severity: str
-    decision: str
+    yaw: float | None
+    pitch: float | None
+    confidence: float | None
+
+
+class HeadPoseResponse(BaseModel):
+    """고개 방향 분석 결과."""
+
+    yaw: float | None
+    pitch: float | None
+    roll: float | None
+
+
+class GazeStateResponse(BaseModel):
+    """연속 시선 및 고개 이탈 상태."""
+
+    consecutive_away_count: int = Field(ge=0)
+    consecutive_eye_only_count: int = Field(ge=0)
+    consecutive_head_only_count: int = Field(ge=0)
+    consecutive_eye_and_head_count: int = Field(ge=0)
+    away_duration_ms: int = Field(ge=0)
+    last_direction: GazeDirection | None
+    persistent_gaze_away: bool
+    sequence_continuous: bool
+    elapsed_time_valid: bool
+    state_continuous: bool
+
+
+class GazeMonitorResponse(BaseModel):
+    """시선 및 고개 방향 모니터링 결과."""
+
+    event_type: GazeEventType
+    direction: GazeDirection
+    eye_direction_reliable: bool
+    eye_direction: EyeDirectionResponse
+    head_pose: HeadPoseResponse
+    eye_gaze_away: bool
+    head_pose_away: bool
     message: str
-    details: dict[str, Any]
+    state: GazeStateResponse
 
 
-class RuleResult(BaseModel):
-    """Rule Engine의 최종 판단 결과."""
+class EventSummaryResponse(BaseModel):
+    """현재 프레임에서 탐지된 이벤트 요약."""
 
-    applied_rules: list[AppliedRule]
-    rule_count: int
-    severity: str
-    decision: str
+    event_detected: bool
+    event_count: int = Field(ge=0)
+    severity: EventSeverity
+    decision: EventDecision
     create_clip: bool
 
 
-class MonitoringEvent(BaseModel):
-    """Event Engine에서 생성한 이벤트."""
+class MonitoringEventResponse(BaseModel):
+    """외부 응답용 개별 모니터링 이벤트."""
 
-    event_id: str
-    exam_id: str
-    examinee_id: str
-    request_id: str
-
-    occurred_at: datetime
-    elapsed_ms: int
-    capture_sequence: int
-
-    severity: str
-    decision: str
-    create_clip: bool
-
-    clip_start_ms: int | None = None
-    clip_end_ms: int | None = None
-
-    rule_count: int
-    applied_rules: list[AppliedRule]
-
-
-class EventResult(BaseModel):
-    """이벤트 생성 여부와 생성 결과."""
-
-    event_created: bool
-    event: MonitoringEvent | None = None
-
-    # 현재 개발 단계의 로컬 JSON 저장 경로
-    event_file_path: str | None = None
+    event_type: str
+    details: dict[str, Any] = Field(
+        default_factory=dict,
+    )
 
 
 class MonitoringResponse(BaseModel):
@@ -92,14 +141,18 @@ class MonitoringResponse(BaseModel):
     request_id: str
 
     captured_at: datetime
-    elapsed_ms: int
-    capture_sequence: int
+    elapsed_ms: int = Field(ge=0)
+    capture_sequence: int = Field(ge=1)
 
-    face_monitor: FaceMonitorResult
+    face_monitor: FaceMonitorResponse
+    gaze_monitor: GazeMonitorResponse
+    object_monitor: dict[str, Any] | None = None
 
     identity_check_requested: bool
     identity_check_executed: bool
     identity_monitor: IdentityMonitorResult | None = None
 
-    rule_result: RuleResult
-    event_result: EventResult
+    event_summary: EventSummaryResponse
+    events: list[MonitoringEventResponse] = Field(
+        default_factory=list,
+    )

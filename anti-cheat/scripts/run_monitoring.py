@@ -4,21 +4,20 @@ run_monitoring.py
 시험 중 모니터링 기능을 로컬 이미지로 테스트하는 실행 파일.
 
 기능
-- 현재 프레임 이미지 로드
+- 현재 프레임 이미지 폴더 로드
 - 선택적으로 기준 얼굴 이미지 로드
-- 모니터링 서비스 실행
-- 얼굴 탐지 및 동일인 검사 결과 출력
-- Rule Engine 결과 출력
-- Event Engine 이벤트 생성 및 JSON 저장 확인
+- 이미지 순서대로 모니터링 서비스 실행
+- 전체 모니터링 결과 JSON 저장 및 출력
 
 ※ 실제 프로젝트에서는 프론트엔드가 전달한 이미지 bytes를 사용한다.
 ※ 이 파일은 모니터링 모듈 단독 테스트용이다.
 """
 
 import json
+import re
 import sys
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -30,31 +29,30 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
 
+from modules.cheating_detection.gaze_state import clear_gaze_state
 from modules.cheating_detection.service import analyze_monitoring_frame
 from modules.common.exceptions import ProctoringError
 
 
 # 테스트 환경 설정
-EXAM_ID = "exam_001"
-EXAMINEE_ID = "examinee_001"
-REQUEST_ID = "request_monitoring_001"
+EXAM_ID = "exam_002"
+EXAMINEE_ID = "examinee_002"
+REQUEST_ID = "request_monitoring_002"
 
-# 시험 시작 후 경과 시간(ms)
-ELAPSED_MS = 65000
+# 프레임 간 시험 경과 시간(ms)
+FRAME_INTERVAL_MS = 5000
 
-# 캡처 이미지 순번
-CAPTURE_SEQUENCE = 13
+TEST_IMAGE_DIRECTORY = "cheat_vid_5_img"
 
-TEST_IMAGE = "multiple_faces.jpg"
+# 현재 프레임 테스트 이미지 폴더
+CURRENT_IMAGE_DIRECTORY = (
+    PROJECT_ROOT / "data" / "gaze" / TEST_IMAGE_DIRECTORY
+)
+
 REFERENCE_IMAGE = "target_true.jpg"
 
 # 동일인 검사 실행 여부
 RUN_IDENTITY_CHECK = False
-
-# 현재 프레임 테스트 이미지
-CURRENT_IMAGE_PATH = (
-    PROJECT_ROOT / "data" / "monitoring" / TEST_IMAGE
-)
 
 # 본인 인증 시 저장한 기준 이미지
 REFERENCE_IMAGE_PATH = (
@@ -66,8 +64,75 @@ EXAM_LOG_DIR = (
     PROJECT_ROOT / "data" / "logs" / EXAM_ID
 )
 
+RESULT_FILE_PATH = (
+    EXAM_LOG_DIR
+    / f"monitoring_test_result_{REQUEST_ID}.json"
+)
+
 # 테스트 이미지 촬영 시각
 TIMEZONE = ZoneInfo("Asia/Seoul")
+
+SUPPORTED_IMAGE_SUFFIXES = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+}
+
+
+def natural_sort_key(
+    path: Path,
+) -> tuple[tuple[int, str | int], ...]:
+    """파일명에 포함된 숫자를 기준으로 자연 정렬한다."""
+
+    parts = re.split(
+        r"(\d+)",
+        path.name.lower(),
+    )
+
+    return tuple(
+        (1, int(part))
+        if part.isdigit()
+        else (0, part)
+        for part in parts
+    )
+
+
+def collect_image_paths(
+    image_directory: Path,
+) -> list[Path]:
+    """이미지 폴더에서 테스트할 이미지 목록을 반환한다."""
+
+    if not image_directory.exists():
+        raise FileNotFoundError(
+            f"이미지 폴더가 존재하지 않습니다: "
+            f"{image_directory}"
+        )
+
+    if not image_directory.is_dir():
+        raise ValueError(
+            f"이미지 경로가 폴더가 아닙니다: "
+            f"{image_directory}"
+        )
+
+    image_paths = sorted(
+        (
+            path
+            for path in image_directory.iterdir()
+            if (
+                path.is_file()
+                and path.suffix.lower()
+                in SUPPORTED_IMAGE_SUFFIXES
+            )
+        ),
+        key=natural_sort_key,
+    )
+
+    if not image_paths:
+        raise ValueError(
+            "분석할 JPG, JPEG 또는 PNG 이미지가 없습니다."
+        )
+
+    return image_paths
 
 
 def read_image_bytes(
@@ -78,12 +143,14 @@ def read_image_bytes(
 
     if not image_path.exists():
         raise FileNotFoundError(
-            f"{image_name} 파일이 존재하지 않습니다: {image_path}"
+            f"{image_name} 파일이 존재하지 않습니다: "
+            f"{image_path}"
         )
 
     if not image_path.is_file():
         raise ValueError(
-            f"{image_name} 경로가 파일이 아닙니다: {image_path}"
+            f"{image_name} 경로가 파일이 아닙니다: "
+            f"{image_path}"
         )
 
     try:
@@ -91,7 +158,8 @@ def read_image_bytes(
 
     except OSError as error:
         raise OSError(
-            f"{image_name} 파일을 읽을 수 없습니다: {image_path}"
+            f"{image_name} 파일을 읽을 수 없습니다: "
+            f"{image_path}"
         ) from error
 
 
@@ -104,34 +172,31 @@ def prepare_exam_log_directory() -> None:
     )
 
 
-def print_result(
-    title: str,
-    result: object,
+def save_monitoring_result(
+    result: dict[str, object],
+    output_path: Path,
 ) -> None:
-    """결과를 JSON 형식으로 출력한다."""
+    """전체 모니터링 결과를 로컬 JSON 파일로 저장한다."""
 
-    print()
-    print(f"===== {title} =====")
-
-    print(
+    output_path.write_text(
         json.dumps(
             result,
             ensure_ascii=False,
             indent=2,
             default=str,
-        )
+        ),
+        encoding="utf-8",
     )
 
 
 def main() -> None:
-    """로컬 이미지로 모니터링 전체 흐름을 테스트한다."""
+    """로컬 이미지 폴더로 모니터링 전체 흐름을 테스트한다."""
 
     try:
         prepare_exam_log_directory()
 
-        current_image_bytes = read_image_bytes(
-            image_path=CURRENT_IMAGE_PATH,
-            image_name="현재 프레임 이미지",
+        image_paths = collect_image_paths(
+            image_directory=CURRENT_IMAGE_DIRECTORY,
         )
 
         reference_image_bytes = None
@@ -142,94 +207,92 @@ def main() -> None:
                 image_name="기준 얼굴 이미지",
             )
 
-        captured_at = datetime.now(
+        # 이전 실행의 메모리 상태가 남지 않도록 초기화
+        clear_gaze_state(
+            exam_id=EXAM_ID,
+            examinee_id=EXAMINEE_ID,
+        )
+
+        started_at = datetime.now(
             TIMEZONE,
         )
 
-        monitoring_result = analyze_monitoring_frame(
-            exam_id=EXAM_ID,
-            examinee_id=EXAMINEE_ID,
-            request_id=REQUEST_ID,
-            captured_at=captured_at,
-            elapsed_ms=ELAPSED_MS,
-            capture_sequence=CAPTURE_SEQUENCE,
-            current_image_bytes=current_image_bytes,
-            reference_image_bytes=reference_image_bytes,
-            run_identity_check=RUN_IDENTITY_CHECK,
-        )
+        monitoring_results = []
 
-        print_result(
-            title="요청 메타데이터",
-            result={
-                "exam_id": monitoring_result.get(
-                    "exam_id"
-                ),
-                "examinee_id": monitoring_result.get(
-                    "examinee_id"
-                ),
-                "request_id": monitoring_result.get(
-                    "request_id"
-                ),
-                "captured_at": monitoring_result.get(
-                    "captured_at"
-                ),
-                "elapsed_ms": monitoring_result.get(
-                    "elapsed_ms"
-                ),
-                "capture_sequence": monitoring_result.get(
-                    "capture_sequence"
-                ),
-            },
-        )
+        for capture_sequence, image_path in enumerate(
+            image_paths,
+            start=1,
+        ):
+            current_image_bytes = read_image_bytes(
+                image_path=image_path,
+                image_name="현재 프레임 이미지",
+            )
 
-        print_result(
-            title="Face Monitor 결과",
-            result=monitoring_result.get(
-                "face_monitor",
+            elapsed_ms = (
+                (capture_sequence - 1)
+                * FRAME_INTERVAL_MS
+            )
+
+            captured_at = (
+                started_at
+                + timedelta(
+                    milliseconds=elapsed_ms,
+                )
+            )
+
+            request_id = (
+                f"{REQUEST_ID}_{capture_sequence:03d}"
+            )
+
+            monitoring_result = analyze_monitoring_frame(
+                exam_id=EXAM_ID,
+                examinee_id=EXAMINEE_ID,
+                request_id=request_id,
+                captured_at=captured_at,
+                elapsed_ms=elapsed_ms,
+                capture_sequence=capture_sequence,
+                current_image_bytes=current_image_bytes,
+                reference_image_bytes=reference_image_bytes,
+                run_identity_check=RUN_IDENTITY_CHECK,
+            )
+
+            monitoring_results.append(
+                {
+                    "image_path": str(image_path),
+                    **monitoring_result,
+                }
+            )
+
+        final_result = {
+            "exam_id": EXAM_ID,
+            "examinee_id": EXAMINEE_ID,
+            "request_id_prefix": REQUEST_ID,
+            "image_directory": str(
+                CURRENT_IMAGE_DIRECTORY
             ),
+            "image_count": len(image_paths),
+            "frame_interval_ms": FRAME_INTERVAL_MS,
+            "run_identity_check": RUN_IDENTITY_CHECK,
+            "results": monitoring_results,
+        }
+
+        save_monitoring_result(
+            result=final_result,
+            output_path=RESULT_FILE_PATH,
         )
 
-        print_result(
-            title="Identity Monitor 결과",
-            result={
-                "identity_check_requested": (
-                    monitoring_result.get(
-                        "identity_check_requested"
-                    )
-                ),
-                "identity_check_executed": (
-                    monitoring_result.get(
-                        "identity_check_executed"
-                    )
-                ),
-                "identity_monitor": (
-                    monitoring_result.get(
-                        "identity_monitor"
-                    )
-                ),
-            },
+        print(
+            json.dumps(
+                final_result,
+                ensure_ascii=False,
+                indent=2,
+                default=str,
+            )
         )
 
-        print_result(
-            title="Rule Engine 결과",
-            result=monitoring_result.get(
-                "rule_result",
-            ),
-        )
-
-        print_result(
-            title="Event Engine 결과",
-            result=monitoring_result.get(
-                "event_result",
-            ),
-        )
-
+    except (FileNotFoundError, OSError, ValueError) as error:
         print()
-        print("모니터링 테스트가 완료되었습니다.")
-
-    except FileNotFoundError as error:
-        print()
-        print(f"파일 오류: {error}")
+        print(f"입력 오류: {error}")
 
     except ProctoringError as error:
         print()
