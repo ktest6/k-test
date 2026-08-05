@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>K-TEST 리서치 전체 지도 — 팀 보고 (8/5)</title>
+<style>
+  :root {
+    --ink: #1a1a2e;
+    --sub: #555;
+    --line: #e2e2ea;
+    --bg: #f7f7fa;
+    --card: #ffffff;
+    --blue: #2b5fd9;
+    --blue-bg: #eef3fe;
+    --green: #1a7f4e;
+    --green-bg: #e9f7ef;
+    --orange: #b45f06;
+    --orange-bg: #fdf3e3;
+    --red: #c0392b;
+    --red-bg: #fdeeec;
+    --purple: #6b3fa0;
+    --purple-bg: #f3edfa;
+    --gray-bg: #f0f0f4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    background: var(--bg); color: var(--ink);
+    line-height: 1.75; font-size: 16px;
+    padding: 24px 16px 80px;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  header { margin-bottom: 32px; }
+  header h1 { font-size: 26px; margin-bottom: 6px; }
+  header .date { color: var(--sub); font-size: 14px; }
+  .lead {
+    background: var(--card); border-left: 5px solid var(--blue);
+    padding: 16px 20px; margin-top: 16px; border-radius: 0 10px 10px 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    font-size: 17px;
+  }
+  h2 {
+    font-size: 21px; margin: 44px 0 14px;
+    padding-bottom: 8px; border-bottom: 2px solid var(--ink);
+  }
+  h3 { font-size: 17px; margin: 22px 0 8px; }
+  p { margin-bottom: 10px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px 20px; margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  }
+  .card h3 { margin-top: 0; }
+  .tag {
+    display: inline-block; font-size: 12.5px; font-weight: 700;
+    padding: 2px 10px; border-radius: 20px; margin-left: 6px; vertical-align: middle;
+    white-space: nowrap;
+  }
+  .tag.done   { background: var(--green-bg); color: var(--green); }
+  .tag.doing  { background: var(--blue-bg); color: var(--blue); }
+  .tag.later  { background: var(--gray-bg); color: var(--sub); }
+  .tag.cond   { background: var(--orange-bg); color: var(--orange); }
+  .num {
+    font-weight: 800; color: var(--blue);
+  }
+  .term {
+    border-bottom: 2px dotted var(--purple); cursor: help; color: var(--purple);
+    font-weight: 600;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 12px 0 6px;
+    background: var(--card); font-size: 14.5px;
+  }
+  th, td { border: 1px solid var(--line); padding: 9px 11px; text-align: left; vertical-align: top; }
+  th { background: var(--gray-bg); font-size: 13.5px; }
+  .table-scroll { overflow-x: auto; }
+  .vs {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0;
+  }
+  @media (max-width: 640px) { .vs { grid-template-columns: 1fr; } }
+  .vs .side { border-radius: 10px; padding: 14px 16px; }
+  .vs .them { background: var(--red-bg); border: 1px solid #f0c8c2; }
+  .vs .us   { background: var(--green-bg); border: 1px solid #bfe3cd; }
+  .vs .side .who { font-weight: 800; font-size: 14px; margin-bottom: 6px; }
+  .vs .them .who { color: var(--red); }
+  .vs .us .who { color: var(--green); }
+  ul, ol { padding-left: 22px; margin-bottom: 10px; }
+  li { margin-bottom: 6px; }
+  .callout {
+    border-radius: 10px; padding: 13px 16px; margin: 12px 0; font-size: 15px;
+  }
+  .callout.warn { background: var(--orange-bg); border: 1px solid #ecd9b0; }
+  .callout.info { background: var(--blue-bg); border: 1px solid #c9d9f7; }
+  .callout.good { background: var(--green-bg); border: 1px solid #bfe3cd; }
+  .glossary dt {
+    font-weight: 800; color: var(--purple); margin-top: 12px;
+  }
+  .glossary dd { margin-left: 0; color: var(--ink); }
+  .flow {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; margin: 12px 0; overflow-x: auto;
+  }
+  .flow pre {
+    font-family: "Consolas", monospace; font-size: 13.5px; line-height: 1.9;
+    white-space: pre; color: var(--ink);
+  }
+  .toc {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 20px; font-size: 15px;
+  }
+  .toc a { color: var(--blue); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .small { font-size: 13.5px; color: var(--sub); }
+  .stair {
+    display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px;
+  }
+  .stair .n {
+    flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--ink); color: #fff; font-weight: 800; font-size: 13px;
+    display: flex; align-items: center; justify-content: center; margin-top: 3px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>K-TEST 리서치 전체 지도 — 우리가 논문으로 만들려는 것</h1>
+  <div class="date">2026-08-05 · 문제·채점 파트 (재완) → 팀 전체 공유용</div>
+  <div class="lead">
+    한 줄 요약: 채점 시스템은 <b>완성됐고 숫자로 증명됐다</b>. 이제 그 위에서
+    <b>논문 2편</b>을 쓰고, <b>남의 최신 논문 숫자를 같은 시험지에서 넘는 승부 3판</b>을 준비하고 있다.
+    이 문서는 그 전체 계획을 처음 보는 사람도 이해할 수 있게 정리한 것이다.
+  </div>
+</header>
+
+<nav class="toc">
+  <b>목차</b><br>
+  1. <a href="#sec1">지금까지 증명된 것 (숫자만)</a><br>
+  2. <a href="#sec2">주력 논문 ① — "채점을 위한 받아쓰기"</a><br>
+  3. <a href="#sec3">주력 논문 ② — "채점 AI를 공격해 봤다"</a><br>
+  4. <a href="#sec4">정면승부 3판 — 남의 논문 숫자를 넘는다</a><br>
+  5. <a href="#sec5">전체 후보 13종 한눈에 보기</a><br>
+  6. <a href="#sec6">먼저 한 사람들(선행 논문)과 우리 자리</a><br>
+  7. <a href="#sec7">정직 규칙 — 심사에서 무너지지 않기 위해</a><br>
+  8. <a href="#sec8">일정</a><br>
+  9. <a href="#sec9">용어 사전 (모르는 말은 여기서)</a>
+</nav>
+
+<!-- ============================================= -->
+<h2 id="sec1">1. 지금까지 증명된 것 — 숫자만 모아 보기</h2>
+
+<p>아래 숫자는 전부 <b>실제로 돌려서 얻은 값</b>이다 (추정치 없음).</p>
+
+<div class="table-scroll"><table>
+  <tr><th>무엇</th><th>숫자</th><th>쉬운 설명</th></tr>
+  <tr><td>채점 재현성</td><td class="num">100%</td><td>같은 답안을 여러 번 채점해도 점수가 똑같다 (9답안 × 3회)</td></tr>
+  <tr><td>오류 탐지율</td><td class="num">90%</td><td>일부러 심어 둔 문법 오류 20개 중 18개를 잡아냈다</td></tr>
+  <tr><td>문항 생성 폐기율</td><td class="num">100% → 0%</td><td>처음엔 AI가 만든 문항의 근거가 전부 가짜였는데(전부 폐기), 규칙을 고쳐 폐기 0이 됐다</td></tr>
+  <tr><td>받아쓰기 세탁율</td><td class="num">27.5%</td><td>응시자가 낸 발음·문법 실수 4개 중 1개를 받아쓰기 AI가 몰래 고쳐서 지운다</td></tr>
+  <tr><td>받아쓰기 정확도 (CER)</td><td class="num">2.6%</td><td>Gemini 받아쓰기는 글자 기준 매우 정확하다. 그런데 정확하면서도 실수를 지운다 — "정확한데 정직하지 않다"가 기함 논문의 첫 문장</td></tr>
+  <tr><td>사람 점수와의 상관 (종합)</td><td class="num">0.89</td><td>우리 점수와 사람 채점자 점수가 거의 같이 움직인다 (1이면 완벽)</td></tr>
+  <tr><td>사람 점수와의 상관 (언어)</td><td class="num">0.47</td><td>언어 영역만 낮다 — <b>받아쓰기가 실수를 지워서</b>. 이 숫자를 올리는 게 논문 ①의 목표</td></tr>
+  <tr><td>생(生) LLM 채점의 실력</td><td class="num">QWK 0.21</td><td>남의 논문 실측: GPT-4o에게 그냥 채점시키면 사람과의 일치율이 바닥 (우리 주장의 공인)</td></tr>
+  <tr><td>자동 테스트</td><td class="num">202개</td><td>코드를 고칠 때마다 전부 통과해야 머지된다</td></tr>
+</table></div>
+
+<!-- ============================================= -->
+<h2 id="sec2">2. 주력 논문 ① — "채점을 위한 받아쓰기" (기함)</h2>
+
+<div class="card">
+<h3>문제: 받아쓰기 AI가 응시자의 실수를 몰래 고친다</h3>
+<p>
+말하기 시험은 <span class="term">STT</span>(음성을 글자로 바꾸는 받아쓰기 AI)를 거쳐 채점한다.
+그런데 상용 받아쓰기 AI는 "정확하게" 만들려고 학습된 탓에, 응시자의 실수까지 표준어로 고쳐 버린다.
+실제 실측 사례:
+</p>
+<ul>
+  <li>"독을 출 출신" → <b>"독일 출신"</b>으로 교정 (발음 실수가 사라짐)</li>
+  <li>"미국 사는데" → <b>"미국에 사는데"</b>로 교정 (조사 빠뜨린 실수가 사라짐)</li>
+</ul>
+<p>
+실수가 지워지면 그 응시자는 <b>감점을 안 받는다</b>. 즉 받아쓰기가 정확할수록
+채점은 오히려 불공정해질 수 있다. 우리는 이것을 <span class="term">세탁</span>이라고 부르고,
+실측 결과 실수 4개 중 1개꼴(<span class="num">27.5%</span>)로 지워졌다.
+심지어 8/4 감사에서 <b>사람 전사자도 세탁한다</b>는 것까지 확인했다("과심사"→"관심사"로 적음).
+</p>
+</div>
+
+<div class="card">
+<h3>해법: 실수를 보존하는 받아쓰기 모델을 우리가 학습한다</h3>
+<p>
+공개 음성 AI인 Whisper를 <span class="term">LoRA</span>(모델 전체가 아니라 아주 작은 부분만
+붙여서 가르치는 저비용 학습법)로 학습시켜, <b>실수를 지우지 않고 그대로 받아 적는 모델</b>을 만든다.
+학습 재료는 AI Hub의 외국인 발화 데이터(실수를 보존한 사람 전사가 정답지로 붙어 있음).
+비용은 무료 GPU(Colab)로 0원~2만원 수준.
+</p>
+<div class="callout warn">
+<b>중요한 디테일:</b> "들리는 그대로"가 목표가 아니다. 한국어는 표준 발음 때문에
+옳게 말해도 소리와 표기가 다르다("여덟 시"의 표준 발음은 [여덜씨]).
+소리대로 적으면 옳게 말한 사람에게 가짜 오류를 만들어 준다.
+그래서 목표는 <b>"표준 철자로 적되, 소리로 구별되는 실수만 보존"</b>이고,
+소리가 똑같은 표기 차이(돼/됐)는 "말하기에서는 잴 수 없는 것"으로 선언하고 측정에서 뺀다.
+</div>
+</div>
+
+<div class="card">
+<h3>증명 방법: 자(尺) 3개로 잰다 — 보존율 · CER · 채점 일치율</h3>
+<p>
+평가 지표는 하나가 아니라 <b>3개를 함께</b> 쓴다. 비교는 항상 3자 대결이다:
+기본 Whisper(학습 전) vs <b>우리 LoRA</b>(학습 후) vs Gemini(상용).
+</p>
+<div class="table-scroll"><table>
+  <tr><th>자(尺)</th><th>무엇을 재나</th><th>왜 필요한가</th><th>학습 전(before) 숫자</th></tr>
+  <tr>
+    <td><b>① 오류 보존율</b><br><span class="small">우리가 정의한 새 지표</span></td>
+    <td>응시자의 실수 중 받아쓰기에 살아남은 비율</td>
+    <td>세탁을 직접 재는 자. 이게 오르는 게 학습의 목적</td>
+    <td>Gemini <span class="num">66.7%</span> (= 세탁율 27.5% 실측의 이면)</td>
+  </tr>
+  <tr>
+    <td><b>② CER</b><br><span class="small">글자 오류율, 병행 측정</span></td>
+    <td>받아쓴 글자가 사람 정답지와 몇 % 다른가</td>
+    <td><b>속임수 방지 장치.</b> 엉터리 모델도 "실수를 보존"한 것처럼 보일 수 있다(다 틀리게 받아쓰면 실수도 안 지워지니까). CER이 나빠지지 않아야 "정확하면서도 정직하다"가 성립</td>
+    <td>Gemini <span class="num">2.6%</span> (AI Hub 실발화 30건)</td>
+  </tr>
+  <tr>
+    <td><b>③ 하류 QWK</b><br><span class="small">표준 자의 새 용도</span></td>
+    <td>그 받아쓰기로 <b>채점하면</b> 사람 점수와 더 일치하는가</td>
+    <td>받아쓰기가 좋아진 게 시험 점수의 공정함으로 실제로 이어졌다는 최종 증거. <b>QWK 자체는 채점 연구의 표준 자다</b>(쌍둥이 논문 0.801도 QWK). 새로운 것은 이 자를 <b>받아쓰기 모델의 평가</b>에 쓰는 용도이고, 그 측정에는 채점 시스템이 필요해서 우리가 할 수 있다</td>
+    <td>언어 영역 상관 <span class="num">0.47</span></td>
+  </tr>
+</table></div>
+<p>
+성공 판정: <b>①이 오르고, ②는 나빠지지 않고, ③이 오르면</b> 기함 성공.
+사람이 언어 0점을 준 화자에게 우리가 58~63점을 줬던 이유가 바로 세탁이었다
+(실수가 지워져서 감점을 못 함) — ①과 ③이 서로를 증명하는 구조다.
+정답지는 8/4 감사에서 만든 교정본 100건(사람 전사자의 세탁까지 고친 것)을 쓴다.
+</p>
+<div class="callout good">
+<b>보험까지 있다:</b> LoRA 학습이 실패해도, 상용 받아쓰기와 우리 모델의 <b>차이가 나는 자리 =
+실수가 있던 자리</b>라는 점을 이용하는 "이원 전사" 구조가 성립한다. 또 학습이 다 안 되더라도
+"상용 STT의 세탁을 정량화했다"는 측정 결과만으로 논문 절반은 선다.
+</div>
+</div>
+
+<!-- ============================================= -->
+<h2 id="sec3">3. 주력 논문 ② — "채점 AI를 공격해 봤다" (적대적 강건성)</h2>
+
+<div class="card">
+<h3>실험: 일부러 악성 답안을 넣어 봤다</h3>
+<p>
+무음(아무 말 안 함), 영어 발화, 문제 지시문 그대로 읽기 같은 <b>공격 답안</b>을
+채점 시스템에 넣어 보는 실험. 충격적인 결과가 나왔다:
+</p>
+<div class="vs">
+  <div class="side them">
+    <div class="who">생 LLM에게 그냥 채점시키면</div>
+    <b>무음에 95점 A</b>를 주고, "세 요소를 명확하게 표현했다"는
+    채점 근거까지 지어냈다. 영어로 답해도 95점 A.
+  </div>
+  <div class="side us">
+    <div class="who">우리 구조는</div>
+    무음은 소리 크기를 직접 재서 차단, 영어·스팸·베끼기는
+    유효성 검사로 전부 무효 처리. 정상 답안을 잘못 막은 경우 0건.
+  </div>
+</div>
+<p>
+같은 AI 모델을 쓰는데 결과가 갈린다 — <b>차이는 모델이 아니라 우리가 짠 구조의 기여</b>라는 증거.
+</p>
+</div>
+
+<div class="card">
+<h3>논문이 되는 발견 2개</h3>
+<ol>
+  <li><b>역설의 발견:</b> 받아쓰기 정확도를 올리려고 문항 지시문을 힌트로 주는데,
+  무음이 들어오면 AI가 <b>그 힌트로 모범답안을 상상해서 지어낸다</b>.
+  정확도를 위한 장치가 공격의 문이 되는 것.</li>
+  <li><b>방어의 실측:</b> "말이 없으면 빈 답을 내라"는 <b>지시(말)로는 못 막았다</b>.
+  지시를 아무리 강하게 고쳐도 뚫렸다. 막은 것은 <b>소리 크기를 숫자로 직접 재는 관문</b> 하나였다.
+  → "말로 하는 방어는 실패하고, 신호를 재는 방어만 성공한다"는 교훈을 숫자로 확보.</li>
+</ol>
+<div class="callout warn">
+<b>정직 노트:</b> "무음에서 AI가 헛것을 받아쓴다(환각)"는 발견 자체는 2024년 논문이 이미 했다.
+그래서 우리 논문은 "환각 발견"이 아니라 <b>"시험 채점 시스템이 공격에 얼마나 버티는가"</b>로
+방향을 잡는다. 남이 한 것을 우리 것처럼 말하면 심사에서 무너진다.
+</div>
+<p class="small">상태: 실측 절반 이상 완료 (원자료 outputs/stair4_speaking_20260802.json).
+남은 것은 공격 종류 확장(배경 소음·부분 무음)과 반복 실험. 목표 학회: HCLT 2026 (국내, 마감 임박 가능성 → 공고 확인 급함).</p>
+</div>
+
+<!-- ============================================= -->
+<h2 id="sec4">4. 정면승부 3판 — "같은 시험지, 같은 채점 기준"으로 남의 논문 숫자를 넘는다</h2>
+
+<p>
+논문 2편이 "우리만의 새 지표"라면, 정면승부는 <b>남이 이미 발표한 숫자를
+같은 조건에서 이기는 것</b>이다. 전부 공개 데이터라 비교가 성립하고, 상대는 전부 2025~2026 최신 논문이다.
+</p>
+
+<div class="table-scroll"><table>
+  <tr><th></th><th>상대 (누구)</th><th>시험지 (무엇으로)</th><th>상대의 점수</th><th>우리 무기</th></tr>
+  <tr>
+    <td><b>1판</b><br><span class="small">우선</span></td>
+    <td>2026 Frontiers 논문<br><span class="small">(한국어 AI 채점 모델)</span></td>
+    <td>AI Hub 에세이 평가 데이터<br><span class="small">(학생 글 4,418편, 공개)</span></td>
+    <td>QWK (일치율)</td>
+    <td>자질 추출 + XGBoost 3층 결합</td>
+  </tr>
+  <tr>
+    <td><b>2판</b></td>
+    <td>2025 MDPI "쌍둥이 논문"<br><span class="small">(아래 상세)</span></td>
+    <td>국립국어원 학습자 말뭉치<br><span class="small">(외국인이 쓴 글 ~7,500편, 신청 가능)</span></td>
+    <td>QWK <span class="num">0.801</span></td>
+    <td>체크리스트 내용 채점 + 오류 자질</td>
+  </tr>
+  <tr>
+    <td><b>3판</b><br><span class="small">후순위</span></td>
+    <td>2025~26 오류 교정 논문들<br><span class="small">(K-NCT, KoLLA v2.0)</span></td>
+    <td>공개 오류 교정 시험지</td>
+    <td>F1 (탐지 정확도)</td>
+    <td>오류 탐지 모듈 (탐지율 90%)</td>
+  </tr>
+</table></div>
+
+<div class="card">
+<h3>2판 상세 — "쌍둥이 논문"은 어떻게 채점했고, 우리는 왜 이길 수 있나</h3>
+<p>
+쌍둥이 논문(우리와 구도가 같아서 붙인 별명)은 외국인의 한국어 글을 보고 TOPIK 1~6급을 맞히는 시스템이다.
+방법: ① 어휘 다양성·문장 복잡도 같은 셀 수 있는 자질 + ② <b>내용 점수는
+AI가 만든 모범답안과 얼마나 비슷한지(유사도)로 측정</b> → 합쳐서 급수 예측. 결과 QWK 0.801.
+</p>
+<p>핵심 승부처는 ②다. <b>유사도 방식은 우리가 설계 때 일부러 버린 방식</b>이기 때문:</p>
+<ul>
+  <li>유사도는 "관련 있는 얘기인가"만 잰다. <b>"할 일을 다 했는가"는 못 잰다</b> —
+  사고 보고에서 위치를 빼먹어도 사고 얘기면 유사도는 높다.
+  우리는 체크리스트로 "위치를 말했나? ○/×"를 하나씩 판정한다.</li>
+  <li>모범답안을 AI가 만들므로 실행마다 달라질 수 있고, 왜 그 점수인지 설명이 안 된다.
+  우리는 원문 인용을 근거로 붙인다.</li>
+  <li>모범답안과 다르게 쓴 <b>독창적인 글에 벌점</b>을 준다 — 저자들 스스로 한계로 인정했다.</li>
+</ul>
+<p><b>구체적 공략 지점 3개:</b></p>
+<ol>
+  <li><b>오류 특화 자질</b> — 저자들이 논문에 "앞으로 조사 오류 탐지가 가장 효과 클 것"이라고
+  숙제로 적어 놨는데, 우리는 그걸 이미 갖고 있다(탐지율 90%).</li>
+  <li><b>급수 불균형 보정</b> — 저쪽 데이터는 1급 2,858편 vs 6급 328편인데 보정을 안 했다.
+  그 결과 5~6급 구분 정확도 24%, 추상적 주제에서는 QWK 0.007로 무너져 있다. 이 붕괴 지대를 공략한다.</li>
+  <li><b>한국어 임베딩 병행</b> — 자질만이 아니라 문장 의미 벡터도 함께 넣어 결합한다.</li>
+</ol>
+<div class="callout good">
+<b>덤:</b> 이 논문이 GPT-4o에게 직접 채점을 시켜 봤는데 QWK 0.21~0.24로 참패했다.
+"AI에게 그냥 채점시키면 안 된다"는 우리 주장이 <b>남의 논문 숫자로 공인</b>된 셈 — 발표 때 인용한다.
+</div>
+<p class="small">조건: 저쪽과 동일한 검증 방식(주제별 교차검증)을 재현해야 비교가 성립.
+지면 진 대로 보고한다. 데이터 신청 필요(국립국어원 학습자 말뭉치 나눔터).</p>
+</div>
+
+<!-- ============================================= -->
+<h2 id="sec5">5. 전체 후보 13종 한눈에 보기</h2>
+
+<p class="small">
+표시: <span class="tag done">완료·실측</span> = 이미 만들어서 숫자 확보 /
+<span class="tag doing">진행 중</span> = 지금 하는 중 /
+<span class="tag later">2단계</span> = 8/11 이후 /
+<span class="tag cond">조건부</span> = 본진이 궤도에 오르면
+</p>
+
+<h3>논문 후보 4종</h3>
+<div class="table-scroll"><table>
+  <tr><th>#</th><th>이름</th><th>한 줄 설명</th><th>상태</th></tr>
+  <tr><td>①</td><td>세탁 편향 측정</td><td>받아쓰기 AI가 실수를 지우는 현상을 숫자로 (세탁율 27.5% 확보)</td><td><span class="tag doing">진행 중</span></td></tr>
+  <tr><td>②</td><td>적대적 강건성</td><td>채점 AI 공격 실험 — 지시는 실패, 신호 관문만 성공</td><td><span class="tag doing">절반 실측</span></td></tr>
+  <tr><td>③</td><td>인용 게이트 문항 생성</td><td>AI가 만든 문항의 근거가 문서에 실제로 있는지 코드로 검증, 없으면 자동 폐기 (폐기율 100→0%)</td><td><span class="tag done">구현 완료</span></td></tr>
+  <tr><td>④</td><td>벤치마크 데이터셋 공개</td><td>문항+채점 기준+이중 라벨 답안+공격 세트를 묶어 공개 — 이 분야 최초</td><td><span class="tag later">2단계</span></td></tr>
+</table></div>
+
+<h3>검증·공정성 후보 4종 (심사 방어에도 쓰는 부품)</h3>
+<div class="table-scroll"><table>
+  <tr><th>#</th><th>이름</th><th>한 줄 설명</th><th>상태</th></tr>
+  <tr><td>⑤</td><td>메타모픽 검사</td><td>뜻만 같게 바꾸면 점수 불변인지, 요소를 빼면 그 영역만 떨어지는지 자동 검사 (12사례, 시연에서 1분 40초에 시연 가능)</td><td><span class="tag done">구현 완료</span></td></tr>
+  <tr><td>⑥</td><td>불확실성 전파</td><td>받아쓰기를 여러 번 돌려 점수가 등급 경계에 걸치면 "사람 검토" 플래그</td><td><span class="tag cond">Azure 후</span></td></tr>
+  <tr><td>⑦</td><td>모어별 공정성 감사</td><td>같은 실력인데 국적 따라 점수가 다른지 측정 — 고부담 시험의 필수 요건</td><td><span class="tag later">2단계</span></td></tr>
+  <tr><td>⑧</td><td>IRT 사전 캘리브레이션</td><td>실력별 가상 응시자로 문항 난이도를 미리 추정</td><td><span class="tag later">여유 시</span></td></tr>
+</table></div>
+
+<h3>받아쓰기(LoRA) 트랙 3종</h3>
+<div class="table-scroll"><table>
+  <tr><th>#</th><th>이름</th><th>한 줄 설명</th><th>상태</th></tr>
+  <tr><td>⑨</td><td>오류 보존 LoRA (기함 본체)</td><td>실수를 지우지 않는 받아쓰기 모델 학습. 파일럿·학습기·평가기 완성, 라벨 감사 완료(신뢰율 72%, 교정본 100건을 채점 기준으로 승격)</td><td><span class="tag cond">학습 대기</span></td></tr>
+  <tr><td>⑩</td><td>드리프트 감시</td><td>상용 AI가 예고 없이 바뀌어 같은 음성이 다르게 받아써지는지 기록 (고정 음성 8건 박제 시작, 비용 0)</td><td><span class="tag done">축적 중</span></td></tr>
+  <tr><td>⑪</td><td>무음 명시 학습</td><td>무음→빈 출력 쌍을 학습에 섞어 헛것 받아쓰기를 모델 수준에서 억제</td><td><span class="tag cond">조건부</span></td></tr>
+</table></div>
+
+<h3>정면승부용 2종</h3>
+<div class="table-scroll"><table>
+  <tr><th>#</th><th>이름</th><th>한 줄 설명</th><th>상태</th></tr>
+  <tr><td>⑫</td><td>1판: 에세이 QWK 승부</td><td>2026 논문과 같은 AI Hub 에세이 시험지에서 QWK 대결 + XGBoost 결합층의 실전 리허설</td><td><span class="tag later">2단계·데이터 신청</span></td></tr>
+  <tr><td>⑬</td><td>3판: 오류 교정 F1 승부</td><td>공개 오류 교정 시험지에서 우리 탐지 모듈로 F1 대결</td><td><span class="tag later">후순위</span></td></tr>
+</table></div>
+
+<!-- ============================================= -->
+<h2 id="sec6">6. 먼저 한 사람들(선행 논문)과 우리 자리</h2>
+
+<p>
+"이거 이미 있잖아요"라는 심사 질문에 무너지지 않으려고, 비슷한 논문을 먼저 찾아 전부 대조했다.
+결론: <b>부품은 겹치지만, 우리가 서 있는 자리는 비어 있다.</b>
+</p>
+
+<div class="card">
+<h3>가장 가까운 선행 3편과 "그래도 남는 우리 것"</h3>
+<div class="table-scroll"><table>
+  <tr><th>선행 논문</th><th>그들이 한 것</th><th>우리에게 남는 것</th></tr>
+  <tr>
+    <td><b>ACL 2024</b> (스위스)<br><span class="small">오류 보존 받아쓰기</span></td>
+    <td>초등학생 영어에서 실수 보존 받아쓰기 학습 — 우리 아이디어의 최근접 선행</td>
+    <td>그들은 보존율에서 끝났다. <b>"보존이 채점 정확도로 이어지는가"는 아무도 안 쟀다</b> — 그 측정(하류 QWK)을 우리가 처음 한다. 단, "하류 평가"라는 발상 자체는 번역 분야에서 빌려온 것이라 <b>"한국어 L2 채점에의 첫 적용"까지만 주장</b>. + 한국어 특유의 조사·어미 문제</td>
+  </tr>
+  <tr>
+    <td><b>HUFS 2026</b> (한국)<br><span class="small">발음 진단, 같은 데이터 사용</span></td>
+    <td>같은 AI Hub 데이터로 Whisper를 발음 전사로 학습 (발음 오류 진단)</td>
+    <td>방향이 반대(발음 전사 vs 표준 철자+실수 보존)라 경쟁이 아니라 <b>발음 채점의 백업 경로</b>. 전처리 레시피를 물려받음</td>
+  </tr>
+  <tr>
+    <td><b>MDPI 2025</b> 쌍둥이<br><span class="small">한국어 L2 쓰기 채점</span></td>
+    <td>자질+유사도+ML로 TOPIK 급수 예측 (QWK 0.801)</td>
+    <td>내용 채점 방식이 우리가 배제한 유사도 — <b>우리 설계의 정당화 근거</b>이자 정면승부 상대 (4절)</td>
+  </tr>
+</table></div>
+</div>
+
+<!-- ============================================= -->
+<h2 id="sec7">7. 정직 규칙 — 심사에서 무너지지 않기 위한 4가지 약속</h2>
+
+<div class="card">
+<ol>
+  <li><b>비공개 시험지 숫자와 비교하지 않는다.</b> 남의 논문이 자기만 가진 데이터로 낸 점수는
+  우리와 비교 자체가 성립하지 않는다. 비교는 반드시 "같은 공개 시험지, 같은 채점 기준"에서만.</li>
+  <li><b>빌린 부품은 먼저 밝힌다.</b> LoRA·XGBoost·전처리 레시피는 남이 만든 것이다.
+  숨기다 걸리는 순간 짜깁기 의심이 시작된다. 우리 고유 기여는 4개로만 주장한다 —
+  ① 질문(받아쓰기의 교정 버릇이 채점을 오염시키는가) ② 실측 숫자(세탁율 27.5%)
+  ③ 오류 보존율이라는 지표 정의 ④ 두 받아쓰기의 차이를 오류 신호로 뒤집는 발상.</li>
+  <li><b>지면 진 대로 보고한다.</b> 이긴 판만 골라 말하지 않는다. 진 원인 분석이 다음 계단이 된다.</li>
+  <li><b>약속할 수 없는 것은 약속하지 않는다.</b> 예: 문항 생성이 실행 안에서는 똑같이 나왔지만,
+  실행을 나누면 달라졌다 → 그래서 "문구 재현된다"고 말하지 않는다.</li>
+</ol>
+</div>
+
+<!-- ============================================= -->
+<h2 id="sec8">8. 일정 — 언제 무엇을</h2>
+
+<div class="flow"><pre>
+지금(1단계, ~8/10)          2단계(8/11~본선)
+─────────────────          ──────────────────────────────
+8/5~6  라벨링 킷·시연 재료   라벨 100건 (쓰기 50 + 말하기 50)
+8/7~9  라벨링 파일럿 20건      ↓
+       전체 리허설           XGBoost 결합 학습 (계단 5)
+8/10   1단계 마감 점검         ↓
+                            기계-인간 일치율 ≥ 인간-인간 (계단 6)
+                              ↓
+                            정면승부 1판 (에세이 QWK)
+                              ↓
+                            LoRA 학습 → 언어 상관 0.47 ↑ (기함)
+                              ↓
+                            정면승부 2판 (쌍둥이 0.801) · 3판
+</pre></div>
+
+<div class="table-scroll"><table>
+  <tr><th>투고처</th><th>무엇을</th><th>언제</th></tr>
+  <tr><td><b>HCLT 2026</b> (국내 학회)</td><td>논문 ② 적대적 강건성 (실측 이미 확보)</td><td>본선 직후 — <b>마감 공고 확인이 급함</b> (예년 8~9월 마감)</td></tr>
+  <tr><td><b>BEA 2027 / SLaTE</b> (국제)</td><td>논문 ① 기함 + ④ 벤치마크</td><td>2단계 데이터 완성 후 (예년 3월 마감)</td></tr>
+</table></div>
+
+<div class="callout info">
+<b>팀에게 필요한 것:</b> ① 2단계 라벨링에 3인 참여 (답안 100건, 앵커 5개로 훈련 후 2인 독립 채점 + 1인 조정)
+② 국립국어원 학습자 말뭉치·AI Hub 545 데이터 신청 ③ HCLT 마감 공고 확인.
+</div>
+
+<!-- ============================================= -->
+<h2 id="sec9">9. 용어 사전 — 모르는 말은 여기서</h2>
+
+<div class="card">
+<dl class="glossary">
+  <dt>STT (받아쓰기 AI)</dt>
+  <dd>Speech-To-Text. 음성을 듣고 글자로 바꿔 주는 AI. 말하기 시험 채점의 첫 단계.</dd>
+
+  <dt>세탁</dt>
+  <dd>받아쓰기 AI가 응시자의 실수("독을 출")를 표준어("독일")로 몰래 고쳐서 지우는 현상.
+  실수가 지워지면 감점을 못 하므로 채점이 오염된다. 우리가 붙인 이름.</dd>
+
+  <dt>QWK (일치율)</dt>
+  <dd>기계가 준 등급과 사람이 준 등급이 얼마나 일치하는지 재는 값. 1이면 완벽히 일치,
+  0이면 무관. 등급이 2단계 어긋나면 1단계 어긋난 것보다 더 크게 벌점을 주는 방식이라
+  채점 연구의 표준 자(尺)다.</dd>
+
+  <dt>CER (글자 오류율)</dt>
+  <dd>받아쓴 글자가 정답과 몇 % 다른지. 낮을수록 정확. 우리 실측에서 Gemini는 2.6%로
+  매우 정확했지만 — 정확한데 실수를 지워서 "정직하지 않았다".</dd>
+
+  <dt>LoRA (저비용 학습법)</dt>
+  <dd>큰 AI 모델 전체를 다시 가르치는 대신, 작은 부품만 붙여서 가르치는 방법.
+  우리 실측으로 전체의 0.73%만 학습하면 되고, 비용은 0원~2만원.</dd>
+
+  <dt>Whisper</dt>
+  <dd>공개된(무료) 받아쓰기 AI. 우리가 LoRA로 학습시킬 대상. 상용(Gemini)과 달리
+  버전을 박제할 수 있어서 시험의 재현성에 유리하다.</dd>
+
+  <dt>XGBoost (점수 결합기)</dt>
+  <dd>여러 재료(자질)를 넣으면 최종 점수를 예측하도록 학습되는 통계 모델.
+  지금은 사람이 정한 가중치로 점수를 합치는데, 2단계에서 이걸로 교체해 사람 점수와의 일치율을 올린다.</dd>
+
+  <dt>자질 (특징값)</dt>
+  <dd>답안에서 뽑아낸 측정값들 — 어휘 수준, 문장 길이, 조사 오류 수, 과제 완수 여부 등.
+  점수는 이 자질들을 결합해서 나온다. AI에게 "점수 줘"라고 통째로 맡기지 않는 것이 우리 구조의 핵심.</dd>
+
+  <dt>체크리스트 채점</dt>
+  <dd>"사고 위치를 말했는가 ○/×"처럼 과제 요소를 하나씩 판정하는 내용 채점 방식.
+  비슷한 얘기인지(유사도)가 아니라 할 일을 다 했는지(완수)를 잰다.</dd>
+
+  <dt>메타모픽 검사</dt>
+  <dd>정답을 모르는 상태에서도 시스템을 검사하는 방법. "뜻이 같게 바꿨으니 점수도 같아야 한다",
+  "내용을 뺐으니 내용 점수만 떨어져야 한다" 같은 관계가 지켜지는지 본다.</dd>
+
+  <dt>적대적 강건성</dt>
+  <dd>일부러 악성 입력(무음, 외국어, 지시문 낭독)을 넣었을 때 시스템이 속지 않고 버티는 능력.</dd>
+
+  <dt>환각</dt>
+  <dd>AI가 없는 것을 지어내는 현상. 무음을 주면 받아쓰기 AI가 모범답안을 상상해서 지어낸다.</dd>
+
+  <dt>F1 (탐지 정확도)</dt>
+  <dd>오류를 얼마나 빠짐없이(재현율), 얼마나 틀리지 않게(정밀도) 잡았는지를 하나로 합친 점수.</dd>
+
+  <dt>파인튜닝</dt>
+  <dd>이미 학습된 AI를 우리 데이터로 추가 학습시키는 것. LoRA는 파인튜닝의 저비용 버전.</dd>
+
+  <dt>임베딩 / 유사도</dt>
+  <dd>문장의 뜻을 숫자 벡터로 바꾼 것이 임베딩, 두 벡터가 얼마나 가까운지가 유사도.
+  쌍둥이 논문은 이걸로 내용을 채점했고, 우리는 완수를 못 잰다는 이유로 배제했다.</dd>
+
+  <dt>하류 평가</dt>
+  <dd>부품(받아쓰기)의 성능을 부품 자체 점수가 아니라 <b>최종 결과물(채점 점수)의 품질</b>로
+  평가하는 방식. "받아쓰기가 정확한가"가 아니라 "그걸로 채점하면 사람과 일치하는가".</dd>
+
+  <dt>앵커 답안</dt>
+  <dd>등급별(A~E) 대표 예시 답안. 라벨링 전에 이걸로 눈높이를 맞춰야 사람끼리의 일치율이 제대로 나온다.</dd>
+
+  <dt>드리프트</dt>
+  <dd>상용 AI가 예고 없이 업데이트되어 같은 입력에 다른 출력이 나오게 되는 현상.
+  시험에서는 재시험·이의제기 때 문제가 된다.</dd>
+</dl>
+</div>
+
+<p class="small" style="margin-top:32px;">
+원자료: assessment/RESEARCH.md (선행 대조 상세) · assessment/PLAN.md (일정) · assessment/HISTORY.md (실측 기록).
+이 문서는 2026-08-05 기준이며, 숫자는 전부 실측값이다.
+</p>
+
+</div>
+</body>
+</html>
