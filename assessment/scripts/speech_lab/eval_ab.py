@@ -135,7 +135,13 @@ class BaseWhisper:
 
     def __call__(self, wav_bytes: bytes) -> str:
         # 한국어라고 못 박는다. 안 그러면 짧은 발화에서 언어를 잘못 짚는다
-        segments, _ = self.model.transcribe(io.BytesIO(wav_bytes), language="ko")
+        # 심판 고정(8/5): 설정 없이 부르면 품질 검사 실패 시 온도를 올려 주사위를
+        # 굴리며 재시도해서(기본 온도 사다리 0→1.0) 실행마다 결과가 달라진다.
+        # 같은 gold 100건에서 CER 12.2~15.4% 요동을 실측하고 아래로 고정했다.
+        segments, _ = self.model.transcribe(
+            io.BytesIO(wav_bytes), language="ko",
+            beam_size=1, temperature=0.0, condition_on_previous_text=False,
+        )
         return " ".join(s.text.strip() for s in segments).strip()
 
 
