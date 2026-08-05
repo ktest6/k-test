@@ -1,5 +1,6 @@
 import { Role } from '../../../common/enums/role.enum';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
+import { StoragePublicUrlService } from '../../../infrastructure/supabase/storage-public-url.service';
 import { Answer } from '../../answer/domain/entities/answer.entity';
 import { AnswerStatus } from '../../answer/domain/enums/answer-status.enum';
 import { AnswerType } from '../../answer/domain/enums/answer-type.enum';
@@ -58,6 +59,15 @@ function buildAnswer(overrides: Partial<{ id: string; questionId: string }> = {}
   );
 }
 
+function buildStoragePublicUrlService(): StoragePublicUrlService {
+  return {
+    toPublicUrl: jest.fn(
+      (bucket: string, path: string) =>
+        `https://project.supabase.co/storage/v1/object/public/${bucket}/${path}`,
+    ),
+  } as unknown as StoragePublicUrlService;
+}
+
 function buildController(
   sessionOverrides: Partial<{
     start: jest.Mock;
@@ -87,7 +97,12 @@ function buildController(
     get: jest.fn(),
     ...answerOverrides,
   } as unknown as ExamSessionAnswerService;
-  return new ExamSessionController(sessionService, questionService, answerService);
+  return new ExamSessionController(
+    sessionService,
+    questionService,
+    answerService,
+    buildStoragePublicUrlService(),
+  );
 }
 
 describe('ExamSessionController.start', () => {
@@ -177,7 +192,7 @@ describe('ExamSessionController.getQuestion', () => {
         prompt: '그림을 보고 상황을 설명하세요.',
         expected_register: 'formal',
         reference_keywords: [],
-        image_url: 'question-assets/pic-001.png',
+        image_url: 'pic-001.png',
         mode: 'speaking',
       },
       null,
@@ -189,7 +204,9 @@ describe('ExamSessionController.getQuestion', () => {
 
     const result = await controller.getQuestion('1', '4', buildUser());
 
-    expect(result.imageUrl).toBe('question-assets/pic-001.png');
+    expect(result.imageUrl).toBe(
+      'https://project.supabase.co/storage/v1/object/public/question-assets/pic-001.png',
+    );
     expect(result.mode).toBe('speaking');
   });
 
@@ -225,6 +242,28 @@ describe('ExamSessionController.saveAnswer', () => {
       graded: false,
       score: null,
     });
+  });
+
+  it('converts a stored AUDIO path to a full public URL in the response', async () => {
+    const answer = new Answer(
+      '1',
+      '1',
+      '1',
+      AnswerType.AUDIO,
+      null,
+      '9/1/1.webm',
+      AnswerStatus.DRAFT,
+      new Date('2026-06-01T00:00:00.000Z'),
+    );
+    const save = jest.fn().mockResolvedValue({ answer, graded: false, score: null });
+    const controller = buildController({}, {}, { save });
+    const dto = { type: AnswerType.AUDIO, audioFileUrl: '9/1/1.webm' };
+
+    const result = await controller.saveAnswer('1', '1', dto, buildUser());
+
+    expect(result.audioFileUrl).toBe(
+      'https://project.supabase.co/storage/v1/object/public/answer-audio/9/1/1.webm',
+    );
   });
 });
 

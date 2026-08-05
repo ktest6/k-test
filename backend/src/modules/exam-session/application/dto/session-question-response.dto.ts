@@ -21,7 +21,8 @@ export class SessionQuestionResponseDto {
   @ApiPropertyOptional({
     type: String,
     nullable: true,
-    description: '그림 묘사 등 이미지가 있는 문항의 이미지 경로. 없으면 null',
+    description:
+      '그림 묘사 등 이미지가 있는 문항의 이미지 URL(Supabase public URL, 바로 렌더링 가능). 없으면 null',
   })
   imageUrl: string | null;
 

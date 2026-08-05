@@ -1,6 +1,7 @@
 import { HttpService } from '@nestjs/axios';
 import { of } from 'rxjs';
 import { AppConfig } from '../../../../config/configuration';
+import { StoragePublicUrlService } from '../../../../infrastructure/supabase/storage-public-url.service';
 import { ScoreItemInput } from '../../domain/ports/scoring-provider.port';
 import { AssessmentScoringAdapter } from './assessment-scoring.adapter';
 
@@ -24,6 +25,10 @@ function buildConfig(overrides: Partial<{ url: string; apiKey: string }> = {}): 
   };
 }
 
+function buildStoragePublicUrlService(): StoragePublicUrlService {
+  return new StoragePublicUrlService(buildConfig());
+}
+
 function buildAudioInput(overrides: Partial<ScoreItemInput> = {}): ScoreItemInput {
   return {
     answerId: '500',
@@ -45,7 +50,11 @@ describe('AssessmentScoringAdapter.score', () => {
   it('sends a speaking request with the public audio URL and no answer_text', async () => {
     const post = jest.fn().mockReturnValue(of({ data: { total_score: 80 } }));
     const httpService = { post } as unknown as HttpService;
-    const adapter = new AssessmentScoringAdapter(httpService, buildConfig());
+    const adapter = new AssessmentScoringAdapter(
+      httpService,
+      buildConfig(),
+      buildStoragePublicUrlService(),
+    );
 
     const result = await adapter.score(buildAudioInput());
 
@@ -73,7 +82,11 @@ describe('AssessmentScoringAdapter.score', () => {
   it('sends a writing request with answer_text and no audio field', async () => {
     const post = jest.fn().mockReturnValue(of({ data: { total_score: 90 } }));
     const httpService = { post } as unknown as HttpService;
-    const adapter = new AssessmentScoringAdapter(httpService, buildConfig());
+    const adapter = new AssessmentScoringAdapter(
+      httpService,
+      buildConfig(),
+      buildStoragePublicUrlService(),
+    );
     const input: ScoreItemInput = {
       answerId: '501',
       answerType: 'TEXT',
@@ -98,7 +111,11 @@ describe('AssessmentScoringAdapter.score', () => {
   it('includes audio.duration_ms when the input has one (non-wav formats need it)', async () => {
     const post = jest.fn().mockReturnValue(of({ data: {} }));
     const httpService = { post } as unknown as HttpService;
-    const adapter = new AssessmentScoringAdapter(httpService, buildConfig());
+    const adapter = new AssessmentScoringAdapter(
+      httpService,
+      buildConfig(),
+      buildStoragePublicUrlService(),
+    );
 
     await adapter.score(buildAudioInput({ durationMs: 11760 }));
 
@@ -109,7 +126,11 @@ describe('AssessmentScoringAdapter.score', () => {
   it('omits audio.duration_ms when the input has none', async () => {
     const post = jest.fn().mockReturnValue(of({ data: {} }));
     const httpService = { post } as unknown as HttpService;
-    const adapter = new AssessmentScoringAdapter(httpService, buildConfig());
+    const adapter = new AssessmentScoringAdapter(
+      httpService,
+      buildConfig(),
+      buildStoragePublicUrlService(),
+    );
 
     await adapter.score(buildAudioInput());
 
@@ -123,6 +144,7 @@ describe('AssessmentScoringAdapter.score', () => {
     const adapter = new AssessmentScoringAdapter(
       httpService,
       buildConfig({ apiKey: 'secret-key' }),
+      buildStoragePublicUrlService(),
     );
 
     await adapter.score(buildAudioInput());
