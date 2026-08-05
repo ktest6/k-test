@@ -5,6 +5,7 @@ import { ApiStandardResponse } from '../../../common/decorators/api-standard-res
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Role } from '../../../common/enums/role.enum';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
+import { StoragePublicUrlService } from '../../../infrastructure/supabase/storage-public-url.service';
 import { AnswerResponseDto } from '../application/dto/answer-response.dto';
 import { AnswerUploadUrlResponseDto } from '../application/dto/answer-upload-url-response.dto';
 import { ExamSessionStatusResponseDto } from '../application/dto/exam-session-status-response.dto';
@@ -21,6 +22,9 @@ import { ExamSessionService } from '../application/services/exam-session.service
 import { Question } from '../../question/domain/entities/question.entity';
 import { QuestionMode } from '../../question/domain/enums/question-mode.enum';
 
+const QUESTION_ASSETS_BUCKET = 'question-assets';
+const ANSWER_AUDIO_BUCKET = 'answer-audio';
+
 @ApiBearerAuth()
 @ApiTags('Exam Session')
 @ApiCommonErrorResponses()
@@ -30,6 +34,7 @@ export class ExamSessionController {
     private readonly examSessionService: ExamSessionService,
     private readonly examSessionQuestionService: ExamSessionQuestionService,
     private readonly examSessionAnswerService: ExamSessionAnswerService,
+    private readonly storagePublicUrlService: StoragePublicUrlService,
   ) {}
 
   @Post('exams/:id/sessions')
@@ -172,7 +177,12 @@ export class ExamSessionController {
       id: question.id,
       part: question.part,
       prompt: question.content.prompt,
-      imageUrl: question.content.image_url ?? null,
+      imageUrl: question.content.image_url
+        ? this.storagePublicUrlService.toPublicUrl(
+            QUESTION_ASSETS_BUCKET,
+            question.content.image_url,
+          )
+        : null,
       mode: (question.content.mode as QuestionMode | undefined) ?? null,
     };
   }
@@ -183,7 +193,9 @@ export class ExamSessionController {
       questionId: result.answer.questionId,
       type: result.answer.type,
       contentText: result.answer.contentText,
-      audioFileUrl: result.answer.audioFileUrl,
+      audioFileUrl: result.answer.audioFileUrl
+        ? this.storagePublicUrlService.toPublicUrl(ANSWER_AUDIO_BUCKET, result.answer.audioFileUrl)
+        : null,
       status: result.answer.status,
       modifiedAt: result.answer.modifiedAt,
       graded: result.graded,

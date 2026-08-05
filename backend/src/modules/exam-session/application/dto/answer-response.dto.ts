@@ -15,7 +15,12 @@ export class AnswerResponseDto {
   @ApiPropertyOptional({ type: String, nullable: true })
   contentText: string | null;
 
-  @ApiPropertyOptional({ type: String, nullable: true })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description:
+      '재생 가능한 완전한 URL(Supabase public URL). 답안 제출 시 보내는 audioFileUrl(Storage 경로)과 형태가 다르니 주의 — 재제출 시에는 이 값이 아니라 upload-url로 새로 받은 path를 써야 한다.',
+  })
   audioFileUrl: string | null;
 
   @ApiProperty({ enum: AnswerStatus })
