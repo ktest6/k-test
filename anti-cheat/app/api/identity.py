@@ -11,7 +11,7 @@ identity.py
 - 인증 결과 반환
 """
 
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import (
     APIRouter,
@@ -22,7 +22,10 @@ from fastapi import (
     status,
 )
 
-from app.schemas.identity import IdentityVerificationResponse
+from app.schemas.identity import (
+    DocumentType,
+    IdentityVerificationResponse,
+)
 from modules.common.exceptions import InvalidImageError, RekognitionAPIError
 from modules.identity_verification.service import verify_identity
 
@@ -59,6 +62,22 @@ async def verify_identity_api(
         ...,
         description="시험 시작 전 웹캠 캡처 이미지",
     ),
+    last_name: str = Form(
+        ...,
+        description="신청 정보의 성",
+    ),
+    first_name: str = Form(
+        ...,
+        description="신청 정보의 이름",
+    ),
+    birth_date: date = Form(
+        ...,
+        description="신청 정보의 생년월일",
+    ),
+    document_type: DocumentType = Form(
+        ...,
+        description="신분증 종류",
+    ),
 ) -> IdentityVerificationResponse:
     """시험 시작 전 신분증 얼굴과 웹캠 얼굴을 비교한다."""
 
@@ -69,6 +88,7 @@ async def verify_identity_api(
         result = verify_identity(
             source_image_bytes=source_image_bytes,
             target_image_bytes=target_image_bytes,
+            document_type=document_type,
         )
 
         return IdentityVerificationResponse(
