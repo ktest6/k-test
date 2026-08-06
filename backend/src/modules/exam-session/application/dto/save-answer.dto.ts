@@ -14,7 +14,10 @@ export class SaveAnswerDto {
   @MaxLength(1000)
   contentText?: string;
 
-  @ApiPropertyOptional({ description: 'AUDIO 답안일 때 필수 (Supabase Storage 경로)' })
+  @ApiPropertyOptional({
+    description:
+      'AUDIO 답안일 때 필수. upload-url 응답의 path를 그대로 전달 (Storage 경로 — 완전한 URL 아님, 조회 응답의 audioFileUrl과 형태가 다름)',
+  })
   @IsOptional()
   @IsString()
   audioFileUrl?: string;

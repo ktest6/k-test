@@ -3,6 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { appConfig } from '../../../../config/configuration';
+import { StoragePublicUrlService } from '../../../../infrastructure/supabase/storage-public-url.service';
 import { ScoreItemInput, ScoringProviderPort } from '../../domain/ports/scoring-provider.port';
 
 const ANSWER_AUDIO_BUCKET = 'answer-audio';
@@ -31,6 +32,7 @@ export class AssessmentScoringAdapter implements ScoringProviderPort {
   constructor(
     private readonly httpService: HttpService,
     @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>,
+    private readonly storagePublicUrlService: StoragePublicUrlService,
   ) {}
 
   async score(input: ScoreItemInput): Promise<Record<string, unknown>> {
@@ -48,7 +50,7 @@ export class AssessmentScoringAdapter implements ScoringProviderPort {
 
     if (input.answerType === 'AUDIO' && input.audioFileUrl) {
       body.audio = {
-        url: this.toPublicAudioUrl(input.audioFileUrl),
+        url: this.storagePublicUrlService.toPublicUrl(ANSWER_AUDIO_BUCKET, input.audioFileUrl),
         ...(input.durationMs != null ? { duration_ms: input.durationMs } : {}),
       };
     }
@@ -64,10 +66,5 @@ export class AssessmentScoringAdapter implements ScoringProviderPort {
     );
 
     return response.data;
-  }
-
-  /** Storage 경로(예: "12/100/50.webm")를 assessment가 바로 내려받을 수 있는 공개 URL로 바꾼다. */
-  private toPublicAudioUrl(path: string): string {
-    return `${this.config.supabase.url}/storage/v1/object/public/${ANSWER_AUDIO_BUCKET}/${path}`;
   }
 }
