@@ -40,11 +40,16 @@ const DOCUMENT_TYPE_INPUT_BY_USER_ID_TYPE: Record<
  * (이때는 결과를 못 받은 것이므로 아래 이미지 삭제도 일어나지 않는다 —
  * 같은 사진으로 재시도 가능해야 한다).
  *
- * 신분증 사진은 대조 결과를 실제로 받는 즉시(성공/실패 무관) Storage에서
+ * 신분증 사진은 대조 결과를 실제로 받는 즉시(일치/불일치 무관) Storage에서
  * 삭제한다 — 그 이후로는 아무도 다시 읽지 않는 가장 민감한 이미지라 최대한
- * 짧게 보관한다. 얼굴 사진은 여기서 지우지 않는다 — 모니터링(부정행위
- * 감지)이 시험 내내 동일인 검사 기준 이미지로 계속 재사용하기 때문에,
- * 시험 세션이 끝나는 시점에 별도로 정리해야 한다(아직 미구현).
+ * 짧게 보관한다.
+ *
+ * 얼굴 사진은 대조에 성공(matched: true)했을 때만 남긴다 — 모니터링(부정행위
+ * 감지)이 시험 내내 getVerifiedFacePath()로 이 사진을 동일인 검사 기준
+ * 이미지로 재사용하는데, 그 조회 자체가 matched=true인 로그만 대상으로 하기
+ * 때문이다. 즉 불일치로 끝난 시도의 얼굴 사진은 그 후로 아무도 읽지 않으므로
+ * 신분증과 함께 정리한다. 성공한 시도의 얼굴 사진은 시험 세션이 끝나는
+ * 시점에 별도로 정리해야 한다(아직 미구현).
  */
 @Injectable()
 export class IdCardVerificationService {
@@ -102,9 +107,12 @@ export class IdCardVerificationService {
     // similarity(0~100)를 identity_logs.confidence(0~1) 스케일에 맞춘다.
     const confidence = result.similarity / 100;
 
-    // 4) 신분증 사진은 대조 결과를 받은 이 시점부터 더 이상 쓰이지 않으므로 바로 정리한다.
-    // 삭제 실패는 본인인증 자체를 실패시킬 이유가 아니라 경고만 남긴다.
-    await this.deleteIdCardImage(client, dto.idCardPath);
+    // 4) 신분증 사진은 결과를 받은 이 시점부터 더 이상 쓰이지 않으므로 항상 정리한다.
+    // 얼굴 사진은 대조에 성공했을 때만 남긴다(모니터링이 재사용) — 불일치로 끝났으면
+    // 그 얼굴 사진도 아무도 다시 안 쓰므로 함께 정리한다. 삭제 실패는 본인인증 자체를
+    // 실패시킬 이유가 아니라 경고만 남긴다.
+    const pathsToDelete = matched ? [dto.idCardPath] : [dto.idCardPath, dto.facePath];
+    await this.deleteImages(client, pathsToDelete);
 
     // 5) 결과 로그 저장
     await client.from('identity_logs').insert({
@@ -179,13 +187,13 @@ export class IdCardVerificationService {
     return { buffer, filename, contentType: data.type || 'image/jpeg' };
   }
 
-  private async deleteIdCardImage(
+  private async deleteImages(
     client: ReturnType<SupabaseService['getAdminClient']>,
-    path: string,
+    paths: string[],
   ): Promise<void> {
-    const { error } = await client.storage.from(IDENTITY_DOCS_BUCKET).remove([path]);
+    const { error } = await client.storage.from(IDENTITY_DOCS_BUCKET).remove(paths);
     if (error) {
-      this.logger.warn(`신분증 이미지 삭제 실패 (path=${path}): ${error.message}`);
+      this.logger.warn(`이미지 삭제 실패 (paths=${paths.join(', ')}): ${error.message}`);
     }
   }
 }

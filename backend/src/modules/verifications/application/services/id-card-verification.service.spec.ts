@@ -182,7 +182,22 @@ describe('IdCardVerificationService.verify', () => {
     });
   });
 
-  it('deletes only the id card image once a result is received, regardless of match outcome', async () => {
+  it('deletes only the id card image when the match succeeds — the face image is reused by monitoring', async () => {
+    const identityProvider = {
+      verify: jest
+        .fn<Promise<VerifyIdentityResult>, [VerifyIdentityInput]>()
+        .mockResolvedValue(buildResult({ verified: true })),
+    };
+    const remove = jest.fn().mockResolvedValue({ data: null, error: null });
+    const { service } = buildService({ identityProvider, client: { remove } });
+
+    await service.verify('9', buildDto());
+
+    expect(remove).toHaveBeenCalledWith(['9/7/id-card.jpg']);
+    expect(remove).not.toHaveBeenCalledWith(expect.arrayContaining(['9/7/face.jpg']));
+  });
+
+  it('deletes both images when the match fails — a mismatched face is never reused', async () => {
     const identityProvider = {
       verify: jest
         .fn<Promise<VerifyIdentityResult>, [VerifyIdentityInput]>()
@@ -193,8 +208,7 @@ describe('IdCardVerificationService.verify', () => {
 
     await service.verify('9', buildDto());
 
-    expect(remove).toHaveBeenCalledWith(['9/7/id-card.jpg']);
-    expect(remove).not.toHaveBeenCalledWith(['9/7/face.jpg']);
+    expect(remove).toHaveBeenCalledWith(['9/7/id-card.jpg', '9/7/face.jpg']);
   });
 
   it('does not attempt to delete the id card image when the provider call fails', async () => {
