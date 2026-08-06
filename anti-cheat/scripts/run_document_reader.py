@@ -30,11 +30,11 @@ from modules.identity_verification.document_reader import (
 
 SUPPORTED_DOCUMENT_TYPES = {
     "passport",
-    "alien_registration",
+    "alien_registration_card",
 }
 
 # 테스트할 신분증 종류와 이미지 경로를 설정한다.
-DOCUMENT_TYPE = "alien_registration"
+DOCUMENT_TYPE = "alien_registration_card"
 IMAGE_PATH = PROJECT_ROOT / "data" / "compare" / "china_card_female.png"
 
 

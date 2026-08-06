@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 # 백엔드에서 전달받는 신분증 종류
 class DocumentType(str, Enum):
     PASSPORT = "passport"
-    ALIEN_REGISTRATION = "alien_registration"
+    ALIEN_REGISTRATION = "alien_registration_card"
 
 
 # 신청 정보와 신분증 정보의 필드별 일치 여부
