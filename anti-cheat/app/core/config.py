@@ -33,6 +33,7 @@ class Settings:
     aws_access_key_id: str | None
     aws_secret_access_key: str | None
     identity_similarity_threshold: float
+    identity_similarity_retrieval_threshold: float
     earphone_confidence_threshold: float
     gaze_eye_yaw_threshold: float
     gaze_eye_pitch_threshold: float
@@ -105,6 +106,31 @@ def get_earphone_confidence_threshold() -> float:
     return threshold
 
 
+def get_similarity_retrieval_threshold() -> float:
+    """실제 얼굴 유사도 조회에 사용할 기준값을 읽고 검증한다."""
+
+    raw_value = os.getenv(
+        "IDENTITY_SIMILARITY_RETRIEVAL_THRESHOLD",
+        "0.0",
+    )
+
+    try:
+        threshold = float(raw_value)
+
+    except ValueError as error:
+        raise RuntimeError(
+            "IDENTITY_SIMILARITY_RETRIEVAL_THRESHOLD는 숫자여야 합니다."
+        ) from error
+
+    if not 0.0 <= threshold <= 100.0:
+        raise RuntimeError(
+            "IDENTITY_SIMILARITY_RETRIEVAL_THRESHOLD는 "
+            "0 이상 100 이하이어야 합니다."
+        )
+
+    return threshold
+
+
 def get_float_env(
     name: str,
     default: str,
@@ -158,6 +184,9 @@ settings = Settings(
     aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
     aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
     identity_similarity_threshold=get_similarity_threshold(),
+    identity_similarity_retrieval_threshold=(
+        get_similarity_retrieval_threshold()
+    ),
     earphone_confidence_threshold=get_earphone_confidence_threshold(),
     gaze_eye_yaw_threshold=get_float_env(
         name="GAZE_EYE_YAW_THRESHOLD",
