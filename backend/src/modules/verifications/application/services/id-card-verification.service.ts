@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   ConflictDomainException,
   ForbiddenDomainException,
@@ -36,10 +36,20 @@ const DOCUMENT_TYPE_INPUT_BY_USER_ID_TYPE: Record<
  * 실제 대조는 FastAPI 서비스(IdentityProviderPort)에 위임한다. scoring/
  * monitoring과 달리 여기서는 외부 서비스 실패를 "이상 없음"으로 눙치지
  * 않는다 — 본인인증은 보안 게이트라, 실패를 성공으로 처리하면 인증을
- * 우회하는 셈이 된다. 통신 실패 시 그대로 에러를 던져 재시도를 유도한다.
+ * 우회하는 셈이 된다. 통신 실패 시 그대로 에러를 던져 재시도를 유도한다
+ * (이때는 결과를 못 받은 것이므로 아래 이미지 삭제도 일어나지 않는다 —
+ * 같은 사진으로 재시도 가능해야 한다).
+ *
+ * 신분증 사진은 대조 결과를 실제로 받는 즉시(성공/실패 무관) Storage에서
+ * 삭제한다 — 그 이후로는 아무도 다시 읽지 않는 가장 민감한 이미지라 최대한
+ * 짧게 보관한다. 얼굴 사진은 여기서 지우지 않는다 — 모니터링(부정행위
+ * 감지)이 시험 내내 동일인 검사 기준 이미지로 계속 재사용하기 때문에,
+ * 시험 세션이 끝나는 시점에 별도로 정리해야 한다(아직 미구현).
  */
 @Injectable()
 export class IdCardVerificationService {
+  private readonly logger = new Logger(IdCardVerificationService.name);
+
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly examAccessService: ExamAccessService,
@@ -92,7 +102,11 @@ export class IdCardVerificationService {
     // similarity(0~100)를 identity_logs.confidence(0~1) 스케일에 맞춘다.
     const confidence = result.similarity / 100;
 
-    // 4) 결과 로그 저장
+    // 4) 신분증 사진은 대조 결과를 받은 이 시점부터 더 이상 쓰이지 않으므로 바로 정리한다.
+    // 삭제 실패는 본인인증 자체를 실패시킬 이유가 아니라 경고만 남긴다.
+    await this.deleteIdCardImage(client, dto.idCardPath);
+
+    // 5) 결과 로그 저장
     await client.from('identity_logs').insert({
       exam_id: Number(dto.examId),
       user_id: Number(userId),
@@ -163,5 +177,15 @@ export class IdCardVerificationService {
     const buffer = Buffer.from(await data.arrayBuffer());
     const filename = path.split('/').pop() ?? 'image.jpg';
     return { buffer, filename, contentType: data.type || 'image/jpeg' };
+  }
+
+  private async deleteIdCardImage(
+    client: ReturnType<SupabaseService['getAdminClient']>,
+    path: string,
+  ): Promise<void> {
+    const { error } = await client.storage.from(IDENTITY_DOCS_BUCKET).remove([path]);
+    if (error) {
+      this.logger.warn(`신분증 이미지 삭제 실패 (path=${path}): ${error.message}`);
+    }
   }
 }
