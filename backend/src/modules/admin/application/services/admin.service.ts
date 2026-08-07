@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import {
   ConflictDomainException,
@@ -18,6 +18,8 @@ export interface RegisterAdminRequest {
 
 @Injectable()
 export class AdminService {
+  private readonly logger = new Logger(AdminService.name);
+
   constructor(@Inject(ADMIN_REPOSITORY) private readonly adminRepository: AdminRepository) {}
 
   async register(input: RegisterAdminRequest): Promise<Admin> {
@@ -37,12 +39,14 @@ export class AdminService {
   async verifyCredentials(email: string, password: string): Promise<Admin> {
     const credentials = await this.adminRepository.findCredentialsByEmail(email);
     if (!credentials) {
+      this.logger.warn(`관리자 로그인 실패 (계정 없음): email=${email}`);
       throw new UnauthorizedDomainException('이메일 또는 비밀번호가 올바르지 않습니다.');
     }
 
     const matches = await bcrypt.compare(password, credentials.passwordHash);
     if (!matches) {
       await this.adminRepository.recordLoginFailure(credentials.admin.id);
+      this.logger.warn(`관리자 로그인 실패 (비밀번호 불일치): email=${email}`);
       throw new UnauthorizedDomainException('이메일 또는 비밀번호가 올바르지 않습니다.');
     }
 
