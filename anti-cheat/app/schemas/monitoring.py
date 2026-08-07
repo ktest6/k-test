@@ -1,0 +1,158 @@
+"""
+monitoring.py
+
+모니터링 API 응답 데이터 구조를 정의한다.
+"""
+
+from datetime import datetime
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
+
+
+FaceEventType = Literal[
+    "FACE_NORMAL",
+    "FACE_OUT_OF_FRAME",
+    "MULTIPLE_FACES",
+]
+
+GazeEventType = Literal[
+    "GAZE_NORMAL",
+    "GAZE_AWAY",
+    "GAZE_UNCERTAIN",
+    "GAZE_NOT_ANALYZED",
+]
+
+GazeDirection = Literal[
+    "CENTER",
+    "LEFT",
+    "RIGHT",
+    "UP",
+    "DOWN",
+    "UP_LEFT",
+    "UP_RIGHT",
+    "DOWN_LEFT",
+    "DOWN_RIGHT",
+    "UNKNOWN",
+]
+
+EventSeverity = Literal[
+    "NORMAL",
+    "LOW",
+    "MEDIUM",
+    "HIGH",
+]
+
+EventDecision = Literal[
+    "NONE",
+    "RECORD_EVENT",
+    "CREATE_CLIP",
+]
+
+
+class IdentityMonitorResult(BaseModel):
+    """중간 동일인 검사 결과."""
+
+    verified: bool
+    similarity: float
+    similarity_threshold: float
+    matched_face_count: int
+    event_type: str
+    message: str
+
+
+class FaceMonitorResponse(BaseModel):
+    """외부 응답용 얼굴 감지 및 인원 판정 결과."""
+
+    face_count: int = Field(ge=0)
+    event_type: FaceEventType
+    message: str
+
+
+class EyeDirectionResponse(BaseModel):
+    """눈 시선 방향 분석 결과."""
+
+    yaw: float | None
+    pitch: float | None
+    confidence: float | None
+
+
+class HeadPoseResponse(BaseModel):
+    """고개 방향 분석 결과."""
+
+    yaw: float | None
+    pitch: float | None
+    roll: float | None
+
+
+class GazeStateResponse(BaseModel):
+    """연속 시선 및 고개 이탈 상태."""
+
+    consecutive_away_count: int = Field(ge=0)
+    consecutive_eye_only_count: int = Field(ge=0)
+    consecutive_head_only_count: int = Field(ge=0)
+    consecutive_eye_and_head_count: int = Field(ge=0)
+    away_duration_ms: int = Field(ge=0)
+    last_direction: GazeDirection | None
+    persistent_gaze_away: bool
+    sequence_continuous: bool
+    elapsed_time_valid: bool
+    state_continuous: bool
+
+
+class GazeMonitorResponse(BaseModel):
+    """시선 및 고개 방향 모니터링 결과."""
+
+    event_type: GazeEventType
+    direction: GazeDirection
+    eye_direction_reliable: bool
+    eye_direction: EyeDirectionResponse
+    head_pose: HeadPoseResponse
+    eye_gaze_away: bool
+    head_pose_away: bool
+    message: str
+    state: GazeStateResponse
+
+
+class EventSummaryResponse(BaseModel):
+    """현재 프레임에서 탐지된 이벤트 요약."""
+
+    event_detected: bool
+    event_count: int = Field(ge=0)
+    severity: EventSeverity
+    decision: EventDecision
+    create_clip: bool
+
+
+class MonitoringEventResponse(BaseModel):
+    """외부 응답용 개별 모니터링 이벤트."""
+
+    event_type: str
+    details: dict[str, Any] = Field(
+        default_factory=dict,
+    )
+
+
+class MonitoringResponse(BaseModel):
+    """모니터링 API의 최종 응답."""
+
+    exam_id: str
+    examinee_id: str
+    request_id: str
+
+    captured_at: datetime
+    elapsed_ms: int = Field(ge=0)
+    capture_sequence: int = Field(ge=1)
+
+    face_monitor: FaceMonitorResponse
+    gaze_monitor: GazeMonitorResponse
+    object_monitor: dict[str, Any] | None = None
+
+    identity_check_requested: bool
+    identity_check_executed: bool
+    identity_monitor: IdentityMonitorResult | None = None
+
+    event_summary: EventSummaryResponse
+    events: list[MonitoringEventResponse] = Field(
+        default_factory=list,
+    )
