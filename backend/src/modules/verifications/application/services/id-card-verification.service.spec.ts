@@ -61,7 +61,9 @@ function buildResult(overrides: Partial<VerifyIdentityResult> = {}): VerifyIdent
   };
 }
 
-function buildClient(overrides: { download?: jest.Mock; insert?: jest.Mock } = {}) {
+function buildClient(
+  overrides: { download?: jest.Mock; insert?: jest.Mock; remove?: jest.Mock } = {},
+) {
   const download =
     overrides.download ??
     jest.fn().mockResolvedValue({
@@ -69,9 +71,10 @@ function buildClient(overrides: { download?: jest.Mock; insert?: jest.Mock } = {
       error: null,
     });
   const insert = overrides.insert ?? jest.fn().mockResolvedValue({ data: null, error: null });
+  const remove = overrides.remove ?? jest.fn().mockResolvedValue({ data: null, error: null });
   return {
     from: jest.fn().mockReturnValue({ insert }),
-    storage: { from: jest.fn().mockReturnValue({ download }) },
+    storage: { from: jest.fn().mockReturnValue({ download, remove }) },
   };
 }
 
@@ -80,7 +83,7 @@ function buildService(
     examAccessService?: Partial<ExamAccessService>;
     userService?: Partial<UserService>;
     identityProvider?: Partial<IdentityProviderPort>;
-    client?: { download?: jest.Mock; insert?: jest.Mock };
+    client?: { download?: jest.Mock; insert?: jest.Mock; remove?: jest.Mock };
   } = {},
 ) {
   const examAccessService = {
@@ -177,6 +180,53 @@ describe('IdCardVerificationService.verify', () => {
       fieldMatches: { last_name: true },
       message: '본인인증 성공',
     });
+  });
+
+  it('deletes only the id card image when the match succeeds — the face image is reused by monitoring', async () => {
+    const identityProvider = {
+      verify: jest
+        .fn<Promise<VerifyIdentityResult>, [VerifyIdentityInput]>()
+        .mockResolvedValue(buildResult({ verified: true })),
+    };
+    const remove = jest.fn().mockResolvedValue({ data: null, error: null });
+    const { service } = buildService({ identityProvider, client: { remove } });
+
+    await service.verify('9', buildDto());
+
+    expect(remove).toHaveBeenCalledWith(['9/7/id-card.jpg']);
+    expect(remove).not.toHaveBeenCalledWith(expect.arrayContaining(['9/7/face.jpg']));
+  });
+
+  it('deletes both images when the match fails — a mismatched face is never reused', async () => {
+    const identityProvider = {
+      verify: jest
+        .fn<Promise<VerifyIdentityResult>, [VerifyIdentityInput]>()
+        .mockResolvedValue(buildResult({ verified: false })),
+    };
+    const remove = jest.fn().mockResolvedValue({ data: null, error: null });
+    const { service } = buildService({ identityProvider, client: { remove } });
+
+    await service.verify('9', buildDto());
+
+    expect(remove).toHaveBeenCalledWith(['9/7/id-card.jpg', '9/7/face.jpg']);
+  });
+
+  it('does not attempt to delete the id card image when the provider call fails', async () => {
+    const identityProvider = {
+      verify: jest.fn().mockRejectedValue(new Error('fastapi unreachable')),
+    };
+    const remove = jest.fn();
+    const { service } = buildService({ identityProvider, client: { remove } });
+
+    await expect(service.verify('9', buildDto())).rejects.toThrow(ConflictDomainException);
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it('does not fail verification when deleting the id card image fails', async () => {
+    const remove = jest.fn().mockResolvedValue({ data: null, error: { message: 'boom' } });
+    const { service } = buildService({ client: { remove } });
+
+    await expect(service.verify('9', buildDto())).resolves.toMatchObject({ matched: true });
   });
 
   it('maps ARC users to the ARC document type input', async () => {
