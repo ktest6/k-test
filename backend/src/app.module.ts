@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigType } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -9,6 +9,7 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformResponseInterceptor } from './common/interceptors/transform-response.interceptor';
+import { RequestLoggingMiddleware } from './common/middleware/request-logging.middleware';
 import { SupabaseModule } from './infrastructure/supabase/supabase.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -60,4 +61,8 @@ import { MonitoringModule } from './modules/monitoring/monitoring.module';
     { provide: APP_INTERCEPTOR, useClass: TransformResponseInterceptor },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestLoggingMiddleware).forRoutes('*');
+  }
+}
