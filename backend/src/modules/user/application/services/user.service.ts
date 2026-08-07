@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import {
   ConflictDomainException,
@@ -31,6 +31,8 @@ export interface RegisterUserRequest {
 
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
   constructor(@Inject(USER_REPOSITORY) private readonly userRepository: UserRepository) {}
 
   existsByEmail(email: string): Promise<boolean> {
@@ -57,12 +59,14 @@ export class UserService {
   async verifyCredentials(email: string, password: string): Promise<User> {
     const credentials = await this.userRepository.findCredentialsByEmail(email);
     if (!credentials) {
+      this.logger.warn(`로그인 실패 (계정 없음): email=${email}`);
       throw new UnauthorizedDomainException('이메일 또는 비밀번호가 올바르지 않습니다.');
     }
 
     const matches = await bcrypt.compare(password, credentials.passwordHash);
     if (!matches) {
       await this.userRepository.recordLoginFailure(credentials.user.id);
+      this.logger.warn(`로그인 실패 (비밀번호 불일치): email=${email}`);
       throw new UnauthorizedDomainException('이메일 또는 비밀번호가 올바르지 않습니다.');
     }
 
