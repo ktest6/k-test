@@ -79,6 +79,14 @@ export class ExamSessionService {
         ? SessionStatus.EXPIRED
         : session.status;
 
+    // 세션이 더 이상 진행중이 아니게 된 시점에 본인인증용 얼굴 이미지를 정리한다.
+    // 채점 완료 여부와는 무관 — 얼굴 사진은 채점이 아니라 시험 중 모니터링의
+    // 동일인 검사에만 쓰였으므로, 세션이 끝나는 순간 더 이상 쓸모가 없다.
+    // 멱등한 정리라 상태 조회가 반복돼도 안전하다.
+    if (status !== SessionStatus.INPROGRESS) {
+      await this.idCardVerificationService.cleanupVerifiedFaceImage(session.examId, userId);
+    }
+
     const remainingSeconds =
       status === SessionStatus.INPROGRESS
         ? Math.max(0, Math.floor((exam.closeAt.getTime() - now.getTime()) / 1000))
