@@ -54,9 +54,12 @@ function buildRepository(overrides: Partial<ExamSessionRepository> = {}) {
   };
 }
 
-function buildIdCardVerificationService(overrides: Partial<{ hasVerifiedExam: jest.Mock }> = {}) {
+function buildIdCardVerificationService(
+  overrides: Partial<{ hasVerifiedExam: jest.Mock; cleanupVerifiedFaceImage: jest.Mock }> = {},
+) {
   return {
     hasVerifiedExam: jest.fn().mockResolvedValue(true),
+    cleanupVerifiedFaceImage: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   } as unknown as IdCardVerificationService;
 }
@@ -270,6 +273,44 @@ describe('ExamSessionService.getStatus', () => {
 
     expect(result.status).toBe(SessionStatus.SUBMITTED);
     expect(result.remainingSeconds).toBe(0);
+  });
+
+  it('cleans up the verified face image once the session is no longer INPROGRESS', async () => {
+    const session = buildSession({ status: SessionStatus.INPROGRESS });
+    const exam = buildExam({ closeAt: new Date('2020-01-01T00:00:00.000Z') });
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
+    const examApplicationService = {} as unknown as ExamApplicationService;
+    const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
+    const cleanupVerifiedFaceImage = jest.fn().mockResolvedValue(undefined);
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService({ cleanupVerifiedFaceImage }),
+    );
+
+    await service.getStatus('6', '1');
+
+    expect(cleanupVerifiedFaceImage).toHaveBeenCalledWith('1', '1');
+  });
+
+  it('does not clean up the verified face image while the session is still INPROGRESS', async () => {
+    const session = buildSession({ status: SessionStatus.INPROGRESS });
+    const exam = buildExam({ closeAt: new Date(Date.now() + 3600_000) });
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
+    const examApplicationService = {} as unknown as ExamApplicationService;
+    const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
+    const cleanupVerifiedFaceImage = jest.fn().mockResolvedValue(undefined);
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService({ cleanupVerifiedFaceImage }),
+    );
+
+    await service.getStatus('1', '1');
+
+    expect(cleanupVerifiedFaceImage).not.toHaveBeenCalled();
   });
 });
 

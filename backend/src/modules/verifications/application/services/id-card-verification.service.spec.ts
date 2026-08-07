@@ -62,7 +62,12 @@ function buildResult(overrides: Partial<VerifyIdentityResult> = {}): VerifyIdent
 }
 
 function buildClient(
-  overrides: { download?: jest.Mock; insert?: jest.Mock; remove?: jest.Mock } = {},
+  overrides: {
+    download?: jest.Mock;
+    insert?: jest.Mock;
+    remove?: jest.Mock;
+    maybeSingle?: jest.Mock;
+  } = {},
 ) {
   const download =
     overrides.download ??
@@ -72,8 +77,30 @@ function buildClient(
     });
   const insert = overrides.insert ?? jest.fn().mockResolvedValue({ data: null, error: null });
   const remove = overrides.remove ?? jest.fn().mockResolvedValue({ data: null, error: null });
+  const maybeSingle = overrides.maybeSingle ?? jest.fn().mockResolvedValue({ data: null });
+
+  const queryBuilder: {
+    insert: jest.Mock;
+    select: jest.Mock;
+    eq: jest.Mock;
+    order: jest.Mock;
+    limit: jest.Mock;
+    maybeSingle: jest.Mock;
+  } = {
+    insert,
+    select: jest.fn(),
+    eq: jest.fn(),
+    order: jest.fn(),
+    limit: jest.fn(),
+    maybeSingle,
+  };
+  queryBuilder.select.mockReturnValue(queryBuilder);
+  queryBuilder.eq.mockReturnValue(queryBuilder);
+  queryBuilder.order.mockReturnValue(queryBuilder);
+  queryBuilder.limit.mockReturnValue(queryBuilder);
+
   return {
-    from: jest.fn().mockReturnValue({ insert }),
+    from: jest.fn().mockReturnValue(queryBuilder),
     storage: { from: jest.fn().mockReturnValue({ download, remove }) },
   };
 }
@@ -83,7 +110,12 @@ function buildService(
     examAccessService?: Partial<ExamAccessService>;
     userService?: Partial<UserService>;
     identityProvider?: Partial<IdentityProviderPort>;
-    client?: { download?: jest.Mock; insert?: jest.Mock; remove?: jest.Mock };
+    client?: {
+      download?: jest.Mock;
+      insert?: jest.Mock;
+      remove?: jest.Mock;
+      maybeSingle?: jest.Mock;
+    };
   } = {},
 ) {
   const examAccessService = {
@@ -263,5 +295,35 @@ describe('IdCardVerificationService.verify', () => {
     const { service } = buildService({ client: { download } });
 
     await expect(service.verify('9', buildDto())).rejects.toThrow(NotFoundDomainException);
+  });
+});
+
+describe('IdCardVerificationService.cleanupVerifiedFaceImage', () => {
+  it('deletes the verified face image when one exists', async () => {
+    const maybeSingle = jest.fn().mockResolvedValue({ data: { face_path: '9/7/face.jpg' } });
+    const remove = jest.fn().mockResolvedValue({ data: null, error: null });
+    const { service } = buildService({ client: { maybeSingle, remove } });
+
+    await service.cleanupVerifiedFaceImage('7', '9');
+
+    expect(remove).toHaveBeenCalledWith(['9/7/face.jpg']);
+  });
+
+  it('does nothing when there is no verified face image on record', async () => {
+    const maybeSingle = jest.fn().mockResolvedValue({ data: null });
+    const remove = jest.fn();
+    const { service } = buildService({ client: { maybeSingle, remove } });
+
+    await service.cleanupVerifiedFaceImage('7', '9');
+
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when deleting the face image fails', async () => {
+    const maybeSingle = jest.fn().mockResolvedValue({ data: { face_path: '9/7/face.jpg' } });
+    const remove = jest.fn().mockResolvedValue({ data: null, error: { message: 'boom' } });
+    const { service } = buildService({ client: { maybeSingle, remove } });
+
+    await expect(service.cleanupVerifiedFaceImage('7', '9')).resolves.toBeUndefined();
   });
 });

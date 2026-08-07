@@ -48,8 +48,10 @@ const DOCUMENT_TYPE_INPUT_BY_USER_ID_TYPE: Record<
  * 감지)이 시험 내내 getVerifiedFacePath()로 이 사진을 동일인 검사 기준
  * 이미지로 재사용하는데, 그 조회 자체가 matched=true인 로그만 대상으로 하기
  * 때문이다. 즉 불일치로 끝난 시도의 얼굴 사진은 그 후로 아무도 읽지 않으므로
- * 신분증과 함께 정리한다. 성공한 시도의 얼굴 사진은 시험 세션이 끝나는
- * 시점에 별도로 정리해야 한다(아직 미구현).
+ * 신분증과 함께 정리한다. 성공한 시도의 얼굴 사진은 세션이 더 이상
+ * INPROGRESS가 아니게 되는 시점에 cleanupVerifiedFaceImage()로 정리한다
+ * (ExamSessionService.getStatus()에서 호출) — 채점 완료 여부와는 무관하다,
+ * 얼굴 사진은 채점에 전혀 쓰이지 않기 때문이다.
  */
 @Injectable()
 export class IdCardVerificationService {
@@ -171,6 +173,22 @@ export class IdCardVerificationService {
       .maybeSingle<{ face_path: string }>();
 
     return data?.face_path ?? null;
+  }
+
+  /**
+   * 시험 세션이 끝난(더 이상 INPROGRESS가 아닌) 뒤 더 이상 필요 없는 동일인
+   * 검사 기준 얼굴 이미지를 정리한다. 이미 정리됐거나 애초에 검증 로그가
+   * 없으면 조용히 아무 일도 하지 않는다(멱등) — 세션 상태를 조회할 때마다
+   * 반복 호출돼도 안전하다.
+   */
+  async cleanupVerifiedFaceImage(examId: string, userId: string): Promise<void> {
+    const facePath = await this.getVerifiedFacePath(examId, userId);
+    if (!facePath) {
+      return;
+    }
+
+    const client = this.supabaseService.getAdminClient();
+    await this.deleteImages(client, [facePath]);
   }
 
   private async downloadImage(
