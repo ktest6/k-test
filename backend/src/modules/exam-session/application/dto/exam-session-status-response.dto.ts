@@ -18,9 +18,11 @@ export class ExamSessionStatusResponseDto {
   @ApiProperty({
     type: String,
     nullable: true,
-    description: '마지막으로 진입한 문항 ID — 중단 후 재개 시 이 문항부터 다시 보여주면 된다.',
+    description:
+      '아직 답안이 없는 첫 문항 ID — 매 조회 시 답안 저장 현황으로 다시 계산한다(저장된 값 아님). ' +
+      '중단 후 재개 시 이 문항부터 보여주면 된다. 모든 문항에 답했거나 진행중이 아니면 null.',
   })
-  currentQuestionId: string | null;
+  nextQuestionId: string | null;
 
   @ApiProperty({ description: '응시 기간(회차 close_at) 기준 남은 초. 진행중이 아니면 0.' })
   remainingSeconds: number;

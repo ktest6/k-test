@@ -4,6 +4,7 @@ import {
   ForbiddenDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import { AnswerService } from '../../../answer/application/services/answer.service';
 import { ExamApplicationService } from '../../../exam/application/services/exam-application.service';
 import { ExamService } from '../../../exam/application/services/exam.service';
 import { ExamStatus } from '../../../exam/domain/enums/exam-status.enum';
@@ -15,12 +16,15 @@ import {
   EXAM_SESSION_REPOSITORY,
   ExamSessionRepository,
 } from '../../domain/exam-session.repository.interface';
+import { ExamSessionQuestionService } from './exam-session-question.service';
 
 export interface ExamSessionStatusResult {
   session: ExamSession;
   /** 응시 기간이 지났는데 아직 INPROGRESS로 남아있으면 EXPIRED로 계산해서 보여준다(저장은 안 함). */
   status: SessionStatus;
   remainingSeconds: number;
+  /** 아직 답안이 없는 첫 문항 — 매번 답안 저장 현황으로 계산하며 별도로 저장하지 않는다. 모두 답했거나 진행중이 아니면 null. */
+  nextQuestionId: string | null;
 }
 
 @Injectable()
@@ -30,6 +34,8 @@ export class ExamSessionService {
     private readonly examService: ExamService,
     private readonly examApplicationService: ExamApplicationService,
     private readonly idCardVerificationService: IdCardVerificationService,
+    private readonly examSessionQuestionService: ExamSessionQuestionService,
+    private readonly answerService: AnswerService,
   ) {}
 
   async start(examId: string, userId: string): Promise<ExamSession> {
@@ -92,7 +98,24 @@ export class ExamSessionService {
         ? Math.max(0, Math.floor((exam.closeAt.getTime() - now.getTime()) / 1000))
         : 0;
 
-    return { session, status, remainingSeconds };
+    const nextQuestionId =
+      status === SessionStatus.INPROGRESS
+        ? await this.findNextQuestionId(examSessionId, userId)
+        : null;
+
+    return { session, status, remainingSeconds, nextQuestionId };
+  }
+
+  /** 세션에 배정된 문항 순서대로, 아직 답안이 없는 첫 문항을 찾는다. */
+  private async findNextQuestionId(examSessionId: string, userId: string): Promise<string | null> {
+    const [questions, answeredQuestionIds] = await Promise.all([
+      this.examSessionQuestionService.listQuestions(examSessionId, userId),
+      this.answerService.listAnsweredQuestionIds(examSessionId),
+    ]);
+
+    const answered = new Set(answeredQuestionIds);
+    const next = questions.find((question) => !answered.has(question.id));
+    return next?.id ?? null;
   }
 
   /** 답안 저장처럼 "지금 실제로 응시 중"이어야만 허용되는 동작들의 공통 게이트. */

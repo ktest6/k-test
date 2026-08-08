@@ -125,11 +125,12 @@ describe('ExamSessionController.start', () => {
 
 describe('ExamSessionController.getStatus', () => {
   it('delegates to ExamSessionService.getStatus and maps the response', async () => {
-    const session = buildSession({ currentQuestionId: '5' });
+    const session = buildSession();
     const getStatus = jest.fn().mockResolvedValue({
       session,
       status: SessionStatus.INPROGRESS,
       remainingSeconds: 120,
+      nextQuestionId: '5',
     });
     const controller = buildController({ getStatus });
 
@@ -140,7 +141,7 @@ describe('ExamSessionController.getStatus', () => {
       id: '1',
       examId: '1',
       status: SessionStatus.INPROGRESS,
-      currentQuestionId: '5',
+      nextQuestionId: '5',
       remainingSeconds: 120,
     });
   });
