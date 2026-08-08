@@ -45,4 +45,8 @@ export class AnswerService {
   findBySessionAndQuestion(examSessionId: string, questionId: string): Promise<Answer | null> {
     return this.answerRepository.findBySessionAndQuestion(examSessionId, questionId);
   }
+
+  listAnsweredQuestionIds(examSessionId: string): Promise<string[]> {
+    return this.answerRepository.listAnsweredQuestionIds(examSessionId);
+  }
 }

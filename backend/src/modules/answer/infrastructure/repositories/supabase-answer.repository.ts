@@ -75,4 +75,14 @@ export class SupabaseAnswerRepository implements AnswerRepository {
       .maybeSingle<AnswerRow>();
     return data ? toDomain(data) : null;
   }
+
+  async listAnsweredQuestionIds(examSessionId: string): Promise<string[]> {
+    const client = this.supabaseService.getAdminClient();
+    const { data } = await client
+      .from(TABLE)
+      .select('question_id')
+      .eq('exam_session_id', Number(examSessionId))
+      .is('deleted_at', null);
+    return (data ?? []).map((row: { question_id: number }) => String(row.question_id));
+  }
 }

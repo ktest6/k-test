@@ -61,7 +61,7 @@ export class ExamSessionController {
   @ApiOperation({
     summary: '세션 상태 조회',
     description:
-      '진행중/제출됨/만료 상태와 마지막 진입 문항, 남은 시간을 반환한다. 재개 화면 진입 시 이 API로 어디서부터 다시 보여줄지 판단한다.',
+      '진행중/제출됨/만료 상태와 다음에 풀어야 할 문항, 남은 시간을 반환한다. 재개 화면 진입 시 이 API로 어디서부터 다시 보여줄지 판단한다.',
   })
   @ApiStandardResponse(ExamSessionStatusResponseDto, { message: '세션 상태 조회 성공' })
   async getStatus(
@@ -73,7 +73,7 @@ export class ExamSessionController {
       id: result.session.id,
       examId: result.session.examId,
       status: result.status,
-      currentQuestionId: result.session.currentQuestionId,
+      nextQuestionId: result.nextQuestionId,
       remainingSeconds: result.remainingSeconds,
     };
   }
