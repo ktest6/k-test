@@ -323,7 +323,7 @@ def evaluate_object_rules(
 
     applied_rules: list[dict[str, Any]] = []
 
-    if object_result is None:
+    if not isinstance(object_result, dict):
         return applied_rules
 
     detected_objects = object_result.get(
@@ -335,7 +335,7 @@ def evaluate_object_rules(
         label = detected_object.get("label")
         confidence = detected_object.get("confidence", 0.0)
 
-        if label == "Cell Phone":
+        if label == "Mobile Phone":
             applied_rules.append(
                 create_rule_result(
                     rule_id="RULE_PHONE_DETECTED",
@@ -350,13 +350,13 @@ def evaluate_object_rules(
                 )
             )
 
-        elif label == "Earphones":
+        elif label in {"Earbuds", "Headphones"}:
             applied_rules.append(
                 create_rule_result(
                     rule_id="RULE_EARPHONE_DETECTED",
                     event_type="EARPHONE_DETECTED",
-                    severity=SEVERITY_MEDIUM,
-                    decision=DECISION_RECORD_EVENT,
+                    severity=SEVERITY_HIGH,
+                    decision=DECISION_CREATE_CLIP,
                     message="시험 화면에서 이어폰이 탐지되었습니다.",
                     details={
                         "label": label,
@@ -368,7 +368,7 @@ def evaluate_object_rules(
     return applied_rules
 
 
-# 여러 탐지 결과가 함께 발생한 경우 평가
+# 여러 탐지 결과가 함께 발생한 경우 평가 -> 룰 엔진 고도화
 def evaluate_combination_rules(
     monitoring_results: dict[str, Any],
 ) -> list[dict[str, Any]]:

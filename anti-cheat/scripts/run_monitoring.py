@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 
 
 # 프로젝트 루트 경로
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[1] # anti-cheat 폴더
 
 # 프로젝트 모듈 import를 위한 경로 추가
 sys.path.append(str(PROJECT_ROOT))
@@ -35,9 +35,9 @@ from modules.common.exceptions import ProctoringError
 
 
 # 테스트 환경 설정
-EXAM_ID = "exam_002"
-EXAMINEE_ID = "examinee_002"
-REQUEST_ID = "request_monitoring_002"
+EXAM_ID = "exam_003"
+EXAMINEE_ID = "examinee_003"
+REQUEST_ID = "request_monitoring_object_003"
 
 # 프레임 간 시험 경과 시간(ms)
 FRAME_INTERVAL_MS = 5000
@@ -45,19 +45,23 @@ FRAME_INTERVAL_MS = 5000
 TEST_IMAGE_DIRECTORY = "cheat_vid_5_img"
 
 # 현재 프레임 테스트 이미지 폴더
-CURRENT_IMAGE_DIRECTORY = (
-    PROJECT_ROOT / "data" / "gaze" / TEST_IMAGE_DIRECTORY
+# CURRENT_IMAGE_DIRECTORY = (
+#     PROJECT_ROOT / "data" / "gaze" / TEST_IMAGE_DIRECTORY
+# )
+CURRENT_IMAGE_DIRECTORY = Path(
+    "/Users/apple/dio_folder/python/dataset/phone_test_vid_5_img"
 )
 
 REFERENCE_IMAGE = "target_true.jpg"
-
-# 동일인 검사 실행 여부
-RUN_IDENTITY_CHECK = False
 
 # 본인 인증 시 저장한 기준 이미지
 REFERENCE_IMAGE_PATH = (
     PROJECT_ROOT / "data" / "compare" / REFERENCE_IMAGE
 )
+
+# 동일인 검사 실행 여부
+RUN_IDENTITY_CHECK = False
+
 
 # 시험 로그 저장 폴더
 EXAM_LOG_DIR = (
