@@ -12,6 +12,7 @@ script 디렉토리의 run 파일들은 로컬 환경에서 이미지 파일을 
 ---
 # 1. 구조
 ```
+```text
 anti-cheat/
 │
 ├── app/
@@ -36,11 +37,12 @@ anti-cheat/
 │   │   │   └── 이어폰 탐지 요청 및 응답 구조 정의
 │   │   │
 │   │   └── monitoring.py
-│   │       └── 얼굴·시선·동일인·이벤트 모니터링 응답 구조 정의
+│   │       └── 얼굴·시선·동일인·객체·이벤트 모니터링 응답 구조 정의
 │   │
 │   └── core/
 │       └── config.py
-│           └── 얼굴 유사도, 이어폰, 시선·고개 방향 및 이벤트 Threshold 설정
+│           └── 얼굴 유사도, 이어폰, 휴대폰, 시선·고개 방향 및
+│               객체 탐지 Threshold 설정
 │
 ├── modules/
 │   ├── aws_rekognition/
@@ -56,13 +58,22 @@ anti-cheat/
 │   │
 │   ├── earphone_detection/
 │   │   ├── detector.py
-│   │   │   └── AWS Rekognition을 이용해 이미지에서 이어폰 후보 탐지
+│   │   │   └── AWS Rekognition을 이용해 귀 이미지에서 이어폰 후보 탐지
 │   │   │
 │   │   ├── analyzer.py
 │   │   │   └── 탐지 결과를 분석하여 이어폰 착용 여부 판단
 │   │   │
 │   │   └── service.py
 │   │       └── 귀 이미지 검증부터 최종 응답 생성까지 전체 흐름 관리
+│   │
+│   ├── object_detection/
+│   │   ├── detector.py
+│   │   │   └── DetectLabels를 이용해 시험 중 프레임에서
+│   │   │       Mobile Phone·Earbuds·Headphones 후보 탐지
+│   │   │
+│   │   └── analyzer.py
+│   │       └── 휴대폰 Confidence 및 이어폰 Confidence·Head Pose 조건을
+│   │           적용하여 시험 중 금지 객체 탐지 결과 생성
 │   │
 │   ├── cheating_detection/
 │   │   ├── face_detection.py
@@ -81,7 +92,7 @@ anti-cheat/
 │   │   │   └── 시험 중 기준 얼굴과 현재 얼굴 비교
 │   │   │
 │   │   ├── rule_engine.py
-│   │   │   └── 얼굴·시선·고개·동일인 탐지 결과 평가 및
+│   │   │   └── 얼굴·시선·고개·동일인·객체 탐지 결과 평가 및
 │   │   │       Severity·Decision 결정
 │   │   │
 │   │   ├── event_engine.py
@@ -89,11 +100,13 @@ anti-cheat/
 │   │   │
 │   │   └── service.py
 │   │       └── 시험 중 프레임 분석 전체 흐름 관리
-│   │           DetectFaces 결과를 얼굴 및 시선 분석에서 재사용
+│   │           DetectFaces 결과를 얼굴 및 시선 분석에서 재사용하고
+│   │           DetectLabels 결과를 시험 중 객체 탐지에 활용
 │   │
 │   └── common/
 │       ├── exceptions.py
-│       │   └── 본인 인증, 모니터링, 이어폰 탐지 및 시선 상태 공통 예외 정의
+│       │   └── 본인 인증, 모니터링, 이어폰 탐지, 시선 상태 및
+│       │       AWS Rekognition 공통 예외 정의
 │       │
 │       └── image_validation.py
 │           └── 전달받은 이미지 bytes 공통 검증
@@ -109,19 +122,18 @@ anti-cheat/
 │   │   └── 로컬 이미지 기반 시선·고개 방향 및 연속 상태 단독 테스트
 │   │
 │   └── run_monitoring.py
-│       └── 이미지 폴더 기반 전체 모니터링 통합 테스트 및 JSON 결과 저장
+│       └── 이미지 폴더 기반 얼굴·시선·고개·객체 탐지
+│           전체 모니터링 통합 테스트 및 JSON 결과 저장
 │
-├── data/
-│   ├── gaze/
-│   │   └── 시선 추적 및 모니터링 테스트 이미지
-│   │
-│   └── logs/
-│       └── 시험별 본인 인증 및 로컬 통합 테스트 JSON 저장
 │
 ├── requirements.txt
 ├── .env.example
+│   └── AWS 설정 및 얼굴·이어폰·휴대폰·시선·고개 방향 Threshold 예시
+│
 ├── .gitignore
 └── README.md
+```
+
 ```
 
 ---
@@ -130,37 +142,43 @@ anti-cheat/
 
 ## 시험 시작 전 본인 인증
 
-- 신분증 또는 수험표 이미지 입력
-- 시험 시작 전 웹캠 캡처 이미지 입력
-- AWS Rekognition CompareFaces 호출
-- 두 이미지의 얼굴 유사도 비교
-- 설정된 Threshold를 기준으로 본인 여부 판단
-- 본인 인증 결과 반환 및 JSON 로그 저장
-- 신분증과 사전 입력 정보 비교 → 논의 필요
+* 신분증 또는 수험표 이미지 입력
+* 시험 시작 전 웹캠 캡처 이미지 입력
+* AWS Rekognition CompareFaces 호출
+* 두 이미지의 얼굴 유사도 비교
+* 설정된 Threshold를 기준으로 본인 여부 판단
+* 본인 인증 결과 반환 및 JSON 로그 저장
+* 신분증과 사전 입력 정보 비교 → 논의 필요
 
 ## 시험 시작 전 이어폰 탐지
 
-- 응시자의 왼쪽 귀 이미지 입력
-- 응시자의 오른쪽 귀 이미지 입력
-- 입력 이미지 형식 및 크기 검증
-- AWS Rekognition DetectLabels 호출
-- Earbuds, Headphones 등 이어폰 관련 Label 분석
-- 설정된 Threshold를 기준으로 이어폰 탐지 여부 판단
-- 왼쪽 귀와 오른쪽 귀 검사 결과 반환
-- 한쪽이라도 이어폰이 탐지되면 시험 시작 제한
-- 탐지 결과와 재촬영 필요 여부 반환
+* 응시자의 왼쪽 귀 이미지 입력
+* 응시자의 오른쪽 귀 이미지 입력
+* 입력 이미지 형식 및 크기 검증
+* AWS Rekognition DetectLabels 호출
+* Earbuds, Headphones 등 이어폰 관련 Label 분석
+* 설정된 Threshold를 기준으로 이어폰 탐지 여부 판단
+* 왼쪽 귀와 오른쪽 귀 검사 결과 반환
+* 한쪽이라도 이어폰이 탐지되면 시험 시작 제한
+* 탐지 결과와 재촬영 필요 여부 반환
 
 ## 시험 중 모니터링
 
-- 시험 중 프레임 이미지 수신
-- 얼굴 검출
-- 얼굴 화면 이탈 감지
-- 다중 인원 감지
-- 기준 얼굴과 현재 얼굴 비교
-- 위험도와 Decision 결정
-- 이벤트 메타데이터 생성
-- 이벤트 JSON 로그 저장
-- 휴대폰 등 추가 객체 탐지 → 개발 전
+* 시험 중 프레임 이미지 수신
+* AWS Rekognition DetectFaces를 이용한 얼굴 검출
+* 얼굴 화면 이탈 감지
+* 다중 인원 감지
+* Eye Direction과 Head Pose 기반 시선 및 고개 방향 분석
+* 시험·응시자별 연속 시선 및 고개 이탈 상태 관리
+* 필요한 시점에 기준 얼굴과 현재 얼굴을 비교하여 동일인 여부 확인
+* AWS Rekognition DetectLabels를 이용한 시험 중 객체 탐지
+* Mobile Phone Label과 설정된 Threshold를 기준으로 휴대폰 탐지
+* Head Pose 조건을 만족하는 경우 Earbuds, Headphones Label을 추가 분석하여 시험 중 이어폰 탐지
+* 얼굴·시선·고개·동일인·객체 탐지 결과를 Rule Engine에서 평가
+* 위험도 Severity 및 Decision 결정
+* Event Engine을 이용한 event_summary 및 events 응답 생성
+* 모니터링 결과 JSON 로그 저장
+
 
 ---
 
