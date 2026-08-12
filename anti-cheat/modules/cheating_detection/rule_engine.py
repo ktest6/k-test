@@ -407,7 +407,7 @@ def evaluate_combination_rules(
 
     if (
         head_event_type == "HEAD_DOWN"
-        and "Cell Phone" in detected_labels
+        and "Mobile Phone" in detected_labels
     ):
         applied_rules.append(
             create_rule_result(
