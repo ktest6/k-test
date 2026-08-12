@@ -34,3 +34,10 @@ class RekognitionAPIError(ProctoringError):
 
 class InvalidImageError(ProctoringError):
     """입력 이미지가 유효하지 않을 때 발생하는 예외."""
+
+class GazeStateError(MonitoringError):
+    """시선 상태 관리 중 발생하는 예외."""
+
+
+class GazeCalibrationError(MonitoringError):
+    """시선 기준점 보정 중 발생하는 예외."""

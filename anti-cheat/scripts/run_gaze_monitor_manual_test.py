@@ -2,6 +2,7 @@
 run_gaze_monitor.py
 
 로컬 얼굴 이미지로 시선 탐지와 연속 이탈 상태를 확인한다.
+수동으로 시선 기준점 보정(calibration) 결과를 입력한다.
 """
 
 import argparse
@@ -15,6 +16,7 @@ from typing import Any, Sequence
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
+
 from app.core.config import settings
 from modules.cheating_detection.face_detection import detect_faces
 from modules.cheating_detection.face_monitor import analyze_face_monitor
@@ -27,16 +29,31 @@ SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
 
 # 분석할 이미지 파일 또는 이미지 디렉터리 경로를 입력한다.
 INPUT_IMAGE_PATHS = [
-    PROJECT_ROOT / "data" / "gaze" / "gaze_test_3_img",
+    PROJECT_ROOT / "data" / "gaze" / "gaze_manual_test_2_img",
 ]
 
+# 로컬 Calibration 테스트 결과
+TEST_GAZE_CALIBRATION = {
+    "eye_yaw_center": -2.1937092542648315,
+    "eye_pitch_center": -20.79940414428711,
+    "sample_count": 6,
+}
 
-def natural_sort_key(path: Path) -> tuple[tuple[int, str | int], ...]:
+
+def natural_sort_key(
+    path: Path,
+) -> tuple[tuple[int, str | int], ...]:
     """파일명에 포함된 숫자를 수치 순서로 정렬할 키를 만든다."""
 
-    parts = re.split(r"(\d+)", path.name.lower())
+    parts = re.split(
+        r"(\d+)",
+        path.name.lower(),
+    )
+
     return tuple(
-        (1, int(part)) if part.isdigit() else (0, part)
+        (1, int(part))
+        if part.isdigit()
+        else (0, part)
         for part in parts
     )
 
@@ -50,6 +67,7 @@ def parse_arguments() -> argparse.Namespace:
             "시선 탐지 결과를 출력합니다."
         )
     )
+
     parser.add_argument(
         "image_paths",
         nargs="*",
@@ -59,44 +77,69 @@ def parse_arguments() -> argparse.Namespace:
             "생략하면 INPUT_IMAGE_PATHS를 사용합니다."
         ),
     )
-    parser.add_argument("--exam-id", default="gaze_test_exam")
-    parser.add_argument("--examinee-id", default="gaze_test_examinee")
+
+    parser.add_argument(
+        "--exam-id",
+        default="gaze_test_exam",
+    )
+
+    parser.add_argument(
+        "--examinee-id",
+        default="gaze_test_examinee",
+    )
+
     parser.add_argument(
         "--frame-interval-ms",
         type=int,
         default=1000,
         help="이미지 사이의 시험 경과 시간 간격(ms)",
     )
+
     return parser.parse_args()
 
 
-def collect_image_paths(input_paths: Sequence[Path]) -> list[Path]:
+def collect_image_paths(
+    input_paths: Sequence[Path],
+) -> list[Path]:
     """입력 파일과 디렉터리에서 분석할 이미지 목록을 만든다."""
 
     image_paths: list[Path] = []
 
     for input_path in input_paths:
         if not input_path.exists():
-            raise FileNotFoundError(f"입력 경로가 없습니다: {input_path}")
+            raise FileNotFoundError(
+                f"입력 경로가 없습니다: {input_path}"
+            )
 
         if input_path.is_file():
-            candidates = [input_path]
+            candidates = [
+                input_path,
+            ]
+
         elif input_path.is_dir():
             candidates = sorted(
-                (path for path in input_path.iterdir() if path.is_file()),
+                (
+                    path
+                    for path in input_path.iterdir()
+                    if path.is_file()
+                ),
                 key=natural_sort_key,
             )
+
         else:
             candidates = []
 
         image_paths.extend(
             path
             for path in candidates
-            if path.suffix.lower() in SUPPORTED_IMAGE_SUFFIXES
+            if path.suffix.lower()
+            in SUPPORTED_IMAGE_SUFFIXES
         )
 
     if not image_paths:
-        raise ValueError("분석할 JPG, JPEG 또는 PNG 이미지가 없습니다.")
+        raise ValueError(
+            "분석할 JPG, JPEG 또는 PNG 이미지가 없습니다."
+        )
 
     return image_paths
 
@@ -114,17 +157,34 @@ def analyze_image(
     image_bytes = image_path.read_bytes()
 
     # 프레임당 DetectFaces는 한 번만 호출한다.
-    detection_response = detect_faces(image_bytes=image_bytes)
-    face_monitor_result = analyze_face_monitor(detection_response)
+    detection_response = detect_faces(
+        image_bytes=image_bytes,
+    )
+
+    face_monitor_result = analyze_face_monitor(
+        detection_response,
+    )
 
     gaze_monitor_result = analyze_gaze_monitor(
         face_monitor_result=face_monitor_result,
-        eye_yaw_threshold=settings.gaze_eye_yaw_threshold,
-        eye_pitch_threshold=settings.gaze_eye_pitch_threshold,
-        head_yaw_threshold=settings.gaze_head_yaw_threshold,
-        head_pitch_threshold=settings.gaze_head_pitch_threshold,
-        minimum_eye_confidence=settings.gaze_minimum_eye_confidence,
+        eye_yaw_threshold=(
+            settings.gaze_eye_yaw_threshold
+        ),
+        eye_pitch_threshold=(
+            settings.gaze_eye_pitch_threshold
+        ),
+        head_yaw_threshold=(
+            settings.gaze_head_yaw_threshold
+        ),
+        head_pitch_threshold=(
+            settings.gaze_head_pitch_threshold
+        ),
+        minimum_eye_confidence=(
+            settings.gaze_minimum_eye_confidence
+        ),
+        gaze_calibration=TEST_GAZE_CALIBRATION,
     )
+
     gaze_state_result = update_gaze_state(
         gaze_monitor_result=gaze_monitor_result,
         elapsed_ms=elapsed_ms,
@@ -140,8 +200,12 @@ def analyze_image(
         "capture_sequence": capture_sequence,
         "elapsed_ms": elapsed_ms,
         "face_monitor": {
-            "face_count": face_monitor_result["face_count"],
-            "event_type": face_monitor_result["event_type"],
+            "face_count": (
+                face_monitor_result["face_count"]
+            ),
+            "event_type": (
+                face_monitor_result["event_type"]
+            ),
         },
         "gaze_monitor": gaze_monitor_result,
         "gaze_state": gaze_state_result,
@@ -154,25 +218,50 @@ def main() -> int:
     arguments = parse_arguments()
 
     if arguments.frame_interval_ms < 1:
-        print("[입력 오류] --frame-interval-ms는 1 이상이어야 합니다.")
+        print(
+            "[입력 오류] "
+            "--frame-interval-ms는 1 이상이어야 합니다."
+        )
         return 2
 
     try:
-        input_paths = arguments.image_paths or INPUT_IMAGE_PATHS
-        image_paths = collect_image_paths(input_paths)
+        input_paths = (
+            arguments.image_paths
+            or INPUT_IMAGE_PATHS
+        )
+
+        image_paths = collect_image_paths(
+            input_paths,
+        )
+
         previous_state = None
 
         print(
             json.dumps(
                 {
                     "exam_id": arguments.exam_id,
-                    "examinee_id": arguments.examinee_id,
-                    "image_count": len(image_paths),
+                    "examinee_id": (
+                        arguments.examinee_id
+                    ),
+                    "image_count": len(
+                        image_paths
+                    ),
+                    "gaze_calibration": (
+                        TEST_GAZE_CALIBRATION
+                    ),
                     "thresholds": {
-                        "eye_yaw": settings.gaze_eye_yaw_threshold,
-                        "eye_pitch": settings.gaze_eye_pitch_threshold,
-                        "head_yaw": settings.gaze_head_yaw_threshold,
-                        "head_pitch": settings.gaze_head_pitch_threshold,
+                        "eye_yaw": (
+                            settings.gaze_eye_yaw_threshold
+                        ),
+                        "eye_pitch": (
+                            settings.gaze_eye_pitch_threshold
+                        ),
+                        "head_yaw": (
+                            settings.gaze_head_yaw_threshold
+                        ),
+                        "head_pitch": (
+                            settings.gaze_head_pitch_threshold
+                        ),
                         "minimum_eye_confidence": (
                             settings.gaze_minimum_eye_confidence
                         ),
@@ -196,18 +285,36 @@ def main() -> int:
                 examinee_id=arguments.examinee_id,
                 capture_sequence=capture_sequence,
                 elapsed_ms=(
-                    (capture_sequence - 1) * arguments.frame_interval_ms
+                    (capture_sequence - 1)
+                    * arguments.frame_interval_ms
                 ),
                 previous_state=previous_state,
             )
-            previous_state = result["gaze_state"]
-            print(json.dumps(result, ensure_ascii=False, indent=2))
 
-    except (FileNotFoundError, OSError, ValueError) as error:
-        print(f"[입력 오류] {error}")
+            previous_state = result["gaze_state"]
+
+            print(
+                json.dumps(
+                    result,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+
+    except (
+        FileNotFoundError,
+        OSError,
+        ValueError,
+    ) as error:
+        print(
+            f"[입력 오류] {error}"
+        )
         return 2
+
     except ProctoringError as error:
-        print(f"[시선 탐지 오류] {error}")
+        print(
+            f"[시선 탐지 오류] {error}"
+        )
         return 1
 
     return 0

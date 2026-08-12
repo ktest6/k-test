@@ -12,6 +12,7 @@ gaze_monitor.py
 ※ 연속 시선 이탈 횟수 및 지속 시간 판단은 별도 상태 관리 모듈에서 수행한다.
 """
 
+from math import isfinite
 from typing import Any
 
 
@@ -141,10 +142,10 @@ def determine_gaze_direction(
         horizontal_direction = DIRECTION_RIGHT
 
     if eye_pitch <= -eye_pitch_threshold:
-        vertical_direction = DIRECTION_UP
+        vertical_direction = DIRECTION_DOWN
 
     elif eye_pitch >= eye_pitch_threshold:
-        vertical_direction = DIRECTION_DOWN
+        vertical_direction = DIRECTION_UP
 
     if (
         horizontal_direction == DIRECTION_CENTER
@@ -208,6 +209,53 @@ def is_head_pose_away(
     )
 
 
+def is_valid_gaze_calibration(
+    gaze_calibration: dict[str, Any] | None,
+) -> bool:
+    """Eye Direction 보정에 필요한 Calibration 값을 검증한다."""
+
+    if not isinstance(gaze_calibration, dict):
+        return False
+
+    eye_yaw_center = gaze_calibration.get("eye_yaw_center")
+    eye_pitch_center = gaze_calibration.get("eye_pitch_center")
+
+    for center_value in (eye_yaw_center, eye_pitch_center):
+        if (
+            not isinstance(center_value, (int, float))
+            or isinstance(center_value, bool)
+            or not isfinite(center_value)
+        ):
+            return False
+
+    return True
+
+
+def calculate_relative_eye_direction(
+    eye_direction: dict[str, float],
+    gaze_calibration: dict[str, Any] | None,
+) -> dict[str, float]:
+    """화면 중앙 기준의 Eye Direction을 계산한다.
+
+    유효한 Calibration이 없으면 기존 절대 Eye Direction 값을
+    그대로 반환해 동일한 판정 흐름에서 사용한다.
+    """
+
+    eye_yaw = eye_direction["yaw"]
+    eye_pitch = eye_direction["pitch"]
+
+    if not is_valid_gaze_calibration(gaze_calibration):
+        return {
+            "yaw": eye_yaw,
+            "pitch": eye_pitch,
+        }
+
+    return {
+        "yaw": eye_yaw - gaze_calibration["eye_yaw_center"],
+        "pitch": eye_pitch - gaze_calibration["eye_pitch_center"],
+    }
+
+
 def create_not_analyzed_result(
     message: str,
 ) -> dict[str, Any]:
@@ -221,6 +269,11 @@ def create_not_analyzed_result(
             "yaw": None,
             "pitch": None,
             "confidence": None,
+        },
+        "calibration_applied": False,
+        "relative_eye_direction": {
+            "yaw": None,
+            "pitch": None,
         },
         "head_pose": {
             "yaw": None,
@@ -240,6 +293,7 @@ def analyze_gaze_monitor(
     head_yaw_threshold: float,
     head_pitch_threshold: float,
     minimum_eye_confidence: float,
+    gaze_calibration: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     얼굴 분석 결과를 바탕으로 시선 및 고개 방향을 판단한다.
@@ -302,6 +356,11 @@ def analyze_gaze_monitor(
             "direction": DIRECTION_UNKNOWN,
             "eye_direction_reliable": False,
             "eye_direction": eye_direction,
+            "calibration_applied": False,
+            "relative_eye_direction": {
+                "yaw": None,
+                "pitch": None,
+            },
             "head_pose": head_pose,
             "eye_gaze_away": False,
             "head_pose_away": is_head_pose_away(
@@ -315,9 +374,18 @@ def analyze_gaze_monitor(
             ),
         }
 
+    calibration_applied = is_valid_gaze_calibration(
+        gaze_calibration=gaze_calibration,
+    )
+
+    relative_eye_direction = calculate_relative_eye_direction(
+        eye_direction=eye_direction,
+        gaze_calibration=gaze_calibration,
+    )
+
     direction = determine_gaze_direction(
-        eye_yaw=eye_direction["yaw"],
-        eye_pitch=eye_direction["pitch"],
+        eye_yaw=relative_eye_direction["yaw"],
+        eye_pitch=relative_eye_direction["pitch"],
         eye_yaw_threshold=eye_yaw_threshold,
         eye_pitch_threshold=eye_pitch_threshold,
     )
@@ -353,6 +421,8 @@ def analyze_gaze_monitor(
         "direction": direction,
         "eye_direction_reliable": True,
         "eye_direction": eye_direction,
+        "calibration_applied": calibration_applied,
+        "relative_eye_direction": relative_eye_direction,
         "head_pose": head_pose,
         "eye_gaze_away": eye_gaze_away,
         "head_pose_away": head_pose_away,
