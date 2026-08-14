@@ -22,6 +22,7 @@ function buildConfig(overrides: Partial<{ url: string; apiKey: string }> = {}): 
     admin: { signupSecret: '' },
     assessment: { url: 'https://assessment.internal', apiKey: '', ...overrides },
     monitoring: { url: '' },
+    mail: { smtpHost: '', smtpPort: 587, smtpUser: '', smtpPassword: '', from: '' },
   };
 }
 

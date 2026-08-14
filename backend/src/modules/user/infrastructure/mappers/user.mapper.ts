@@ -17,6 +17,7 @@ export interface UserRow {
   login_attempts: number;
   last_login_at: string | null;
   created_at: string;
+  email_verified_at: string | null;
 }
 
 export class UserMapper {
@@ -36,6 +37,7 @@ export class UserMapper {
       row.login_attempts,
       row.last_login_at ? new Date(row.last_login_at) : null,
       new Date(row.created_at),
+      row.email_verified_at ? new Date(row.email_verified_at) : null,
     );
   }
 }

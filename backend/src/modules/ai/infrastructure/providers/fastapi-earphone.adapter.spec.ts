@@ -21,6 +21,7 @@ function buildConfig(): AppConfig {
     admin: { signupSecret: '' },
     assessment: { url: '', apiKey: '' },
     monitoring: { url: 'https://fastapi.internal' },
+    mail: { smtpHost: '', smtpPort: 587, smtpUser: '', smtpPassword: '', from: '' },
   };
 }
 

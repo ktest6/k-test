@@ -36,6 +36,14 @@ export interface AppConfig {
     /** 설정돼 있으면 X-API-Key 헤더로 실어 보낸다. 비어있으면 헤더 자체를 안 보냄(assessment 서비스 개발 모드). */
     apiKey: string;
   };
+  mail: {
+    smtpHost: string;
+    smtpPort: number;
+    smtpUser: string;
+    smtpPassword: string;
+    /** 발신자 표시 (예: "K-TEST <no-reply@ktest.local>"). */
+    from: string;
+  };
 }
 
 export const appConfig = registerAs('app', (): AppConfig => ({
@@ -75,5 +83,12 @@ export const appConfig = registerAs('app', (): AppConfig => ({
   assessment: {
     url: process.env.ASSESSMENT_URL ?? '',
     apiKey: process.env.ASSESSMENT_API_KEY ?? '',
+  },
+  mail: {
+    smtpHost: process.env.SMTP_HOST ?? '',
+    smtpPort: parseInt(process.env.SMTP_PORT ?? '587', 10),
+    smtpUser: process.env.SMTP_USER ?? '',
+    smtpPassword: process.env.SMTP_PASSWORD ?? '',
+    from: process.env.SMTP_FROM ?? 'K-TEST <no-reply@ktest.local>',
   },
 }));

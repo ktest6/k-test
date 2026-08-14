@@ -20,5 +20,7 @@ export class User {
     readonly loginAttempts: number,
     readonly lastLoginAt: Date | null,
     readonly createdAt: Date,
+    /** 이메일 인증 완료 시각 — null이면 미인증. */
+    readonly emailVerifiedAt: Date | null,
   ) {}
 }
