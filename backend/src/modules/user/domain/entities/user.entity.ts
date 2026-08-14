@@ -11,8 +11,9 @@ export class User {
     readonly nationality: string,
     /** ISO date string (YYYY-MM-DD). */
     readonly birthDate: string,
-    readonly idType: IdentityDocumentType,
-    readonly idNumber: string,
+    /** 가입 시 선택 입력 — 등록 전이면 null. */
+    readonly idType: IdentityDocumentType | null,
+    readonly idNumber: string | null,
     readonly companyCode: string | null,
     readonly termsAgreedAt: Date,
     readonly privacyAgreedAt: Date,

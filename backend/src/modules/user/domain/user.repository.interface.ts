@@ -8,8 +8,8 @@ export interface RegisterUserInput {
   lastName: string;
   nationality: string;
   birthDate: string;
-  idType: IdentityDocumentType;
-  idNumber: string;
+  idType?: IdentityDocumentType;
+  idNumber?: string;
   companyCode?: string;
   termsAgreedAt: Date;
   privacyAgreedAt: Date;

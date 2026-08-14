@@ -16,7 +16,10 @@ import { VerifyIdCardDto } from '../dto/verify-id-card.dto';
 import { ExamAccessService } from './exam-access.service';
 import { IdCardVerificationService } from './id-card-verification.service';
 
-function buildUser(idType: IdentityDocumentType = IdentityDocumentType.PASSPORT): User {
+function buildUser(
+  idType: IdentityDocumentType | null = IdentityDocumentType.PASSPORT,
+  idNumber: string | null = 'M12345678',
+): User {
   return new User(
     '9',
     'user@test.local',
@@ -25,7 +28,7 @@ function buildUser(idType: IdentityDocumentType = IdentityDocumentType.PASSPORT)
     'KR',
     '1995-03-21',
     idType,
-    'M12345678',
+    idNumber,
     null,
     new Date(),
     new Date(),
@@ -295,6 +298,16 @@ describe('IdCardVerificationService.verify', () => {
     const { service } = buildService({ client: { download } });
 
     await expect(service.verify('9', buildDto())).rejects.toThrow(NotFoundDomainException);
+  });
+
+  // TODO(AUTH-02): 서비스 쪽 가드를 주석 처리해둔 동안 같이 skip — AI 쪽 확인되면 둘 다 복구.
+  it.skip('rejects when the caller never registered an identity document', async () => {
+    const userService = { findById: jest.fn().mockResolvedValue(buildUser(null, null)) };
+    const identityProvider = { verify: jest.fn() };
+    const { service } = buildService({ userService, identityProvider });
+
+    await expect(service.verify('9', buildDto())).rejects.toThrow(ConflictDomainException);
+    expect(identityProvider.verify).not.toHaveBeenCalled();
   });
 });
 

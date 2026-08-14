@@ -20,11 +20,11 @@ export class UserResponseDto {
   @ApiProperty({ description: 'YYYY-MM-DD' })
   birthDate: string;
 
-  @ApiProperty({ enum: IdentityDocumentType })
-  idType: IdentityDocumentType;
+  @ApiPropertyOptional({ enum: IdentityDocumentType, nullable: true })
+  idType: IdentityDocumentType | null;
 
-  @ApiProperty()
-  idNumber: string;
+  @ApiPropertyOptional({ type: String, nullable: true })
+  idNumber: string | null;
 
   @ApiPropertyOptional({ type: String, nullable: true })
   companyCode: string | null;

@@ -50,4 +50,29 @@ describe('SignUpDto', () => {
     const errors = await validate(dto);
     expect(errors).toHaveLength(0);
   });
+
+  it('allows registration with no identity document at all', async () => {
+    const payload = validPayload();
+    delete payload.idType;
+    delete payload.idNumber;
+    const dto = plainToInstance(SignUpDto, payload);
+    const errors = await validate(dto);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('rejects an idType selected with no idNumber', async () => {
+    const payload = validPayload();
+    delete payload.idNumber;
+    const dto = plainToInstance(SignUpDto, payload);
+    const errors = await validate(dto);
+    expect(errors.some((e) => e.property === 'idNumber')).toBe(true);
+  });
+
+  it('does not require idType when idNumber is present without it', async () => {
+    const payload = validPayload();
+    delete payload.idType;
+    const dto = plainToInstance(SignUpDto, payload);
+    const errors = await validate(dto);
+    expect(errors).toHaveLength(0);
+  });
 });
