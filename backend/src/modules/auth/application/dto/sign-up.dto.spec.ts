@@ -75,4 +75,16 @@ describe('SignUpDto', () => {
     const errors = await validate(dto);
     expect(errors).toHaveLength(0);
   });
+
+  it('allows registration without the optional marketing consent', async () => {
+    const dto = plainToInstance(SignUpDto, validPayload());
+    const errors = await validate(dto);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('rejects a non-boolean marketing consent value', async () => {
+    const dto = plainToInstance(SignUpDto, { ...validPayload(), agreedToMarketing: 'yes' });
+    const errors = await validate(dto);
+    expect(errors.some((e) => e.property === 'agreedToMarketing')).toBe(true);
+  });
 });

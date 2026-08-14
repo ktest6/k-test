@@ -18,6 +18,7 @@ export interface UserRow {
   last_login_at: string | null;
   created_at: string;
   email_verified_at: string | null;
+  marketing_agreed_at: string | null;
 }
 
 export class UserMapper {
@@ -38,6 +39,7 @@ export class UserMapper {
       row.last_login_at ? new Date(row.last_login_at) : null,
       new Date(row.created_at),
       row.email_verified_at ? new Date(row.email_verified_at) : null,
+      row.marketing_agreed_at ? new Date(row.marketing_agreed_at) : null,
     );
   }
 }

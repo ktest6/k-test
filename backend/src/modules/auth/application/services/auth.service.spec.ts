@@ -33,6 +33,7 @@ function buildUser(): User {
     null,
     new Date(),
     new Date(),
+    null,
   );
 }
 
@@ -321,5 +322,36 @@ describe('AuthService.signUp', () => {
     expect(register).toHaveBeenCalledWith(expect.objectContaining({ emailVerifiedAt: verifiedAt }));
     expect(result.accessToken).toBe('signed-token');
     expect(result.role).toBe(Role.USER);
+  });
+
+  it('maps agreedToMarketing to a timestamp when true, and to null when omitted', async () => {
+    const register = jest.fn().mockResolvedValue(buildUser());
+    const userService = { register } as unknown as UserService;
+    const adminService = {} as unknown as AdminService;
+    const service = new AuthService(
+      userService,
+      adminService,
+      buildJwtService(),
+      buildMailService(),
+      buildEmailVerificationService(),
+      buildConfig('secret'),
+    );
+    const baseDto: SignUpDto = {
+      email: 'student@example.com',
+      password: '12341234!!',
+      firstName: 'GILDONG',
+      lastName: 'HONG',
+      nationality: 'KOR',
+      birthDate: '1995-03-21',
+      agreedToTerms: true,
+      agreedToPrivacyPolicy: true,
+    };
+
+    await service.signUp({ ...baseDto, agreedToMarketing: true });
+    await service.signUp(baseDto);
+
+    const [firstCall, secondCall] = register.mock.calls as { marketingAgreedAt: Date | null }[][];
+    expect(firstCall[0].marketingAgreedAt).toBeInstanceOf(Date);
+    expect(secondCall[0].marketingAgreedAt).toBeNull();
   });
 });
