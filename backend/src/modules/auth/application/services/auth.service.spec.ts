@@ -236,6 +236,26 @@ describe('AuthService.sendVerificationCode', () => {
       ConflictDomainException,
     );
   });
+
+  it('surfaces a clear error when the mail itself fails to send, instead of reporting success', async () => {
+    const sendCode = jest.fn().mockResolvedValue('654321');
+    const userService = {} as unknown as UserService;
+    const adminService = {} as unknown as AdminService;
+    const sendVerificationCode = jest.fn().mockRejectedValue(new Error('SMTP auth failed'));
+    const mailService = { sendVerificationCode } as unknown as MailService;
+    const service = new AuthService(
+      userService,
+      adminService,
+      buildJwtService(),
+      mailService,
+      buildEmailVerificationService({ sendCode }),
+      buildConfig('secret'),
+    );
+
+    await expect(service.sendVerificationCode({ email: 'student@example.com' })).rejects.toThrow(
+      ConflictDomainException,
+    );
+  });
 });
 
 describe('AuthService.verifyEmail', () => {

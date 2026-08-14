@@ -4,7 +4,10 @@ import { ConfigType } from '@nestjs/config';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { appConfig } from '../../../../config/configuration';
 import { Role } from '../../../../common/enums/role.enum';
-import { UnauthorizedDomainException } from '../../../../common/exceptions/domain.exception';
+import {
+  ConflictDomainException,
+  UnauthorizedDomainException,
+} from '../../../../common/exceptions/domain.exception';
 import { MailService } from '../../../../infrastructure/mail/mail.service';
 import { AdminService } from '../../../admin/application/services/admin.service';
 import { UserService } from '../../../user/application/services/user.service';
@@ -45,10 +48,20 @@ export class AuthService {
     return { available: !taken };
   }
 
-  /** 가입 전에 이메일로 인증코드를 보낸다 — 최초 발송/재발송 공용. */
+  /**
+   * 가입 전에 이메일로 인증코드를 보낸다 — 최초 발송/재발송 공용. 메일 발송
+   * 자체가 이 API의 목적이라, 실패를 조용히 삼키면 "성공" 응답을 받은 사용자가
+   * 오지 않을 메일을 기다리게 된다. 그래서 발송 실패는 명확한 에러로 알린다.
+   */
   async sendVerificationCode(dto: SendCodeDto): Promise<void> {
     const code = await this.emailVerificationService.sendCode(dto.email);
-    await this.mailService.sendVerificationCode(dto.email, code);
+    try {
+      await this.mailService.sendVerificationCode(dto.email, code);
+    } catch {
+      throw new ConflictDomainException(
+        '인증 메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요.',
+      );
+    }
   }
 
   async verifyEmail(dto: VerifyEmailDto): Promise<void> {
