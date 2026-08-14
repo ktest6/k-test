@@ -9,6 +9,7 @@ import {
   IsString,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 import { IdentityDocumentType } from '../../../user/domain/enums/identity-document-type.enum';
 
@@ -46,15 +47,24 @@ export class SignUpDto {
   @IsDateString()
   birthDate: string;
 
-  @ApiProperty({ enum: IdentityDocumentType, description: '신분증 종류 (여권/외국인등록증)' })
+  @ApiPropertyOptional({
+    enum: IdentityDocumentType,
+    description: '신분증 종류 (여권/외국인등록증) — 선택 입력. 가입 후 별도로 등록할 수 있다.',
+  })
+  @IsOptional()
   @IsEnum(IdentityDocumentType)
-  idType: IdentityDocumentType;
+  idType?: IdentityDocumentType;
 
-  @ApiProperty({ example: 'M12345678' })
+  @ApiPropertyOptional({
+    example: 'M12345678',
+    description:
+      'idType을 선택했다면 필수 — 신분증 종류만 있고 번호가 없는 상태는 허용하지 않는다.',
+  })
+  @ValidateIf((dto: SignUpDto) => dto.idType !== undefined)
   @IsString()
   @MinLength(1)
   @MaxLength(50)
-  idNumber: string;
+  idNumber?: string;
 
   // 소속 (선택, B2B)
   @ApiPropertyOptional({ description: '소속 기업 코드 (B2B, 추후 관리자 매칭용)' })

@@ -81,6 +81,13 @@ export class IdCardVerificationService {
     // 3) FastAPI로 얼굴 대조 요청 — first_name/last_name/birth_date/documentType은
     // 프론트가 아니라 가입 시 등록된 정보를 그대로 쓴다(신청 정보와의 대조가 목적이므로).
     const user = await this.userService.findById(userId);
+    // TODO(AUTH-02): idType/idNumber 없는 사용자를 어떻게 처리할지 AI 쪽 확인 후 다시 켜기.
+    // if (!user.idType || !user.idNumber) {
+    //   throw new ConflictDomainException(
+    //     '먼저 신분증 종류와 번호를 등록해야 본인인증을 진행할 수 있습니다.',
+    //   );
+    // }
+
     const [idCardImage, faceImage] = await Promise.all([
       this.downloadImage(client, dto.idCardPath),
       this.downloadImage(client, dto.facePath),
@@ -97,7 +104,8 @@ export class IdCardVerificationService {
         firstName: user.firstName,
         lastName: user.lastName,
         birthDate: user.birthDate,
-        documentType: DOCUMENT_TYPE_INPUT_BY_USER_ID_TYPE[user.idType],
+        // TODO(AUTH-02): 가드를 꺼놔서 idType이 null일 수 있다 — non-null 단언은 임시 조치.
+        documentType: DOCUMENT_TYPE_INPUT_BY_USER_ID_TYPE[user.idType!],
       });
     } catch {
       throw new ConflictDomainException(

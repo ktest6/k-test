@@ -22,8 +22,8 @@ export interface RegisterUserRequest {
   lastName: string;
   nationality: string;
   birthDate: string;
-  idType: IdentityDocumentType;
-  idNumber: string;
+  idType?: IdentityDocumentType;
+  idNumber?: string;
   companyCode?: string;
   termsAgreedAt: Date;
   privacyAgreedAt: Date;
@@ -44,12 +44,14 @@ export class UserService {
     if (emailTaken) {
       throw new ConflictDomainException('이미 사용 중인 이메일입니다.');
     }
-    const identityTaken = await this.userRepository.existsByIdentityDocument(
-      input.idType,
-      input.idNumber,
-    );
-    if (identityTaken) {
-      throw new ConflictDomainException('이미 등록된 신분증 정보입니다.');
+    if (input.idType && input.idNumber) {
+      const identityTaken = await this.userRepository.existsByIdentityDocument(
+        input.idType,
+        input.idNumber,
+      );
+      if (identityTaken) {
+        throw new ConflictDomainException('이미 등록된 신분증 정보입니다.');
+      }
     }
 
     const passwordHash = await bcrypt.hash(input.password, PASSWORD_SALT_ROUNDS);

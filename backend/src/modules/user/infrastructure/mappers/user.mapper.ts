@@ -9,8 +9,8 @@ export interface UserRow {
   last_name: string;
   nationality: string;
   birth_date: string;
-  id_type: IdentityDocumentType;
-  id_number: string;
+  id_type: IdentityDocumentType | null;
+  id_number: string | null;
   company_code: string | null;
   terms_agreed_at: string;
   privacy_agreed_at: string;
