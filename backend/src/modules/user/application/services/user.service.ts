@@ -28,6 +28,7 @@ export interface RegisterUserRequest {
   termsAgreedAt: Date;
   privacyAgreedAt: Date;
   emailVerifiedAt: Date;
+  marketingAgreedAt: Date | null;
 }
 
 @Injectable()

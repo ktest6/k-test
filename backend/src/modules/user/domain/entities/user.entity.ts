@@ -22,5 +22,7 @@ export class User {
     readonly createdAt: Date,
     /** 이메일 인증 완료 시각 — null이면 미인증. */
     readonly emailVerifiedAt: Date | null,
+    /** 마케팅 정보 수신 동의 시각(선택) — 동의 안 했으면 null. */
+    readonly marketingAgreedAt: Date | null,
   ) {}
 }

@@ -15,6 +15,8 @@ export interface RegisterUserInput {
   privacyAgreedAt: Date;
   /** 가입 전 이메일 인증(코드)을 통과한 시각 — 가입은 항상 인증 이후에만 일어난다. */
   emailVerifiedAt: Date;
+  /** 마케팅 정보 수신 동의(선택) 시각 — 동의 안 했으면 null. */
+  marketingAgreedAt: Date | null;
 }
 
 export interface UpdateUserProfileInput {

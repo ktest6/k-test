@@ -76,6 +76,7 @@ export class AuthService {
       termsAgreedAt: now,
       privacyAgreedAt: now,
       emailVerifiedAt,
+      marketingAgreedAt: dto.agreedToMarketing ? now : null,
     });
     return this.toAuthResponse(user, Role.USER);
   }

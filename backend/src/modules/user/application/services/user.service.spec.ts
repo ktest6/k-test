@@ -29,6 +29,7 @@ function buildUser(): User {
     null,
     new Date(),
     new Date(),
+    null,
   );
 }
 
@@ -43,6 +44,7 @@ function buildRegisterRequest(overrides: Partial<RegisterUserRequest> = {}): Reg
     termsAgreedAt: new Date(),
     privacyAgreedAt: new Date(),
     emailVerifiedAt: new Date(),
+    marketingAgreedAt: null,
     ...overrides,
   };
 }
@@ -105,6 +107,22 @@ describe('UserService.register', () => {
 
     expect(register).toHaveBeenCalledWith(
       expect.objectContaining({ emailVerifiedAt: verifiedAt, passwordHash: 'hashed' }),
+    );
+  });
+
+  it('passes marketingAgreedAt straight through, including when null (not agreed)', async () => {
+    const register = jest.fn().mockResolvedValue(buildUser());
+    const repository = buildRepository({ register });
+    const service = new UserService(repository);
+    const marketingAgreedAt = new Date('2026-01-01T00:00:00.000Z');
+
+    await service.register(buildRegisterRequest({ marketingAgreedAt }));
+    await service.register(buildRegisterRequest({ marketingAgreedAt: null }));
+
+    expect(register).toHaveBeenNthCalledWith(1, expect.objectContaining({ marketingAgreedAt }));
+    expect(register).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ marketingAgreedAt: null }),
     );
   });
 });

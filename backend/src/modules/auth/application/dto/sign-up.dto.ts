@@ -83,4 +83,9 @@ export class SignUpDto {
   @IsBoolean()
   @Equals(true, { message: '개인정보처리방침에 동의해야 가입할 수 있습니다.' })
   agreedToPrivacyPolicy: boolean;
+
+  @ApiPropertyOptional({ description: '마케팅 정보 수신 동의 여부 (선택)' })
+  @IsOptional()
+  @IsBoolean()
+  agreedToMarketing?: boolean;
 }
