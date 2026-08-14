@@ -35,6 +35,7 @@ function buildUser(
     0,
     null,
     new Date(),
+    new Date(),
   );
 }
 

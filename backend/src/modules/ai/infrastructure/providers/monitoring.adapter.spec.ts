@@ -22,6 +22,7 @@ function buildConfig(url = 'https://monitoring.internal'): AppConfig {
     admin: { signupSecret: '' },
     assessment: { url: '', apiKey: '' },
     monitoring: { url },
+    mail: { smtpHost: '', smtpPort: 587, smtpUser: '', smtpPassword: '', from: '' },
   };
 }
 

@@ -5,13 +5,17 @@ import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { appConfig } from '../../../../config/configuration';
 import { Role } from '../../../../common/enums/role.enum';
 import { UnauthorizedDomainException } from '../../../../common/exceptions/domain.exception';
+import { MailService } from '../../../../infrastructure/mail/mail.service';
 import { AdminService } from '../../../admin/application/services/admin.service';
 import { UserService } from '../../../user/application/services/user.service';
 import { AdminSignUpDto } from '../dto/admin-sign-up.dto';
 import { AuthResponseDto } from '../dto/auth-response.dto';
 import { CheckEmailResponseDto } from '../dto/check-email-response.dto';
+import { SendCodeDto } from '../dto/send-code.dto';
 import { SignInDto } from '../dto/sign-in.dto';
 import { SignUpDto } from '../dto/sign-up.dto';
+import { VerifyEmailDto } from '../dto/verify-email.dto';
+import { EmailVerificationService } from './email-verification.service';
 
 interface JwtPayload {
   sub: string;
@@ -31,6 +35,8 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly adminService: AdminService,
     private readonly jwtService: JwtService,
+    private readonly mailService: MailService,
+    private readonly emailVerificationService: EmailVerificationService,
     @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>,
   ) {}
 
@@ -39,7 +45,23 @@ export class AuthService {
     return { available: !taken };
   }
 
+  /** 가입 전에 이메일로 인증코드를 보낸다 — 최초 발송/재발송 공용. */
+  async sendVerificationCode(dto: SendCodeDto): Promise<void> {
+    const code = await this.emailVerificationService.sendCode(dto.email);
+    await this.mailService.sendVerificationCode(dto.email, code);
+  }
+
+  async verifyEmail(dto: VerifyEmailDto): Promise<void> {
+    await this.emailVerificationService.verifyCode(dto.email, dto.code);
+  }
+
+  /**
+   * 이메일 인증이 이미 끝난 뒤에만 호출된다(프론트 흐름: 이메일 인증 → 나머지 정보
+   * 입력 → 최종 가입). 인증 안 된 이메일이면 여기서 막힌다. 가입 시점엔 이미 본인
+   * 확인이 끝난 상태라 별도 로그인 없이 바로 토큰을 발급한다.
+   */
   async signUp(dto: SignUpDto): Promise<AuthResponseDto> {
+    const emailVerifiedAt = await this.emailVerificationService.consumeVerification(dto.email);
     const now = new Date();
     const user = await this.userService.register({
       email: dto.email,
@@ -53,6 +75,7 @@ export class AuthService {
       companyCode: dto.companyCode,
       termsAgreedAt: now,
       privacyAgreedAt: now,
+      emailVerifiedAt,
     });
     return this.toAuthResponse(user, Role.USER);
   }

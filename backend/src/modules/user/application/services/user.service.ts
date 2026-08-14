@@ -27,6 +27,7 @@ export interface RegisterUserRequest {
   companyCode?: string;
   termsAgreedAt: Date;
   privacyAgreedAt: Date;
+  emailVerifiedAt: Date;
 }
 
 @Injectable()
@@ -82,6 +83,10 @@ export class UserService {
       throw new NotFoundDomainException(`사용자(${id})를 찾을 수 없습니다.`);
     }
     return user;
+  }
+
+  findByEmail(email: string): Promise<User | null> {
+    return this.userRepository.findByEmail(email);
   }
 
   update(id: string, input: UpdateUserProfileInput): Promise<User> {

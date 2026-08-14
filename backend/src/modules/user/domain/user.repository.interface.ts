@@ -13,6 +13,8 @@ export interface RegisterUserInput {
   companyCode?: string;
   termsAgreedAt: Date;
   privacyAgreedAt: Date;
+  /** 가입 전 이메일 인증(코드)을 통과한 시각 — 가입은 항상 인증 이후에만 일어난다. */
+  emailVerifiedAt: Date;
 }
 
 export interface UpdateUserProfileInput {

@@ -26,4 +26,10 @@ export const validationSchema = Joi.object({
   ADMIN_SIGNUP_SECRET: Joi.string().min(16).required(),
 
   MONITORING_URL: Joi.string().uri().required(),
+
+  SMTP_HOST: Joi.string().allow('').default(''),
+  SMTP_PORT: Joi.number().default(587),
+  SMTP_USER: Joi.string().allow('').default(''),
+  SMTP_PASSWORD: Joi.string().allow('').default(''),
+  SMTP_FROM: Joi.string().default('K-TEST <no-reply@ktest.local>'),
 });
