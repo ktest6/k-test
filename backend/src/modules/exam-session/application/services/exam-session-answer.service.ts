@@ -23,9 +23,7 @@ const AUDIO_EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
 };
 
 export interface SaveAnswerInput {
-  type: AnswerType;
-  contentText?: string;
-  audioFileUrl?: string;
+  audioFileUrl: string;
   durationMs?: number;
 }
 
@@ -58,9 +56,9 @@ export class ExamSessionAnswerService {
       {
         examSessionId,
         questionId,
-        type: input.type,
-        contentText: input.contentText ?? null,
-        audioFileUrl: input.audioFileUrl ?? null,
+        type: AnswerType.AUDIO,
+        contentText: null,
+        audioFileUrl: input.audioFileUrl,
       },
       input.durationMs ?? null,
     );

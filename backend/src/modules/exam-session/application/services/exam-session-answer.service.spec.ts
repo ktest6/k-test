@@ -63,8 +63,7 @@ describe('ExamSessionAnswerService.save', () => {
     );
 
     const result = await service.save('1', '1', '1', {
-      type: AnswerType.TEXT,
-      contentText: '내용',
+      audioFileUrl: '1/1/1.webm',
     });
 
     expect(assertActiveSession).toHaveBeenCalledWith('1', '1');
@@ -73,9 +72,9 @@ describe('ExamSessionAnswerService.save', () => {
       {
         examSessionId: '1',
         questionId: '1',
-        type: AnswerType.TEXT,
-        contentText: '내용',
-        audioFileUrl: null,
+        type: AnswerType.AUDIO,
+        contentText: null,
+        audioFileUrl: '1/1/1.webm',
       },
       null,
     );
@@ -100,7 +99,6 @@ describe('ExamSessionAnswerService.save', () => {
     );
 
     await service.save('1', '1', '1', {
-      type: AnswerType.AUDIO,
       audioFileUrl: '1/1/1.webm',
       durationMs: 11760,
     });
@@ -133,9 +131,9 @@ describe('ExamSessionAnswerService.save', () => {
       buildStorageUploadUrlService(),
     );
 
-    await expect(
-      service.save('1', '1', '1', { type: AnswerType.TEXT, contentText: '내용' }),
-    ).rejects.toThrow('session not active');
+    await expect(service.save('1', '1', '1', { audioFileUrl: '1/1/1.webm' })).rejects.toThrow(
+      'session not active',
+    );
     expect(getQuestion).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
   });
