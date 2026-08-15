@@ -9,7 +9,10 @@ import { QuestionSectionType } from '../../question/domain/enums/question-sectio
 import { ExamSession } from '../domain/entities/exam-session.entity';
 import { SessionStatus } from '../domain/enums/session-status.enum';
 import { ExamSessionAnswerService } from '../application/services/exam-session-answer.service';
-import { ExamSessionQuestionService } from '../application/services/exam-session-question.service';
+import {
+  ExamSessionQuestionService,
+  SessionQuestion,
+} from '../application/services/exam-session-question.service';
 import { ExamSessionService } from '../application/services/exam-session.service';
 import { ExamSessionController } from './exam-session.controller';
 
@@ -46,6 +49,10 @@ function buildQuestion(id: string): Question {
     [{ id: '1', code: 'c1', description: '채점 기준', weight: 1.5, displayOrder: 0 }],
     new Date(),
   );
+}
+
+function buildSessionQuestion(id: string, answered = false): SessionQuestion {
+  return { question: buildQuestion(id), answered };
 }
 
 function buildAnswer(overrides: Partial<{ id: string; questionId: string }> = {}): Answer {
@@ -131,8 +138,6 @@ describe('ExamSessionController.getStatus', () => {
     const getStatus = jest.fn().mockResolvedValue({
       session,
       status: SessionStatus.INPROGRESS,
-      remainingSeconds: 120,
-      nextQuestionId: '5',
     });
     const controller = buildController({ getStatus });
 
@@ -143,15 +148,15 @@ describe('ExamSessionController.getStatus', () => {
       id: '1',
       examId: '1',
       status: SessionStatus.INPROGRESS,
-      nextQuestionId: '5',
-      remainingSeconds: 120,
     });
   });
 });
 
 describe('ExamSessionController.listQuestions', () => {
-  it('delegates to ExamSessionQuestionService.listQuestions and strips grading info from the response', async () => {
-    const listQuestions = jest.fn().mockResolvedValue([buildQuestion('1'), buildQuestion('2')]);
+  it('delegates to ExamSessionQuestionService.listQuestions and includes the answered flag', async () => {
+    const listQuestions = jest
+      .fn()
+      .mockResolvedValue([buildSessionQuestion('1', true), buildSessionQuestion('2', false)]);
     const controller = buildController({}, { listQuestions });
 
     const result = await controller.listQuestions('1', buildUser());
@@ -161,6 +166,7 @@ describe('ExamSessionController.listQuestions', () => {
       {
         id: '1',
         part: QuestionSectionType.SITUATION_DESCRIPTION,
+        answered: true,
         preparationSeconds: 40,
         responseSeconds: 60,
         guideTexts: ['안내문구'],
@@ -173,6 +179,7 @@ describe('ExamSessionController.listQuestions', () => {
       {
         id: '2',
         part: QuestionSectionType.SITUATION_DESCRIPTION,
+        answered: false,
         preparationSeconds: 40,
         responseSeconds: 60,
         guideTexts: ['안내문구'],
@@ -193,7 +200,7 @@ describe('ExamSessionController.listQuestions', () => {
 
 describe('ExamSessionController.getQuestion', () => {
   it('delegates to ExamSessionQuestionService.getQuestion and strips grading info from the response', async () => {
-    const getQuestion = jest.fn().mockResolvedValue(buildQuestion('3'));
+    const getQuestion = jest.fn().mockResolvedValue(buildSessionQuestion('3', true));
     const controller = buildController({}, { getQuestion });
 
     const result = await controller.getQuestion('1', '3', buildUser());
@@ -202,6 +209,7 @@ describe('ExamSessionController.getQuestion', () => {
     expect(result).toEqual({
       id: '3',
       part: QuestionSectionType.SITUATION_DESCRIPTION,
+      answered: true,
       preparationSeconds: 40,
       responseSeconds: 60,
       guideTexts: ['안내문구'],
@@ -230,7 +238,7 @@ describe('ExamSessionController.getQuestion', () => {
       [],
       new Date(),
     );
-    const getQuestion = jest.fn().mockResolvedValue(question);
+    const getQuestion = jest.fn().mockResolvedValue({ question, answered: false });
     const controller = buildController({}, { getQuestion });
 
     const result = await controller.getQuestion('1', '4', buildUser());
@@ -243,7 +251,7 @@ describe('ExamSessionController.getQuestion', () => {
   });
 
   it('tells the service the caller is an admin so ownership can be bypassed', async () => {
-    const getQuestion = jest.fn().mockResolvedValue(buildQuestion('3'));
+    const getQuestion = jest.fn().mockResolvedValue(buildSessionQuestion('3'));
     const controller = buildController({}, { getQuestion });
     const admin: AuthenticatedUser = { id: '9', email: 'admin@test.com', role: Role.ADMIN };
 

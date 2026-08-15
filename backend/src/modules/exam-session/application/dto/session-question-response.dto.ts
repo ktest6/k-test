@@ -13,6 +13,9 @@ export class SessionQuestionResponseDto {
   @ApiProperty({ enum: QuestionSectionType, description: '문항 유형' })
   part: QuestionSectionType;
 
+  @ApiProperty({ description: '이 세션에서 이미 답안을 저장했는지 여부' })
+  answered: boolean;
+
   @ApiProperty({ description: '준비시간(초)' })
   preparationSeconds: number;
 
