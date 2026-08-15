@@ -257,7 +257,7 @@ describe('ExamSessionController.saveAnswer', () => {
     const answer = buildAnswer();
     const save = jest.fn().mockResolvedValue({ answer, graded: false, score: null });
     const controller = buildController({}, {}, { save });
-    const dto = { type: AnswerType.TEXT, contentText: '내용' };
+    const dto = { audioFileUrl: '9/1/1.webm' };
 
     const result = await controller.saveAnswer('1', '1', dto, buildUser());
 
@@ -288,7 +288,7 @@ describe('ExamSessionController.saveAnswer', () => {
     );
     const save = jest.fn().mockResolvedValue({ answer, graded: false, score: null });
     const controller = buildController({}, {}, { save });
-    const dto = { type: AnswerType.AUDIO, audioFileUrl: '9/1/1.webm' };
+    const dto = { audioFileUrl: '9/1/1.webm' };
 
     const result = await controller.saveAnswer('1', '1', dto, buildUser());
 
