@@ -18,6 +18,9 @@ import {
 } from '../../domain/exam-session.repository.interface';
 import { ExamSessionQuestionService } from './exam-session-question.service';
 
+/** 재개(재시작) 시도가 이 횟수에 도달하면 세션을 BLOCKED로 전환하고 더 이상 진행을 막는다. */
+const RESUME_ATTEMPT_LIMIT = 3;
+
 export interface ExamSessionStatusResult {
   session: ExamSession;
   /** 응시 기간이 지났는데 아직 INPROGRESS로 남아있으면 EXPIRED로 계산해서 보여준다(저장은 안 함). */
@@ -58,8 +61,14 @@ export class ExamSessionService {
     const existing = await this.examSessionRepository.findByUserAndExam(userId, examId);
     if (existing) {
       // 중간에 끊겼다가 다시 "시작"을 누른 경우 — 새로 만들지 않고 같은 세션을 이어서 준다.
+      // 다만 반복 재접속은 악용(예: 준비/응답 시간 리셋 시도) 신호로 보고 횟수를 제한한다.
       if (existing.status === SessionStatus.INPROGRESS) {
-        return existing;
+        const nextResumeCount = existing.resumeCount + 1;
+        if (nextResumeCount >= RESUME_ATTEMPT_LIMIT) {
+          await this.examSessionRepository.updateStatus(existing.id, SessionStatus.BLOCKED);
+          throw new ForbiddenDomainException('반복적인 재접속으로 시험 응시가 제한되었습니다.');
+        }
+        return this.examSessionRepository.updateResumeCount(existing.id, nextResumeCount);
       }
       throw new ConflictDomainException('이미 종료된 시험입니다.');
     }

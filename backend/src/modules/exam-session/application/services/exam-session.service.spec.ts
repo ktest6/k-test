@@ -45,6 +45,7 @@ function buildSession(
     status: SessionStatus;
     userId: string;
     currentQuestionId: string | null;
+    resumeCount: number;
   }> = {},
 ): ExamSession {
   return new ExamSession(
@@ -52,6 +53,7 @@ function buildSession(
     '1',
     overrides.userId ?? '1',
     overrides.status ?? SessionStatus.INPROGRESS,
+    overrides.resumeCount ?? 0,
     new Date('2026-06-01T00:00:00.000Z'),
     overrides.currentQuestionId ?? null,
     null,
@@ -65,6 +67,8 @@ function buildRepository(overrides: Partial<ExamSessionRepository> = {}) {
     create: jest.fn(),
     findById: jest.fn().mockResolvedValue(null),
     findByUserAndExam: jest.fn().mockResolvedValue(null),
+    updateResumeCount: jest.fn(),
+    updateStatus: jest.fn(),
     ...overrides,
   };
 }
@@ -179,15 +183,18 @@ describe('ExamSessionService.start', () => {
     expect(repository.create).not.toHaveBeenCalled();
   });
 
-  it('resumes the existing session instead of creating a new one when still INPROGRESS', async () => {
+  it('resumes the existing session and increments the resume count when still INPROGRESS', async () => {
     const exam = buildExam();
     const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
     const examApplicationService = {
       hasActiveApplication: jest.fn().mockResolvedValue(true),
     } as unknown as ExamApplicationService;
-    const existing = buildSession({ status: SessionStatus.INPROGRESS });
+    const existing = buildSession({ status: SessionStatus.INPROGRESS, resumeCount: 1 });
+    const resumed = buildSession({ status: SessionStatus.INPROGRESS, resumeCount: 2 });
+    const updateResumeCount = jest.fn().mockResolvedValue(resumed);
     const repository = buildRepository({
       findByUserAndExam: jest.fn().mockResolvedValue(existing),
+      updateResumeCount,
     });
     const service = new ExamSessionService(
       repository,
@@ -200,7 +207,61 @@ describe('ExamSessionService.start', () => {
 
     const result = await service.start('1', '1');
 
-    expect(result).toBe(existing);
+    expect(updateResumeCount).toHaveBeenCalledWith('1', 2);
+    expect(result).toBe(resumed);
+    expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it('blocks the session instead of resuming once the 3rd resume attempt is reached', async () => {
+    const exam = buildExam();
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
+    const examApplicationService = {
+      hasActiveApplication: jest.fn().mockResolvedValue(true),
+    } as unknown as ExamApplicationService;
+    const existing = buildSession({ status: SessionStatus.INPROGRESS, resumeCount: 2 });
+    const updateStatus = jest
+      .fn()
+      .mockResolvedValue(buildSession({ status: SessionStatus.BLOCKED, resumeCount: 2 }));
+    const repository = buildRepository({
+      findByUserAndExam: jest.fn().mockResolvedValue(existing),
+      updateStatus,
+    });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+      buildExamSessionQuestionService(),
+      buildAnswerService(),
+    );
+
+    await expect(service.start('1', '1')).rejects.toThrow(ForbiddenDomainException);
+
+    expect(updateStatus).toHaveBeenCalledWith('1', SessionStatus.BLOCKED);
+    expect(repository.updateResumeCount).not.toHaveBeenCalled();
+    expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects starting again once the existing session is already BLOCKED', async () => {
+    const exam = buildExam();
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
+    const examApplicationService = {
+      hasActiveApplication: jest.fn().mockResolvedValue(true),
+    } as unknown as ExamApplicationService;
+    const existing = buildSession({ status: SessionStatus.BLOCKED, resumeCount: 3 });
+    const repository = buildRepository({
+      findByUserAndExam: jest.fn().mockResolvedValue(existing),
+    });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+      buildExamSessionQuestionService(),
+      buildAnswerService(),
+    );
+
+    await expect(service.start('1', '1')).rejects.toThrow(ConflictDomainException);
     expect(repository.create).not.toHaveBeenCalled();
   });
 
@@ -481,6 +542,23 @@ describe('ExamSessionService.assertActiveSession', () => {
 
   it('rejects when the session is already SUBMITTED', async () => {
     const session = buildSession({ status: SessionStatus.SUBMITTED });
+    const examService = {} as unknown as ExamService;
+    const examApplicationService = {} as unknown as ExamApplicationService;
+    const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+      buildExamSessionQuestionService(),
+      buildAnswerService(),
+    );
+
+    await expect(service.assertActiveSession('1', '1')).rejects.toThrow(ConflictDomainException);
+  });
+
+  it('rejects when the session is BLOCKED (반복 재접속으로 차단된 세션)', async () => {
+    const session = buildSession({ status: SessionStatus.BLOCKED, resumeCount: 3 });
     const examService = {} as unknown as ExamService;
     const examApplicationService = {} as unknown as ExamApplicationService;
     const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });

@@ -18,6 +18,7 @@ function buildSession(): ExamSession {
     '7',
     '9',
     SessionStatus.INPROGRESS,
+    0,
     new Date('2026-08-04T00:00:00.000Z'),
     null,
     null,

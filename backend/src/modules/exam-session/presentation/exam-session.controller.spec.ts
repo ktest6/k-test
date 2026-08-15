@@ -23,6 +23,7 @@ function buildSession(overrides: Partial<{ currentQuestionId: string | null }> =
     '1',
     '1',
     SessionStatus.INPROGRESS,
+    0,
     new Date('2026-06-01T00:00:00.000Z'),
     overrides.currentQuestionId ?? null,
     null,

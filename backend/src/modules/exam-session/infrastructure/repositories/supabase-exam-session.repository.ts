@@ -15,6 +15,7 @@ interface ExamSessionRow {
   exam_id: number;
   user_id: number;
   status: SessionStatus;
+  resume_count: number;
   started_at: string;
   current_question_id: number | null;
   last_saved_at: string | null;
@@ -28,6 +29,7 @@ function toDomain(row: ExamSessionRow): ExamSession {
     String(row.exam_id),
     String(row.user_id),
     row.status,
+    row.resume_count,
     new Date(row.started_at),
     row.current_question_id !== null ? String(row.current_question_id) : null,
     row.last_saved_at ? new Date(row.last_saved_at) : null,
@@ -75,5 +77,35 @@ export class SupabaseExamSessionRepository implements ExamSessionRepository {
       .is('deleted_at', null)
       .maybeSingle<ExamSessionRow>();
     return data ? toDomain(data) : null;
+  }
+
+  async updateResumeCount(id: string, resumeCount: number): Promise<ExamSession> {
+    const client = this.supabaseService.getAdminClient();
+    const { data, error } = await client
+      .from(TABLE)
+      .update({ resume_count: resumeCount })
+      .eq('exam_session_id', Number(id))
+      .select()
+      .single<ExamSessionRow>();
+
+    if (error || !data) {
+      throw new ConflictDomainException(error?.message ?? '응시 세션 갱신에 실패했습니다.');
+    }
+    return toDomain(data);
+  }
+
+  async updateStatus(id: string, status: SessionStatus): Promise<ExamSession> {
+    const client = this.supabaseService.getAdminClient();
+    const { data, error } = await client
+      .from(TABLE)
+      .update({ status })
+      .eq('exam_session_id', Number(id))
+      .select()
+      .single<ExamSessionRow>();
+
+    if (error || !data) {
+      throw new ConflictDomainException(error?.message ?? '응시 세션 갱신에 실패했습니다.');
+    }
+    return toDomain(data);
   }
 }
