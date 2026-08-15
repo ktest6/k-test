@@ -1,4 +1,5 @@
 import { Question, QuestionContent } from './entities/question.entity';
+import { QuestionSectionType } from './enums/question-section-type.enum';
 
 export interface CreateChecklistItemInput {
   code: string;
@@ -7,7 +8,7 @@ export interface CreateChecklistItemInput {
 }
 
 export interface CreateQuestionDraftInput {
-  part: string;
+  part: QuestionSectionType;
   content: QuestionContent;
   checklist: CreateChecklistItemInput[];
 }

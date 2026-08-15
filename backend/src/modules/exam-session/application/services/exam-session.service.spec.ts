@@ -9,6 +9,7 @@ import { ExamService } from '../../../exam/application/services/exam.service';
 import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
 import { AnswerService } from '../../../answer/application/services/answer.service';
 import { Question } from '../../../question/domain/entities/question.entity';
+import { QuestionSectionType } from '../../../question/domain/enums/question-section-type.enum';
 import { ExamSession } from '../../domain/entities/exam-session.entity';
 import { SessionStatus } from '../../domain/enums/session-status.enum';
 import { ExamSessionRepository } from '../../domain/exam-session.repository.interface';
@@ -18,8 +19,8 @@ import { ExamSessionService } from './exam-session.service';
 function buildQuestion(id: string): Question {
   return new Question(
     id,
-    'PART1',
-    { item_id: id, prompt: '', expected_register: '', reference_keywords: [] },
+    QuestionSectionType.SITUATION_DESCRIPTION,
+    { preparationSeconds: 40, responseSeconds: 60, guideTexts: [] },
     null,
     [],
     new Date(),

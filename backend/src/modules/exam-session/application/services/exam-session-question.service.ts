@@ -6,10 +6,18 @@ import {
 } from '../../../../common/exceptions/domain.exception';
 import { ExamQuestionService } from '../../../exam-question/application/services/exam-question.service';
 import { Question } from '../../../question/domain/entities/question.entity';
+import { QuestionSectionType } from '../../../question/domain/enums/question-section-type.enum';
 import {
   EXAM_SESSION_REPOSITORY,
   ExamSessionRepository,
 } from '../../domain/exam-session.repository.interface';
+
+/** 섹션 노출 순서 — 1. 상황 묘사하기 → 2. 읽고 설명하기 → 3. 질문에 대답하기. */
+const SECTION_ORDER: QuestionSectionType[] = [
+  QuestionSectionType.SITUATION_DESCRIPTION,
+  QuestionSectionType.READ_AND_EXPLAIN,
+  QuestionSectionType.ANSWER_QUESTION,
+];
 
 /** examSessionId를 시드로 한 결정적 셔플 — 같은 세션에서는 항상 같은 순서가 나오지만(새로고침해도 안 바뀜), 세션마다 순서가 다르다. */
 function shuffleKey(examSessionId: string, questionId: string): string {
@@ -23,13 +31,18 @@ export class ExamSessionQuestionService {
     private readonly examQuestionService: ExamQuestionService,
   ) {}
 
+  /** 섹션 순서(SECTION_ORDER)로 먼저 묶고, 같은 섹션 안에서는 세션별 결정적 셔플로 섞는다. */
   async listQuestions(examSessionId: string, userId: string): Promise<Question[]> {
     const examId = await this.getSessionExamId(examSessionId, userId, false);
     const questions = await this.examQuestionService.listAssignedQuestions(examId);
 
-    return [...questions].sort((a, b) =>
-      shuffleKey(examSessionId, a.id) < shuffleKey(examSessionId, b.id) ? -1 : 1,
-    );
+    return [...questions].sort((a, b) => {
+      const sectionDiff = SECTION_ORDER.indexOf(a.part) - SECTION_ORDER.indexOf(b.part);
+      if (sectionDiff !== 0) {
+        return sectionDiff;
+      }
+      return shuffleKey(examSessionId, a.id) < shuffleKey(examSessionId, b.id) ? -1 : 1;
+    });
   }
 
   /** isAdmin이면 세션 소유자가 아니어도 조회를 허용한다(관리자는 항상 조회 가능). */

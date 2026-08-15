@@ -5,6 +5,7 @@ import {
 import { Exam } from '../../../exam/domain/entities/exam.entity';
 import { ExamService } from '../../../exam/application/services/exam.service';
 import { Question } from '../../../question/domain/entities/question.entity';
+import { QuestionSectionType } from '../../../question/domain/enums/question-section-type.enum';
 import { QuestionService } from '../../../question/application/services/question.service';
 import { ExamQuestion } from '../../domain/entities/exam-question.entity';
 import { ExamQuestionRepository } from '../../domain/exam-question.repository.interface';
@@ -26,8 +27,8 @@ function buildExam(): Exam {
 function buildQuestion(id = '1'): Question {
   return new Question(
     id,
-    'work_log',
-    { item_id: 'WRT-001', prompt: 'p', expected_register: 'formal', reference_keywords: ['a'] },
+    QuestionSectionType.SITUATION_DESCRIPTION,
+    { preparationSeconds: 40, responseSeconds: 60, guideTexts: ['안내문구'], instruction: 'p' },
     null,
     [],
     new Date(),

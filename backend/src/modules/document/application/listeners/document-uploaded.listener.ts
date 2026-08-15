@@ -5,6 +5,7 @@ import {
   QuestionGeneratorPort,
 } from '../../../ai/domain/ports/question-generator.port';
 import { QuestionService } from '../../../question/application/services/question.service';
+import { QuestionSectionType } from '../../../question/domain/enums/question-section-type.enum';
 import {
   DOCUMENT_REPOSITORY,
   DocumentRepository,
@@ -42,16 +43,19 @@ export class DocumentUploadedListener {
         fileName: event.fileName,
       });
 
+      // TODO: 듣기/말하기 3유형(QuestionSectionType) 콘텐츠를 실제로 생성하도록
+      // AI 파이프라인 자체를 다시 설계해야 한다 — 지금 당장은 관리자 페이지가
+      // 없어 문항을 SQL로 수동 등록하는 방식으로 가기로 해서, 이 자동 생성
+      // 경로는 컴파일만 맞춰두고 손대지 않는다.
       await this.questionService.bulkCreateDrafts(
         event.documentId,
         generated.items.map((item) => ({
-          part: item.itemType,
+          part: item.itemType as QuestionSectionType,
           content: {
-            item_id: item.itemId,
-            prompt: item.prompt,
-            expected_register: item.expectedRegister,
-            reference_keywords: item.referenceKeywords,
-            mode: generated.mode,
+            preparationSeconds: 0,
+            responseSeconds: 0,
+            guideTexts: [],
+            instruction: item.prompt,
           },
           checklist: item.checklist.map((c) => ({
             code: c.id,

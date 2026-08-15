@@ -6,6 +6,7 @@ import {
   QuestionChecklistItem,
   QuestionContent,
 } from '../../domain/entities/question.entity';
+import { QuestionSectionType } from '../../domain/enums/question-section-type.enum';
 import {
   CreateQuestionDraftInput,
   QuestionRepository,
@@ -16,7 +17,7 @@ const CHECKLIST_TABLE = 'tb_question_checklist_item';
 
 interface QuestionRow {
   question_id: number;
-  part: string;
+  part: QuestionSectionType;
   content: QuestionContent;
   document_id: number | null;
   created_at: string;

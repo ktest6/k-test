@@ -2,6 +2,7 @@ import { AnswerType } from '../../../answer/domain/enums/answer-type.enum';
 import { AnswerSavedEvent } from '../../../answer/domain/events/answer-saved.event';
 import { ScoringProviderPort } from '../../../ai/domain/ports/scoring-provider.port';
 import { Question } from '../../../question/domain/entities/question.entity';
+import { QuestionSectionType } from '../../../question/domain/enums/question-section-type.enum';
 import { QuestionService } from '../../../question/application/services/question.service';
 import { ScoringService } from '../services/scoring.service';
 import { AnswerSavedListener } from './answer-saved.listener';
@@ -9,13 +10,12 @@ import { AnswerSavedListener } from './answer-saved.listener';
 function buildQuestion(): Question {
   return new Question(
     '50',
-    'picture_description',
+    QuestionSectionType.SITUATION_DESCRIPTION,
     {
-      item_id: 'PIC-001',
-      prompt: '그림을 보고 상황을 설명하세요.',
-      expected_register: 'formal',
-      reference_keywords: [],
-      mode: 'speaking',
+      preparationSeconds: 40,
+      responseSeconds: 60,
+      guideTexts: ['안내문구'],
+      instruction: '그림을 보고 상황을 설명하세요.',
     },
     null,
     [
@@ -61,9 +61,9 @@ describe('AnswerSavedListener.handle', () => {
       audioFileUrl: '12/100/50.webm',
       durationMs: 11760,
       item: {
-        itemId: 'PIC-001',
+        itemId: '50',
         prompt: '그림을 보고 상황을 설명하세요.',
-        expectedRegister: 'formal',
+        expectedRegister: '',
         checklist: [{ id: 'c1', description: '상황을 정확히 묘사했는가', weight: 1.5 }],
       },
     });

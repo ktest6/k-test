@@ -5,6 +5,7 @@ import { Answer } from '../../answer/domain/entities/answer.entity';
 import { AnswerStatus } from '../../answer/domain/enums/answer-status.enum';
 import { AnswerType } from '../../answer/domain/enums/answer-type.enum';
 import { Question } from '../../question/domain/entities/question.entity';
+import { QuestionSectionType } from '../../question/domain/enums/question-section-type.enum';
 import { ExamSession } from '../domain/entities/exam-session.entity';
 import { SessionStatus } from '../domain/enums/session-status.enum';
 import { ExamSessionAnswerService } from '../application/services/exam-session-answer.service';
@@ -33,12 +34,12 @@ function buildSession(overrides: Partial<{ currentQuestionId: string | null }> =
 function buildQuestion(id: string): Question {
   return new Question(
     id,
-    'work_log',
+    QuestionSectionType.SITUATION_DESCRIPTION,
     {
-      item_id: `WRT-00${id}`,
-      prompt: `프롬프트 ${id}`,
-      expected_register: 'formal',
-      reference_keywords: ['a'],
+      preparationSeconds: 40,
+      responseSeconds: 60,
+      guideTexts: ['안내문구'],
+      instruction: `프롬프트 ${id}`,
     },
     null,
     [{ id: '1', code: 'c1', description: '채점 기준', weight: 1.5, displayOrder: 0 }],
@@ -156,8 +157,30 @@ describe('ExamSessionController.listQuestions', () => {
 
     expect(listQuestions).toHaveBeenCalledWith('1', '1');
     expect(result).toEqual([
-      { id: '1', part: 'work_log', prompt: '프롬프트 1', imageUrl: null, mode: null },
-      { id: '2', part: 'work_log', prompt: '프롬프트 2', imageUrl: null, mode: null },
+      {
+        id: '1',
+        part: QuestionSectionType.SITUATION_DESCRIPTION,
+        preparationSeconds: 40,
+        responseSeconds: 60,
+        guideTexts: ['안내문구'],
+        instruction: '프롬프트 1',
+        imageUrl: null,
+        safetyRulesTitle: null,
+        safetyRules: null,
+        audioUrl: null,
+      },
+      {
+        id: '2',
+        part: QuestionSectionType.SITUATION_DESCRIPTION,
+        preparationSeconds: 40,
+        responseSeconds: 60,
+        guideTexts: ['안내문구'],
+        instruction: '프롬프트 2',
+        imageUrl: null,
+        safetyRulesTitle: null,
+        safetyRules: null,
+        audioUrl: null,
+      },
     ]);
     result.forEach((dto) => {
       expect(dto).not.toHaveProperty('checklistItems');
@@ -177,24 +200,30 @@ describe('ExamSessionController.getQuestion', () => {
     expect(getQuestion).toHaveBeenCalledWith('1', '3', '1', false);
     expect(result).toEqual({
       id: '3',
-      part: 'work_log',
-      prompt: '프롬프트 3',
+      part: QuestionSectionType.SITUATION_DESCRIPTION,
+      preparationSeconds: 40,
+      responseSeconds: 60,
+      guideTexts: ['안내문구'],
+      instruction: '프롬프트 3',
       imageUrl: null,
-      mode: null,
+      safetyRulesTitle: null,
+      safetyRules: null,
+      audioUrl: null,
     });
   });
 
-  it('exposes imageUrl and mode for picture-description questions', async () => {
+  it('exposes imageUrl and safetyRules for their respective question types', async () => {
     const question = new Question(
       '4',
-      'picture_description',
+      QuestionSectionType.READ_AND_EXPLAIN,
       {
-        item_id: 'PIC-001',
-        prompt: '그림을 보고 상황을 설명하세요.',
-        expected_register: 'formal',
-        reference_keywords: [],
-        image_url: 'pic-001.png',
-        mode: 'speaking',
+        preparationSeconds: 70,
+        responseSeconds: 80,
+        guideTexts: ['90초 동안 말할 수 있습니다'],
+        instruction: '다음 안전수칙을 읽고 새로 온 동료에게 알려주세요.',
+        imageUrl: 'pic-001.png',
+        safetyRulesTitle: '작업장 안전수칙',
+        safetyRules: ['A. 안전모를 착용하세요', 'B. 지정된 통로로만 이동하세요'],
       },
       null,
       [],
@@ -208,7 +237,8 @@ describe('ExamSessionController.getQuestion', () => {
     expect(result.imageUrl).toBe(
       'https://project.supabase.co/storage/v1/object/public/question-assets/pic-001.png',
     );
-    expect(result.mode).toBe('speaking');
+    expect(result.safetyRulesTitle).toBe('작업장 안전수칙');
+    expect(result.safetyRules).toEqual(['A. 안전모를 착용하세요', 'B. 지정된 통로로만 이동하세요']);
   });
 
   it('tells the service the caller is an admin so ownership can be bypassed', async () => {

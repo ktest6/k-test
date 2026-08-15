@@ -5,6 +5,7 @@ import { Answer } from '../../../answer/domain/entities/answer.entity';
 import { AnswerStatus } from '../../../answer/domain/enums/answer-status.enum';
 import { AnswerType } from '../../../answer/domain/enums/answer-type.enum';
 import { Question } from '../../../question/domain/entities/question.entity';
+import { QuestionSectionType } from '../../../question/domain/enums/question-section-type.enum';
 import { ScoringService } from '../../../scoring/application/services/scoring.service';
 import { Score } from '../../../scoring/domain/entities/score.entity';
 import { ExamSessionQuestionService } from './exam-session-question.service';
@@ -18,8 +19,13 @@ function buildAnswer(): Answer {
 function buildQuestion(): Question {
   return new Question(
     '1',
-    'work_log',
-    { item_id: 'WRT-001', prompt: '프롬프트', expected_register: 'formal', reference_keywords: [] },
+    QuestionSectionType.SITUATION_DESCRIPTION,
+    {
+      preparationSeconds: 40,
+      responseSeconds: 60,
+      guideTexts: ['안내문구'],
+      instruction: '프롬프트',
+    },
     null,
     [],
     new Date(),
