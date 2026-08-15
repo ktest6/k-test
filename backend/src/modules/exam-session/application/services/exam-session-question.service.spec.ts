@@ -16,6 +16,7 @@ function buildSession(overrides: Partial<{ userId: string; examId: string }> = {
     overrides.examId ?? '1',
     overrides.userId ?? '1',
     SessionStatus.INPROGRESS,
+    0,
     new Date('2026-06-01T00:00:00.000Z'),
     null,
     null,
@@ -45,6 +46,8 @@ function buildRepository(overrides: Partial<ExamSessionRepository> = {}) {
     create: jest.fn(),
     findById: jest.fn().mockResolvedValue(null),
     findByUserAndExam: jest.fn(),
+    updateResumeCount: jest.fn(),
+    updateStatus: jest.fn(),
     ...overrides,
   };
 }
