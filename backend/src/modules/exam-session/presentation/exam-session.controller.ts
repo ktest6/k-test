@@ -17,9 +17,11 @@ import {
   AnswerWithScoreResult,
   ExamSessionAnswerService,
 } from '../application/services/exam-session-answer.service';
-import { ExamSessionQuestionService } from '../application/services/exam-session-question.service';
+import {
+  ExamSessionQuestionService,
+  SessionQuestion,
+} from '../application/services/exam-session-question.service';
 import { ExamSessionService } from '../application/services/exam-session.service';
-import { Question } from '../../question/domain/entities/question.entity';
 
 const QUESTION_ASSETS_BUCKET = 'question-assets';
 const ANSWER_AUDIO_BUCKET = 'answer-audio';
@@ -60,7 +62,8 @@ export class ExamSessionController {
   @ApiOperation({
     summary: '세션 상태 조회',
     description:
-      '진행중/제출됨/만료 상태와 다음에 풀어야 할 문항, 남은 시간을 반환한다. 재개 화면 진입 시 이 API로 어디서부터 다시 보여줄지 판단한다.',
+      '진행중/제출됨/만료/차단 상태를 반환한다. INPROGRESS가 아니면 더 이상 진행할 수 없다는 뜻이다 — ' +
+      '문항별 진행 상황(다음에 풀 문항)은 문항 목록 조회의 answered 필드로 프런트가 직접 계산한다.',
   })
   @ApiStandardResponse(ExamSessionStatusResponseDto, { message: '세션 상태 조회 성공' })
   async getStatus(
@@ -72,8 +75,6 @@ export class ExamSessionController {
       id: result.session.id,
       examId: result.session.examId,
       status: result.status,
-      nextQuestionId: result.nextQuestionId,
-      remainingSeconds: result.remainingSeconds,
     };
   }
 
@@ -92,7 +93,7 @@ export class ExamSessionController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<SessionQuestionResponseDto[]> {
     const questions = await this.examSessionQuestionService.listQuestions(examSessionId, user.id);
-    return questions.map((question) => this.toQuestionResponse(question));
+    return questions.map((sessionQuestion) => this.toQuestionResponse(sessionQuestion));
   }
 
   @Get('exam-sessions/:examSessionId/questions/:questionId')
@@ -106,13 +107,13 @@ export class ExamSessionController {
     @Param('questionId') questionId: string,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<SessionQuestionResponseDto> {
-    const question = await this.examSessionQuestionService.getQuestion(
+    const sessionQuestion = await this.examSessionQuestionService.getQuestion(
       examSessionId,
       questionId,
       user.id,
       user.role === Role.ADMIN,
     );
-    return this.toQuestionResponse(question);
+    return this.toQuestionResponse(sessionQuestion);
   }
 
   @Post('exam-sessions/:examSessionId/questions/:questionId/answer/upload-url')
@@ -171,11 +172,13 @@ export class ExamSessionController {
     return this.toAnswerResponse(result);
   }
 
-  private toQuestionResponse(question: Question): SessionQuestionResponseDto {
+  private toQuestionResponse(sessionQuestion: SessionQuestion): SessionQuestionResponseDto {
+    const { question, answered } = sessionQuestion;
     const { content } = question;
     return {
       id: question.id,
       part: question.part,
+      answered,
       preparationSeconds: content.preparationSeconds,
       responseSeconds: content.responseSeconds,
       guideTexts: content.guideTexts,
