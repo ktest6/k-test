@@ -5,10 +5,11 @@ import { ExamApplicationService } from './application/services/exam-application.
 import { ExamService } from './application/services/exam.service';
 import { SupabaseExamApplicationRepository } from './infrastructure/repositories/supabase-exam-application.repository';
 import { SupabaseExamRepository } from './infrastructure/repositories/supabase-exam.repository';
+import { AdminExamController } from './presentation/admin-exam.controller';
 import { ExamController } from './presentation/exam.controller';
 
 @Module({
-  controllers: [ExamController],
+  controllers: [ExamController, AdminExamController],
   providers: [
     ExamService,
     ExamApplicationService,

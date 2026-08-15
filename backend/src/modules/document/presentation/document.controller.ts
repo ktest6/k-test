@@ -15,7 +15,7 @@ import { UploadDocumentResponseDto } from '../application/dto/upload-document-re
 import { DocumentService } from '../application/services/document.service';
 
 @ApiBearerAuth()
-@ApiTags('Document')
+@ApiTags('Admin - Document')
 @ApiCommonErrorResponses()
 @Roles(Role.ADMIN)
 @Controller('admin/documents')

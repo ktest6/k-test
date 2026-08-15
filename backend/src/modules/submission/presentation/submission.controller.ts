@@ -1,10 +1,8 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiCommonErrorResponses } from '../../../common/decorators/api-common-error-responses.decorator';
 import { ApiStandardResponse } from '../../../common/decorators/api-standard-response.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
-import { Roles } from '../../../common/decorators/roles.decorator';
-import { Role } from '../../../common/enums/role.enum';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { CreateSubmissionDto } from '../application/dto/create-submission.dto';
 import { SubmissionResponseDto } from '../application/dto/submission-response.dto';
@@ -46,14 +44,5 @@ export class SubmissionController {
   @ApiStandardResponse(SubmissionResponseDto, { status: 201, message: '답안 제출 완료' })
   submit(@Param('id') id: string): Promise<SubmissionResponseDto> {
     return this.submissionService.submit(id);
-  }
-
-  @Post(':id/disqualify')
-  @Roles(Role.ADMIN)
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '수동 실격 처리 (관리자, 자동 정책 외 개입)' })
-  @ApiStandardResponse(SubmissionResponseDto, { message: '실격 처리 완료' })
-  disqualify(@Param('id') id: string): Promise<SubmissionResponseDto> {
-    return this.submissionService.disqualify(id);
   }
 }

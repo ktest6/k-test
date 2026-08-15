@@ -21,10 +21,9 @@ function buildDto() {
   return { capturedAt: '2026-08-04T00:00:00+09:00', elapsedMs: 1000, captureSequence: 1 };
 }
 
-function buildController(overrides: Partial<{ analyze: jest.Mock; getEvents: jest.Mock }> = {}) {
+function buildController(overrides: Partial<{ analyze: jest.Mock }> = {}) {
   const monitoringService = {
     analyze: jest.fn(),
-    getEvents: jest.fn(),
     ...overrides,
   } as unknown as MonitoringService;
   return new MonitoringController(monitoringService);
@@ -86,33 +85,5 @@ describe('MonitoringController.analyze', () => {
         },
       ],
     });
-  });
-});
-
-describe('MonitoringController.getEvents', () => {
-  it('delegates to MonitoringService.getEvents and maps each event', async () => {
-    const event = new ProctoringEvent(
-      '1',
-      '100',
-      'PHONE_DETECTED',
-      'HIGH',
-      { label: 'Mobile Phone' },
-      new Date(),
-    );
-    const getEvents = jest.fn().mockResolvedValue([event]);
-    const controller = buildController({ getEvents });
-
-    const result = await controller.getEvents('100');
-
-    expect(getEvents).toHaveBeenCalledWith('100');
-    expect(result).toEqual([
-      {
-        id: '1',
-        eventType: 'PHONE_DETECTED',
-        severity: 'HIGH',
-        meta: { label: 'Mobile Phone' },
-        createdAt: event.createdAt,
-      },
-    ]);
   });
 });
