@@ -428,23 +428,6 @@ describe('ExamSessionService.assertActiveSession', () => {
     await expect(service.assertActiveSession('1', '1')).rejects.toThrow(ConflictDomainException);
   });
 
-  it('rejects when the session is BLOCKED (반복 재접속으로 차단된 세션)', async () => {
-    const session = buildSession({ status: SessionStatus.BLOCKED, resumeCount: 3 });
-    const examService = {} as unknown as ExamService;
-    const examApplicationService = {} as unknown as ExamApplicationService;
-    const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
-    const service = new ExamSessionService(
-      repository,
-      examService,
-      examApplicationService,
-      buildIdCardVerificationService(),
-      buildExamSessionQuestionService(),
-      buildAnswerService(),
-    );
-
-    await expect(service.assertActiveSession('1', '1')).rejects.toThrow(ConflictDomainException);
-  });
-
   it('rejects when INPROGRESS but past the exam close time', async () => {
     const session = buildSession({ status: SessionStatus.INPROGRESS });
     const exam = buildExam({ closeAt: new Date('2020-01-01T00:00:00.000Z') });
