@@ -1,6 +1,7 @@
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { Role } from '../../../common/enums/role.enum';
 import { Question } from '../../question/domain/entities/question.entity';
+import { QuestionSectionType } from '../../question/domain/enums/question-section-type.enum';
 import { ExamQuestion } from '../domain/entities/exam-question.entity';
 import { ExamQuestionService } from '../application/services/exam-question.service';
 import { ExamQuestionController } from './exam-question.controller';
@@ -16,8 +17,8 @@ function buildAssignment(): ExamQuestion {
 function buildQuestion(): Question {
   return new Question(
     '2',
-    'work_log',
-    { item_id: 'WRT-001', prompt: 'p', expected_register: 'formal', reference_keywords: ['a'] },
+    QuestionSectionType.SITUATION_DESCRIPTION,
+    { preparationSeconds: 40, responseSeconds: 60, guideTexts: ['안내문구'], instruction: 'p' },
     null,
     [{ id: '1', code: 'c1', description: '설명', weight: 1.5, displayOrder: 0 }],
     new Date(),
@@ -67,12 +68,12 @@ describe('ExamQuestionController.list', () => {
     expect(result).toEqual([
       {
         id: '2',
-        part: 'work_log',
+        part: QuestionSectionType.SITUATION_DESCRIPTION,
         content: {
-          item_id: 'WRT-001',
-          prompt: 'p',
-          expected_register: 'formal',
-          reference_keywords: ['a'],
+          preparationSeconds: 40,
+          responseSeconds: 60,
+          guideTexts: ['안내문구'],
+          instruction: 'p',
         },
         checklistItems: [{ id: '1', code: 'c1', description: '설명', weight: 1.5 }],
       },

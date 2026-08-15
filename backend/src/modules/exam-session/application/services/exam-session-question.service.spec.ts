@@ -4,6 +4,7 @@ import {
 } from '../../../../common/exceptions/domain.exception';
 import { ExamQuestionService } from '../../../exam-question/application/services/exam-question.service';
 import { Question } from '../../../question/domain/entities/question.entity';
+import { QuestionSectionType } from '../../../question/domain/enums/question-section-type.enum';
 import { ExamSession } from '../../domain/entities/exam-session.entity';
 import { SessionStatus } from '../../domain/enums/session-status.enum';
 import { ExamSessionRepository } from '../../domain/exam-session.repository.interface';
@@ -23,15 +24,15 @@ function buildSession(overrides: Partial<{ userId: string; examId: string }> = {
   );
 }
 
-function buildQuestion(id: string): Question {
+function buildQuestion(id: string, part = QuestionSectionType.SITUATION_DESCRIPTION): Question {
   return new Question(
     id,
-    'work_log',
+    part,
     {
-      item_id: `WRT-00${id}`,
-      prompt: `프롬프트 ${id}`,
-      expected_register: 'formal',
-      reference_keywords: [],
+      preparationSeconds: 40,
+      responseSeconds: 60,
+      guideTexts: ['안내문구'],
+      instruction: `프롬프트 ${id}`,
     },
     null,
     [{ id: '1', code: 'c1', description: '채점 기준', weight: 1.5, displayOrder: 0 }],
@@ -106,6 +107,33 @@ describe('ExamSessionQuestionService.listQuestions', () => {
     const orderB = (await service.listQuestions('session-b', '1')).map((q) => q.id);
 
     expect(orderA).not.toEqual(orderB);
+  });
+
+  it('groups questions by section in a fixed order, shuffling only within each section', async () => {
+    // 일부러 뒤죽박죽 순서로 배정 목록을 준다 — 결과는 그래도 1섹션(2개) → 2섹션(2개) → 3섹션(2개)여야 한다.
+    const questions = [
+      buildQuestion('answer-1', QuestionSectionType.ANSWER_QUESTION),
+      buildQuestion('situation-1', QuestionSectionType.SITUATION_DESCRIPTION),
+      buildQuestion('read-1', QuestionSectionType.READ_AND_EXPLAIN),
+      buildQuestion('answer-2', QuestionSectionType.ANSWER_QUESTION),
+      buildQuestion('situation-2', QuestionSectionType.SITUATION_DESCRIPTION),
+      buildQuestion('read-2', QuestionSectionType.READ_AND_EXPLAIN),
+    ];
+    const listAssignedQuestions = jest.fn().mockResolvedValue(questions);
+    const examQuestionService = { listAssignedQuestions } as unknown as ExamQuestionService;
+    const repository = buildRepository({ findById: jest.fn().mockResolvedValue(buildSession()) });
+    const service = new ExamSessionQuestionService(repository, examQuestionService);
+
+    const result = await service.listQuestions('session-a', '1');
+
+    expect(result.map((q) => q.part)).toEqual([
+      QuestionSectionType.SITUATION_DESCRIPTION,
+      QuestionSectionType.SITUATION_DESCRIPTION,
+      QuestionSectionType.READ_AND_EXPLAIN,
+      QuestionSectionType.READ_AND_EXPLAIN,
+      QuestionSectionType.ANSWER_QUESTION,
+      QuestionSectionType.ANSWER_QUESTION,
+    ]);
   });
 });
 

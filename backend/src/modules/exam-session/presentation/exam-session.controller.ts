@@ -20,7 +20,6 @@ import {
 import { ExamSessionQuestionService } from '../application/services/exam-session-question.service';
 import { ExamSessionService } from '../application/services/exam-session.service';
 import { Question } from '../../question/domain/entities/question.entity';
-import { QuestionMode } from '../../question/domain/enums/question-mode.enum';
 
 const QUESTION_ASSETS_BUCKET = 'question-assets';
 const ANSWER_AUDIO_BUCKET = 'answer-audio';
@@ -173,17 +172,22 @@ export class ExamSessionController {
   }
 
   private toQuestionResponse(question: Question): SessionQuestionResponseDto {
+    const { content } = question;
     return {
       id: question.id,
       part: question.part,
-      prompt: question.content.prompt,
-      imageUrl: question.content.image_url
-        ? this.storagePublicUrlService.toPublicUrl(
-            QUESTION_ASSETS_BUCKET,
-            question.content.image_url,
-          )
+      preparationSeconds: content.preparationSeconds,
+      responseSeconds: content.responseSeconds,
+      guideTexts: content.guideTexts,
+      instruction: content.instruction ?? null,
+      imageUrl: content.imageUrl
+        ? this.storagePublicUrlService.toPublicUrl(QUESTION_ASSETS_BUCKET, content.imageUrl)
         : null,
-      mode: (question.content.mode as QuestionMode | undefined) ?? null,
+      safetyRulesTitle: content.safetyRulesTitle ?? null,
+      safetyRules: content.safetyRules ?? null,
+      audioUrl: content.audioUrl
+        ? this.storagePublicUrlService.toPublicUrl(QUESTION_ASSETS_BUCKET, content.audioUrl)
+        : null,
     };
   }
 

@@ -59,11 +59,10 @@ describe('DocumentUploadedListener', () => {
       {
         part: 'work_log',
         content: {
-          item_id: 'WRT-001',
-          prompt: '작업일지를 쓰세요.',
-          expected_register: 'formal',
-          reference_keywords: ['작업'],
-          mode: 'writing',
+          preparationSeconds: 0,
+          responseSeconds: 0,
+          guideTexts: [],
+          instruction: '작업일지를 쓰세요.',
         },
         checklist: [{ code: 'c1', description: '작업 기록', weight: 1 }],
       },

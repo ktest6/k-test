@@ -44,9 +44,11 @@ export class AnswerSavedListener {
         audioFileUrl: event.audioFileUrl,
         durationMs: event.durationMs,
         item: {
-          itemId: question.content.item_id,
-          prompt: question.content.prompt,
-          expectedRegister: question.content.expected_register,
+          // TODO: 듣기/말하기 3유형 콘텐츠 구조에 맞는 채점 요청 스펙은 아직 미정(AI팀 확인 대기).
+          // 그때까지 임시로 question.id/instruction으로 채워서 컴파일만 맞춰둔다.
+          itemId: question.id,
+          prompt: question.content.instruction ?? question.content.guideTexts.join(' '),
+          expectedRegister: '',
           checklist: question.checklistItems.map((c) => ({
             id: c.code,
             description: c.description,
