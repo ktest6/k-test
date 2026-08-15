@@ -19,6 +19,9 @@ import {
 /** 재개(재시작) 시도가 이 횟수에 도달하면 세션을 BLOCKED로 전환하고 더 이상 진행을 막는다. */
 const RESUME_ATTEMPT_LIMIT = 3;
 
+/** 재개(재시작) 시도가 이 횟수에 도달하면 세션을 BLOCKED로 전환하고 더 이상 진행을 막는다. */
+const RESUME_ATTEMPT_LIMIT = 3;
+
 export interface ExamSessionStatusResult {
   session: ExamSession;
   /** 응시 기간이 지났는데 아직 INPROGRESS로 남아있으면 EXPIRED로 계산해서 보여준다(저장은 안 함). */
