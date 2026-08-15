@@ -5,11 +5,12 @@ import { SCORING_REPOSITORY } from './domain/scoring.repository.interface';
 import { AnswerSavedListener } from './application/listeners/answer-saved.listener';
 import { ScoringService } from './application/services/scoring.service';
 import { SupabaseScoringRepository } from './infrastructure/repositories/supabase-scoring.repository';
+import { AdminScoringController } from './presentation/admin-scoring.controller';
 import { ScoringController } from './presentation/scoring.controller';
 
 @Module({
   imports: [AiModule, QuestionModule],
-  controllers: [ScoringController],
+  controllers: [ScoringController, AdminScoringController],
   providers: [
     ScoringService,
     AnswerSavedListener,

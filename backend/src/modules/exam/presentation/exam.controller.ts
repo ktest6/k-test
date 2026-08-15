@@ -3,14 +3,12 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiCommonErrorResponses } from '../../../common/decorators/api-common-error-responses.decorator';
 import { ApiStandardResponse } from '../../../common/decorators/api-standard-response.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
-import { Roles } from '../../../common/decorators/roles.decorator';
 import { Role } from '../../../common/enums/role.enum';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { Exam } from '../domain/entities/exam.entity';
 import { computeExamStatus } from '../domain/exam-status.util';
 import { ApplyExamResponseDto } from '../application/dto/apply-exam-response.dto';
 import { CancelExamApplicationResponseDto } from '../application/dto/cancel-exam-application-response.dto';
-import { CreateExamDto } from '../application/dto/create-exam.dto';
 import { ExamAdminResponseDto } from '../application/dto/exam-admin-response.dto';
 import { ExamResponseDto } from '../application/dto/exam-response.dto';
 import { ExamApplicationService } from '../application/services/exam-application.service';
@@ -25,21 +23,6 @@ export class ExamController {
     private readonly examService: ExamService,
     private readonly examApplicationService: ExamApplicationService,
   ) {}
-
-  @Post()
-  @Roles(Role.ADMIN)
-  @ApiOperation({ summary: '회차 추가 (관리자)' })
-  @ApiStandardResponse(ExamAdminResponseDto, { status: 201, message: '회차 추가 완료' })
-  async create(@Body() dto: CreateExamDto): Promise<ExamAdminResponseDto> {
-    const exam = await this.examService.create({
-      applicationOpenAt: new Date(dto.applicationOpenAt),
-      applicationCloseAt: new Date(dto.applicationCloseAt),
-      openAt: new Date(dto.openAt),
-      closeAt: new Date(dto.closeAt),
-      capacity: dto.capacity,
-    });
-    return (await this.toResponse(exam, Role.ADMIN)) as ExamAdminResponseDto;
-  }
 
   @Get()
   @ApiOperation({

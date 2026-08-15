@@ -14,7 +14,7 @@ import { UnassignQuestionResponseDto } from '../application/dto/unassign-questio
 import { ExamQuestionService } from '../application/services/exam-question.service';
 
 @ApiBearerAuth()
-@ApiTags('Exam Question')
+@ApiTags('Admin - Exam Question')
 @ApiCommonErrorResponses()
 @Roles(Role.ADMIN)
 @Controller('exams/:examId/questions')

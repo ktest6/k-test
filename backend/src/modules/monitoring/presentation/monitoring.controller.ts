@@ -2,7 +2,6 @@ import {
   BadRequestException,
   Body,
   Controller,
-  Get,
   Param,
   Post,
   UploadedFile,
@@ -13,26 +12,13 @@ import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nes
 import { ApiCommonErrorResponses } from '../../../common/decorators/api-common-error-responses.decorator';
 import { ApiStandardResponse } from '../../../common/decorators/api-standard-response.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
-import { Roles } from '../../../common/decorators/roles.decorator';
-import { Role } from '../../../common/enums/role.enum';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
-import { ProctoringEvent } from '../domain/entities/proctoring-event.entity';
 import { AnalyzeFrameDto } from '../application/dto/analyze-frame.dto';
 import { MonitoringAnalyzeResponseDto } from '../application/dto/monitoring-analyze-response.dto';
-import { ProctoringEventResponseDto } from '../application/dto/proctoring-event-response.dto';
 import { MonitoringService } from '../application/services/monitoring.service';
+import { toEventDto } from './proctoring-event.mapper';
 
 const MAX_FRAME_SIZE_BYTES = 5 * 1024 * 1024;
-
-function toEventDto(event: ProctoringEvent): ProctoringEventResponseDto {
-  return {
-    id: event.id,
-    eventType: event.eventType,
-    severity: event.severity,
-    meta: event.meta,
-    createdAt: event.createdAt,
-  };
-}
 
 @ApiBearerAuth()
 @ApiTags('Monitoring')
@@ -88,19 +74,5 @@ export class MonitoringController {
       eventCount: result.eventCount,
       recordedEvents: result.recordedEvents.map(toEventDto),
     };
-  }
-
-  @Get('events')
-  @Roles(Role.ADMIN)
-  @ApiOperation({ summary: '세션의 부정행위 이벤트 목록 조회 (관리자)' })
-  @ApiStandardResponse(ProctoringEventResponseDto, {
-    isArray: true,
-    message: '모니터링 이벤트 조회 성공',
-  })
-  async getEvents(
-    @Param('examSessionId') examSessionId: string,
-  ): Promise<ProctoringEventResponseDto[]> {
-    const events = await this.monitoringService.getEvents(examSessionId);
-    return events.map(toEventDto);
   }
 }
