@@ -15,6 +15,7 @@ function validPayload(): Record<string, unknown> {
     idNumber: 'M12345678',
     agreedToTerms: true,
     agreedToPrivacyPolicy: true,
+    agreedToPassportProcessing: true,
   };
 }
 
@@ -35,6 +36,15 @@ describe('SignUpDto', () => {
     const dto = plainToInstance(SignUpDto, { ...validPayload(), agreedToPrivacyPolicy: false });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'agreedToPrivacyPolicy')).toBe(true);
+  });
+
+  it('rejects registration when passport processing is not agreed to', async () => {
+    const dto = plainToInstance(SignUpDto, {
+      ...validPayload(),
+      agreedToPassportProcessing: false,
+    });
+    const errors = await validate(dto);
+    expect(errors.some((e) => e.property === 'agreedToPassportProcessing')).toBe(true);
   });
 
   it('rejects an unknown identity document type', async () => {
@@ -76,15 +86,18 @@ describe('SignUpDto', () => {
     expect(errors).toHaveLength(0);
   });
 
-  it('allows registration without the optional marketing consent', async () => {
+  it('allows registration without the optional voice data AI training consent', async () => {
     const dto = plainToInstance(SignUpDto, validPayload());
     const errors = await validate(dto);
     expect(errors).toHaveLength(0);
   });
 
-  it('rejects a non-boolean marketing consent value', async () => {
-    const dto = plainToInstance(SignUpDto, { ...validPayload(), agreedToMarketing: 'yes' });
+  it('rejects a non-boolean voice data AI training consent value', async () => {
+    const dto = plainToInstance(SignUpDto, {
+      ...validPayload(),
+      agreedToVoiceDataAiTraining: 'yes',
+    });
     const errors = await validate(dto);
-    expect(errors.some((e) => e.property === 'agreedToMarketing')).toBe(true);
+    expect(errors.some((e) => e.property === 'agreedToVoiceDataAiTraining')).toBe(true);
   });
 });

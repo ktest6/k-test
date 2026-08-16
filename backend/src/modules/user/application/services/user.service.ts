@@ -27,8 +27,9 @@ export interface RegisterUserRequest {
   companyCode?: string;
   termsAgreedAt: Date;
   privacyAgreedAt: Date;
+  passportProcessingAgreedAt: Date;
   emailVerifiedAt: Date;
-  marketingAgreedAt: Date | null;
+  voiceDataAiTrainingAgreedAt: Date | null;
 }
 
 @Injectable()

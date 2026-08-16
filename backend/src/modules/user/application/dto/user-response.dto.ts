@@ -35,6 +35,13 @@ export class UserResponseDto {
   @ApiProperty()
   privacyAgreedAt: Date;
 
+  @ApiPropertyOptional({
+    type: Date,
+    nullable: true,
+    description: '여권번호 처리 동의 시각(필수 항목)',
+  })
+  passportProcessingAgreedAt: Date | null;
+
   @ApiProperty()
   loginAttempts: number;
 
@@ -43,4 +50,14 @@ export class UserResponseDto {
 
   @ApiProperty()
   createdAt: Date;
+
+  @ApiPropertyOptional({ type: Date, nullable: true, description: '이메일 인증 완료 시각' })
+  emailVerifiedAt: Date | null;
+
+  @ApiPropertyOptional({
+    type: Date,
+    nullable: true,
+    description: '음성 데이터의 AI 모델 학습 활용 동의 시각(선택). 동의 안 했으면 null.',
+  })
+  voiceDataAiTrainingAgreedAt: Date | null;
 }

@@ -84,8 +84,13 @@ export class SignUpDto {
   @Equals(true, { message: '개인정보처리방침에 동의해야 가입할 수 있습니다.' })
   agreedToPrivacyPolicy: boolean;
 
-  @ApiPropertyOptional({ description: '마케팅 정보 수신 동의 여부 (선택)' })
+  @ApiProperty({ description: '여권번호 처리 동의 여부 (필수)' })
+  @IsBoolean()
+  @Equals(true, { message: '여권번호 처리에 동의해야 가입할 수 있습니다.' })
+  agreedToPassportProcessing: boolean;
+
+  @ApiPropertyOptional({ description: '음성 데이터의 AI 모델 학습 활용 동의 여부 (선택)' })
   @IsOptional()
   @IsBoolean()
-  agreedToMarketing?: boolean;
+  agreedToVoiceDataAiTraining?: boolean;
 }

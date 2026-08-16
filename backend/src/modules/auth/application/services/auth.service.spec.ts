@@ -29,6 +29,7 @@ function buildUser(): User {
     null,
     new Date(),
     new Date(),
+    new Date(),
     0,
     null,
     new Date(),
@@ -304,6 +305,7 @@ describe('AuthService.signUp', () => {
       birthDate: '1995-03-21',
       agreedToTerms: true,
       agreedToPrivacyPolicy: true,
+      agreedToPassportProcessing: true,
     };
 
     await expect(service.signUp(dto)).rejects.toThrow(ConflictDomainException);
@@ -334,6 +336,7 @@ describe('AuthService.signUp', () => {
       birthDate: '1995-03-21',
       agreedToTerms: true,
       agreedToPrivacyPolicy: true,
+      agreedToPassportProcessing: true,
     };
 
     const result = await service.signUp(dto);
@@ -344,7 +347,7 @@ describe('AuthService.signUp', () => {
     expect(result.role).toBe(Role.USER);
   });
 
-  it('maps agreedToMarketing to a timestamp when true, and to null when omitted', async () => {
+  it('maps agreedToVoiceDataAiTraining to a timestamp when true, and to null when omitted', async () => {
     const register = jest.fn().mockResolvedValue(buildUser());
     const userService = { register } as unknown as UserService;
     const adminService = {} as unknown as AdminService;
@@ -365,13 +368,16 @@ describe('AuthService.signUp', () => {
       birthDate: '1995-03-21',
       agreedToTerms: true,
       agreedToPrivacyPolicy: true,
+      agreedToPassportProcessing: true,
     };
 
-    await service.signUp({ ...baseDto, agreedToMarketing: true });
+    await service.signUp({ ...baseDto, agreedToVoiceDataAiTraining: true });
     await service.signUp(baseDto);
 
-    const [firstCall, secondCall] = register.mock.calls as { marketingAgreedAt: Date | null }[][];
-    expect(firstCall[0].marketingAgreedAt).toBeInstanceOf(Date);
-    expect(secondCall[0].marketingAgreedAt).toBeNull();
+    const [firstCall, secondCall] = register.mock.calls as {
+      voiceDataAiTrainingAgreedAt: Date | null;
+    }[][];
+    expect(firstCall[0].voiceDataAiTrainingAgreedAt).toBeInstanceOf(Date);
+    expect(secondCall[0].voiceDataAiTrainingAgreedAt).toBeNull();
   });
 });

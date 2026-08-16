@@ -88,8 +88,9 @@ export class AuthService {
       companyCode: dto.companyCode,
       termsAgreedAt: now,
       privacyAgreedAt: now,
+      passportProcessingAgreedAt: now,
       emailVerifiedAt,
-      marketingAgreedAt: dto.agreedToMarketing ? now : null,
+      voiceDataAiTrainingAgreedAt: dto.agreedToVoiceDataAiTraining ? now : null,
     });
     return this.toAuthResponse(user, Role.USER);
   }

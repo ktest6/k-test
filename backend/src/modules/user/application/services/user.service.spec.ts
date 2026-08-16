@@ -25,6 +25,7 @@ function buildUser(): User {
     null,
     new Date(),
     new Date(),
+    new Date(),
     0,
     null,
     new Date(),
@@ -43,8 +44,9 @@ function buildRegisterRequest(overrides: Partial<RegisterUserRequest> = {}): Reg
     birthDate: '1995-03-21',
     termsAgreedAt: new Date(),
     privacyAgreedAt: new Date(),
+    passportProcessingAgreedAt: new Date(),
     emailVerifiedAt: new Date(),
-    marketingAgreedAt: null,
+    voiceDataAiTrainingAgreedAt: null,
     ...overrides,
   };
 }
@@ -110,19 +112,22 @@ describe('UserService.register', () => {
     );
   });
 
-  it('passes marketingAgreedAt straight through, including when null (not agreed)', async () => {
+  it('passes voiceDataAiTrainingAgreedAt straight through, including when null (not agreed)', async () => {
     const register = jest.fn().mockResolvedValue(buildUser());
     const repository = buildRepository({ register });
     const service = new UserService(repository);
-    const marketingAgreedAt = new Date('2026-01-01T00:00:00.000Z');
+    const voiceDataAiTrainingAgreedAt = new Date('2026-01-01T00:00:00.000Z');
 
-    await service.register(buildRegisterRequest({ marketingAgreedAt }));
-    await service.register(buildRegisterRequest({ marketingAgreedAt: null }));
+    await service.register(buildRegisterRequest({ voiceDataAiTrainingAgreedAt }));
+    await service.register(buildRegisterRequest({ voiceDataAiTrainingAgreedAt: null }));
 
-    expect(register).toHaveBeenNthCalledWith(1, expect.objectContaining({ marketingAgreedAt }));
+    expect(register).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ voiceDataAiTrainingAgreedAt }),
+    );
     expect(register).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ marketingAgreedAt: null }),
+      expect.objectContaining({ voiceDataAiTrainingAgreedAt: null }),
     );
   });
 });
