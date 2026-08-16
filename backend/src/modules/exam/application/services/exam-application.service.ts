@@ -65,4 +65,8 @@ export class ExamApplicationService {
     );
     return !!application;
   }
+
+  listMine(userId: string): Promise<ExamApplication[]> {
+    return this.examApplicationRepository.listActiveByUser(userId);
+  }
 }

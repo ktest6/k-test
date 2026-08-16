@@ -9,9 +9,9 @@ import { UserResponseDto } from '../application/dto/user-response.dto';
 import { UserService } from '../application/services/user.service';
 
 @ApiBearerAuth()
-@ApiTags('User')
+@ApiTags('Mypage')
 @ApiCommonErrorResponses()
-@Controller('users')
+@Controller('mypage')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 

@@ -35,6 +35,7 @@ function buildRepository(overrides: Partial<ExamApplicationRepository> = {}) {
     findActiveByExamAndUser: jest.fn().mockResolvedValue(null),
     cancel: jest.fn(),
     countActiveByExam: jest.fn().mockResolvedValue(0),
+    listActiveByUser: jest.fn().mockResolvedValue([]),
     ...overrides,
   };
 }
@@ -111,5 +112,20 @@ describe('ExamApplicationService.cancel', () => {
     await service.cancel('1', '1');
 
     expect(repository.cancel).toHaveBeenCalledWith('5');
+  });
+});
+
+describe('ExamApplicationService.listMine', () => {
+  it('delegates to the repository', async () => {
+    const examService = {} as unknown as ExamService;
+    const applications = [new ExamApplication('5', '1', '9', new Date())];
+    const listActiveByUser = jest.fn().mockResolvedValue(applications);
+    const repository = buildRepository({ listActiveByUser });
+    const service = new ExamApplicationService(examService, repository);
+
+    const result = await service.listMine('9');
+
+    expect(listActiveByUser).toHaveBeenCalledWith('9');
+    expect(result).toBe(applications);
   });
 });

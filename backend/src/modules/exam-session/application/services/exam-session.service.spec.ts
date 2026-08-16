@@ -462,3 +462,71 @@ describe('ExamSessionService.assertActiveSession', () => {
     expect(result).toBe(session);
   });
 });
+
+describe('ExamSessionService.listMine', () => {
+  it('returns null session fields for an exam never started', async () => {
+    const exam = buildExam();
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
+    const examApplicationService = {
+      listMine: jest
+        .fn()
+        .mockResolvedValue([{ id: '1', examId: '1', userId: '1', appliedAt: new Date() }]),
+    } as unknown as ExamApplicationService;
+    const repository = buildRepository({ findByUserAndExam: jest.fn().mockResolvedValue(null) });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
+
+    const [result] = await service.listMine('1');
+
+    expect(result.exam).toBe(exam);
+    expect(result.session).toBeNull();
+  });
+
+  it('includes the session id and computed status when a session exists', async () => {
+    const exam = buildExam({ closeAt: new Date(Date.now() + 3600_000) });
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
+    const examApplicationService = {
+      listMine: jest
+        .fn()
+        .mockResolvedValue([{ id: '1', examId: '1', userId: '1', appliedAt: new Date() }]),
+    } as unknown as ExamApplicationService;
+    const session = buildSession({ status: SessionStatus.INPROGRESS });
+    const repository = buildRepository({ findByUserAndExam: jest.fn().mockResolvedValue(session) });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
+
+    const [result] = await service.listMine('1');
+
+    expect(result.session).toEqual({ id: session.id, status: SessionStatus.INPROGRESS });
+  });
+
+  it('reports EXPIRED for a session stored as INPROGRESS past the exam close time', async () => {
+    const exam = buildExam({ closeAt: new Date('2020-01-01T00:00:00.000Z') });
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
+    const examApplicationService = {
+      listMine: jest
+        .fn()
+        .mockResolvedValue([{ id: '1', examId: '1', userId: '1', appliedAt: new Date() }]),
+    } as unknown as ExamApplicationService;
+    const session = buildSession({ status: SessionStatus.INPROGRESS });
+    const repository = buildRepository({ findByUserAndExam: jest.fn().mockResolvedValue(session) });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+    );
+
+    const [result] = await service.listMine('1');
+
+    expect(result.session?.status).toBe(SessionStatus.EXPIRED);
+  });
+});
