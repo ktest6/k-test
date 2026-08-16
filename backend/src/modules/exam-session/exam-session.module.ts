@@ -10,10 +10,11 @@ import { ExamSessionQuestionService } from './application/services/exam-session-
 import { ExamSessionService } from './application/services/exam-session.service';
 import { SupabaseExamSessionRepository } from './infrastructure/repositories/supabase-exam-session.repository';
 import { ExamSessionController } from './presentation/exam-session.controller';
+import { MypageController } from './presentation/mypage.controller';
 
 @Module({
   imports: [ExamModule, ExamQuestionModule, VerificationsModule, AnswerModule, ScoringModule],
-  controllers: [ExamSessionController],
+  controllers: [ExamSessionController, MypageController],
   providers: [
     ExamSessionService,
     ExamSessionQuestionService,

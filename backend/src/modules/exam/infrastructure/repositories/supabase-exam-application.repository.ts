@@ -72,4 +72,15 @@ export class SupabaseExamApplicationRepository implements ExamApplicationReposit
       .is('deleted_at', null);
     return count ?? 0;
   }
+
+  async listActiveByUser(userId: string): Promise<ExamApplication[]> {
+    const client = this.supabaseService.getAdminClient();
+    const { data } = await client
+      .from(TABLE)
+      .select('*')
+      .eq('user_id', Number(userId))
+      .is('deleted_at', null)
+      .returns<ExamApplicationRow[]>();
+    return (data ?? []).map(toDomain);
+  }
 }

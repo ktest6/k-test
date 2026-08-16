@@ -14,4 +14,6 @@ export interface ExamApplicationRepository {
   /** soft delete. 호출 전 존재/소유권 확인은 서비스 계층 책임. */
   cancel(applicationId: string): Promise<void>;
   countActiveByExam(examId: string): Promise<number>;
+  /** 이 사용자의 활성 신청 전체(마이페이지 시험 현황용). */
+  listActiveByUser(userId: string): Promise<ExamApplication[]>;
 }

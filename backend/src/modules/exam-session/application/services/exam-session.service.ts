@@ -6,6 +6,7 @@ import {
 } from '../../../../common/exceptions/domain.exception';
 import { ExamApplicationService } from '../../../exam/application/services/exam-application.service';
 import { ExamService } from '../../../exam/application/services/exam.service';
+import { Exam } from '../../../exam/domain/entities/exam.entity';
 import { ExamStatus } from '../../../exam/domain/enums/exam-status.enum';
 import { computeExamStatus } from '../../../exam/domain/exam-status.util';
 import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
@@ -15,6 +16,7 @@ import {
   EXAM_SESSION_REPOSITORY,
   ExamSessionRepository,
 } from '../../domain/exam-session.repository.interface';
+import { computeSessionStatus } from '../../domain/session-status.util';
 
 /** 재개(재시작) 시도가 이 횟수에 도달하면 세션을 BLOCKED로 전환하고 더 이상 진행을 막는다. */
 const RESUME_ATTEMPT_LIMIT = 3;
@@ -23,6 +25,14 @@ export interface ExamSessionStatusResult {
   session: ExamSession;
   /** 응시 기간이 지났는데 아직 INPROGRESS로 남아있으면 EXPIRED로 계산해서 보여준다(저장은 안 함). */
   status: SessionStatus;
+}
+
+/** 마이페이지 "내 시험 현황" 한 줄. session은 아직 시작한 적 없으면 null. */
+export interface MyExamStatus {
+  exam: Exam;
+  examStatus: ExamStatus;
+  appliedAt: Date;
+  session: { id: string; status: SessionStatus } | null;
 }
 
 @Injectable()
@@ -79,13 +89,7 @@ export class ExamSessionService {
     }
 
     const exam = await this.examService.findById(session.examId);
-    const now = new Date();
-    const isPastDeadline = now.getTime() > exam.closeAt.getTime();
-
-    const status =
-      session.status === SessionStatus.INPROGRESS && isPastDeadline
-        ? SessionStatus.EXPIRED
-        : session.status;
+    const status = computeSessionStatus(session, exam.closeAt);
 
     // 세션이 더 이상 진행중이 아니게 된 시점에 본인인증용 얼굴 이미지를 정리한다.
     // 채점 완료 여부와는 무관 — 얼굴 사진은 채점이 아니라 시험 중 모니터링의
@@ -96,6 +100,29 @@ export class ExamSessionService {
     }
 
     return { session, status };
+  }
+
+  /** 마이페이지 "내 시험 현황" — 신청한 회차별로 세션 상태(시작 전이면 null)를 함께 내려준다. */
+  async listMine(userId: string): Promise<MyExamStatus[]> {
+    const applications = await this.examApplicationService.listMine(userId);
+
+    return Promise.all(
+      applications.map(async (application) => {
+        const [exam, session] = await Promise.all([
+          this.examService.findById(application.examId),
+          this.examSessionRepository.findByUserAndExam(userId, application.examId),
+        ]);
+
+        return {
+          exam,
+          examStatus: computeExamStatus(exam.openAt, exam.closeAt),
+          appliedAt: application.appliedAt,
+          session: session
+            ? { id: session.id, status: computeSessionStatus(session, exam.closeAt) }
+            : null,
+        };
+      }),
+    );
   }
 
   /** 답안 저장처럼 "지금 실제로 응시 중"이어야만 허용되는 동작들의 공통 게이트. */
