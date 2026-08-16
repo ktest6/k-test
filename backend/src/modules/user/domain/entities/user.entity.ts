@@ -17,12 +17,14 @@ export class User {
     readonly companyCode: string | null,
     readonly termsAgreedAt: Date,
     readonly privacyAgreedAt: Date,
+    /** 여권번호 처리 동의 시각(필수, 회원가입 시 기록) — 가입 이전 계정은 null일 수 있다. */
+    readonly passportProcessingAgreedAt: Date | null,
     readonly loginAttempts: number,
     readonly lastLoginAt: Date | null,
     readonly createdAt: Date,
     /** 이메일 인증 완료 시각 — null이면 미인증. */
     readonly emailVerifiedAt: Date | null,
-    /** 마케팅 정보 수신 동의 시각(선택) — 동의 안 했으면 null. */
-    readonly marketingAgreedAt: Date | null,
+    /** 음성 데이터의 AI 모델 학습 활용 동의 시각(선택) — 동의 안 했으면 null. */
+    readonly voiceDataAiTrainingAgreedAt: Date | null,
   ) {}
 }

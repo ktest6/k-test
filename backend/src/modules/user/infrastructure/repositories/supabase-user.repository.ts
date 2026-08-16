@@ -36,8 +36,11 @@ export class SupabaseUserRepository implements UserRepository {
         company_code: input.companyCode ?? null,
         terms_agreed_at: input.termsAgreedAt.toISOString(),
         privacy_agreed_at: input.privacyAgreedAt.toISOString(),
+        passport_processing_agreed_at: input.passportProcessingAgreedAt.toISOString(),
         email_verified_at: input.emailVerifiedAt.toISOString(),
-        marketing_agreed_at: input.marketingAgreedAt ? input.marketingAgreedAt.toISOString() : null,
+        voice_data_ai_training_agreed_at: input.voiceDataAiTrainingAgreedAt
+          ? input.voiceDataAiTrainingAgreedAt.toISOString()
+          : null,
       })
       .select()
       .single<UserRow>();
