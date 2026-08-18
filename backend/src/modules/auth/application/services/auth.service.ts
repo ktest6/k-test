@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { appConfig } from '../../../../config/configuration';
@@ -8,6 +8,7 @@ import {
   ConflictDomainException,
   UnauthorizedDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import { describeError } from '../../../../common/utils/describe-error.util';
 import { MailService } from '../../../../infrastructure/mail/mail.service';
 import { AdminService } from '../../../admin/application/services/admin.service';
 import { UserService } from '../../../user/application/services/user.service';
@@ -34,6 +35,8 @@ interface Account {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly userService: UserService,
     private readonly adminService: AdminService,
@@ -57,7 +60,8 @@ export class AuthService {
     const code = await this.emailVerificationService.sendCode(dto.email);
     try {
       await this.mailService.sendVerificationCode(dto.email, code);
-    } catch {
+    } catch (err) {
+      this.logger.warn(`인증 메일 발송 실패 (email=${dto.email}): ${describeError(err)}`);
       throw new ConflictDomainException(
         '인증 메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요.',
       );

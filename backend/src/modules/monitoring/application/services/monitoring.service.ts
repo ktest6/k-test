@@ -5,6 +5,7 @@ import {
   MonitoringImageInput,
   MonitoringProviderPort,
 } from '../../../ai/domain/ports/monitoring-provider.port';
+import { describeError } from '../../../../common/utils/describe-error.util';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
 import { ExamSessionService } from '../../../exam-session/application/services/exam-session.service';
@@ -110,7 +111,9 @@ export class MonitoringService {
         events: analyzed.eventSummary.eventDetected ? analyzed.events : [],
       };
     } catch (err) {
-      this.logger.error(`모니터링 분석 요청 실패 (examSessionId=${examSessionId})`, err);
+      this.logger.error(
+        `모니터링 분석 요청 실패 (examSessionId=${examSessionId}): ${describeError(err)}`,
+      );
       return { ...NEUTRAL_RESULT, recordedEvents: [] };
     }
 
