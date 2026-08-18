@@ -1,5 +1,6 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
+import { describeError } from '../../../../common/utils/describe-error.util';
 import {
   EARPHONE_PROVIDER,
   EarphoneImageInput,
@@ -19,6 +20,8 @@ import { ExamAccessService } from './exam-access.service';
  */
 @Injectable()
 export class EarphoneDetectionService {
+  private readonly logger = new Logger(EarphoneDetectionService.name);
+
   constructor(
     private readonly examAccessService: ExamAccessService,
     @Inject(EARPHONE_PROVIDER) private readonly earphoneProvider: EarphoneProviderPort,
@@ -39,7 +42,10 @@ export class EarphoneDetectionService {
         leftEarImage,
         rightEarImage,
       });
-    } catch {
+    } catch (err) {
+      this.logger.warn(
+        `이어폰 탐지 서비스 통신 실패 (examId=${examId}, userId=${userId}): ${describeError(err)}`,
+      );
       throw new ConflictDomainException(
         '이어폰 탐지 서비스와 통신에 실패했습니다. 잠시 후 다시 시도해주세요.',
       );
