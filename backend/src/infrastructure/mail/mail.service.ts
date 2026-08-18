@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { appConfig } from '../../config/configuration';
+import { describeError } from '../../common/utils/describe-error.util';
 import { buildVerificationCodeEmail } from './templates/verification-code.template';
 
 /**
@@ -37,7 +38,7 @@ export class MailService {
         html,
       });
     } catch (err) {
-      this.logger.warn(`인증 메일 발송 실패 (email=${email}): ${(err as Error).message}`);
+      this.logger.warn(`인증 메일 발송 실패 (email=${email}): ${describeError(err)}`);
       throw err;
     }
   }

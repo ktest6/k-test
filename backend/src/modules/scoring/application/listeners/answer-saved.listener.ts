@@ -4,6 +4,7 @@ import {
   ANSWER_SAVED_EVENT,
   AnswerSavedEvent,
 } from '../../../answer/domain/events/answer-saved.event';
+import { describeError } from '../../../../common/utils/describe-error.util';
 import { AnswerType } from '../../../answer/domain/enums/answer-type.enum';
 import { QuestionService } from '../../../question/application/services/question.service';
 import {
@@ -59,7 +60,7 @@ export class AnswerSavedListener {
 
       await this.scoringService.record({ answerId: event.answerId, rawResponse });
     } catch (err) {
-      this.logger.error(`채점 요청 실패 (answerId=${event.answerId})`, err);
+      this.logger.error(`채점 요청 실패 (answerId=${event.answerId}): ${describeError(err)}`);
     }
   }
 }

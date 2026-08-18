@@ -4,6 +4,7 @@ import {
   QUESTION_GENERATOR,
   QuestionGeneratorPort,
 } from '../../../ai/domain/ports/question-generator.port';
+import { describeError } from '../../../../common/utils/describe-error.util';
 import { QuestionService } from '../../../question/application/services/question.service';
 import { QuestionSectionType } from '../../../question/domain/enums/question-section-type.enum';
 import {
@@ -72,7 +73,7 @@ export class DocumentUploadedListener {
         note: generated.note,
       });
     } catch (err) {
-      this.logger.error(`문항 생성 실패 (documentId=${event.documentId})`, err);
+      this.logger.error(`문항 생성 실패 (documentId=${event.documentId}): ${describeError(err)}`);
       const message = err instanceof Error ? err.message : '문항 생성에 실패했습니다.';
       await this.documentRepository.markFailed(event.documentId, message);
     }
