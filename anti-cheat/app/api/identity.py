@@ -26,7 +26,12 @@ from app.schemas.identity import (
     DocumentType,
     IdentityVerificationResponse,
 )
-from modules.common.exceptions import InvalidImageError, RekognitionAPIError
+from modules.common.exceptions import (
+    DocumentIntelligenceAPIError,
+    DocumentReadError,
+    InvalidImageError,
+    RekognitionAPIError,
+)
 from modules.identity_verification.service import verify_identity
 
 
@@ -56,7 +61,7 @@ async def verify_identity_api(
     ),
     source_image: UploadFile = File(
         ...,
-        description="신분증 또는 수험표 이미지",
+        description="여권 이미지",
     ),
     target_image: UploadFile = File(
         ...,
@@ -88,6 +93,9 @@ async def verify_identity_api(
         result = verify_identity(
             source_image_bytes=source_image_bytes,
             target_image_bytes=target_image_bytes,
+            last_name=last_name,
+            first_name=first_name,
+            birth_date=birth_date,
             document_type=document_type,
         )
 
@@ -107,6 +115,18 @@ async def verify_identity_api(
     except RekognitionAPIError as error:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(error),
+        ) from error
+
+    except DocumentIntelligenceAPIError as error:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(error),
+        ) from error
+
+    except DocumentReadError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(error),
         ) from error
 

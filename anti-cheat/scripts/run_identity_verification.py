@@ -13,6 +13,7 @@ run_identity_verification.py
 
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 
@@ -22,6 +23,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 # 프로젝트 모듈을 import할 수 있도록 경로 추가
 sys.path.append(str(PROJECT_ROOT))
 
+from app.schemas.identity import DocumentType
 from modules.common.exceptions import IdentityVerificationError
 from modules.identity_verification.service import verify_identity
 
@@ -30,15 +32,20 @@ from modules.identity_verification.service import verify_identity
 # source_image_bytes = await id_image.read()
 
 # target_image_bytes = await capture_image.read()
-SOURCE_IMAGE_PATH = (
-    PROJECT_ROOT / "data" / "compare" / "source.jpg"
+SOURCE_IMAGE_PATH = Path(
+    # "/Users/apple/dio_folder/python/hackathon_aws/poc/images/ex_dio_front.jpg"
+    "/Users/apple/dio_folder/python/dataset/dio_passport.jpg"
 )
 
-TARGET_IMAGE_PATH = (
-    # PROJECT_ROOT / "data" / "compare" / "target_true.jpg"
-    PROJECT_ROOT / "data" / "compare" / "target_false.png"
-    # PROJECT_ROOT / "data" / "compare" / "no_face.png"
+TARGET_IMAGE_PATH = Path(
+    # "/Users/apple/dio_folder/python/ktest_git/k-test/anti-cheat/data/compare/target_true.jpg"
+    "/Users/apple/dio_folder/python/ktest_git/k-test/anti-cheat/data/compare/target_false.png"
 )
+
+# 테스트할 신청자 정보를 실제 여권 정보에 맞게 설정한다.
+LAST_NAME = "KIM"
+FIRST_NAME = "DOYEONG"
+BIRTH_DATE = "1998-09-26"
 
 
 def validate_image_path(
@@ -80,6 +87,10 @@ def main() -> None:
         result = verify_identity(
             source_image_bytes=source_image_bytes,
             target_image_bytes=target_image_bytes,
+            last_name=LAST_NAME,
+            first_name=FIRST_NAME,
+            birth_date=date.fromisoformat(BIRTH_DATE),
+            document_type=DocumentType.PASSPORT,
         )
 
         print("본인 인증 결과")

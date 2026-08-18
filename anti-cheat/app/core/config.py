@@ -5,6 +5,7 @@ config.py
 
 - .env 파일 로드
 - AWS Rekognition 설정 관리
+- Azure Document Intelligence 설정 관리
 - 본인 인증 유사도 임계값 관리
 """
 
@@ -30,6 +31,8 @@ class Settings:
     aws_region: str
     aws_access_key_id: str | None
     aws_secret_access_key: str | None
+    azure_document_intelligence_endpoint: str
+    azure_document_intelligence_key: str
     identity_similarity_threshold: float
     identity_similarity_retrieval_threshold: float
 
@@ -101,6 +104,12 @@ settings = Settings(
     aws_region=get_required_env("AWS_REGION"),
     aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
     aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    azure_document_intelligence_endpoint=get_required_env(
+        "AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT"
+    ),
+    azure_document_intelligence_key=get_required_env(
+        "AZURE_DOCUMENT_INTELLIGENCE_KEY"
+    ),
     identity_similarity_threshold=get_similarity_threshold(),
     identity_similarity_retrieval_threshold=(
         get_similarity_retrieval_threshold()

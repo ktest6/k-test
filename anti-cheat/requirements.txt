@@ -1,6 +1,7 @@
 annotated-doc==0.0.4
 annotated-types==0.8.0
 anyio==4.14.2
+azure-ai-documentintelligence==1.0.2
 boto3==1.43.46
 botocore==1.43.46
 fastapi==0.140.0

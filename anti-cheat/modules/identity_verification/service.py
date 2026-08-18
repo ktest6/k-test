@@ -4,53 +4,111 @@ service.py
 본인 인증 서비스 모듈.
 
 - 입력 이미지 데이터 검증
+- Azure 기반 여권 판독 및 신청 정보 비교
 - AWS Rekognition CompareFaces 호출
-- 얼굴 유사도 분석
-- OCR 미사용 기간의 신청 정보 임시 통과 처리
-- 얼굴 인증 기반 최종 성공 여부 판단
+- 얼굴 유사도 및 최종 인증 결과 판단
 """
 
+from datetime import date
 from typing import Any
 
 from app.core.config import settings
 from app.schemas.identity import DocumentType
-from modules.common.image_validation import (
-    validate_image_bytes,
+from modules.common.exceptions import UnsupportedDocumentError
+from modules.common.image_validation import validate_image_bytes
+from modules.identity_verification.applicant_matcher import (
+    match_applicant_info,
 )
-from modules.identity_verification.face_compare import (
-    compare_faces,
+from modules.identity_verification.document_reader import (
+    read_identity_document,
 )
+from modules.identity_verification.face_compare import compare_faces
 
 
 def verify_identity(
     source_image_bytes: bytes,
     target_image_bytes: bytes,
+    last_name: str,
+    first_name: str,
+    birth_date: date,
     document_type: DocumentType = DocumentType.PASSPORT,
 ) -> dict[str, Any]:
-    """신분증 얼굴과 캡처 얼굴을 비교하여 본인 여부를 판단한다."""
+    """여권 정보와 얼굴을 순서대로 검증해 본인 여부를 판단한다."""
 
-    validate_image_bytes(
-        image_bytes=source_image_bytes,
-        image_name="신분증",
-    )
+    if document_type != DocumentType.PASSPORT:
+        raise UnsupportedDocumentError("지원하는 문서는 여권뿐입니다.")
 
-    validate_image_bytes(
-        image_bytes=target_image_bytes,
-        image_name="얼굴 캡처",
+    validate_image_bytes(source_image_bytes, "여권")
+    validate_image_bytes(target_image_bytes, "얼굴 캡처")
+
+    # 여권 판독과 신청 정보 비교에 성공한 경우에만 얼굴 비교를 수행한다.
+    document_fields = read_identity_document(source_image_bytes)
+    applicant_result = match_applicant_info(
+        applicant_info={
+            "last_name": last_name,
+            "first_name": first_name,
+            "birth_date": birth_date,
+        },
+        document_fields={
+            "last_name": document_fields["last_name"],
+            "first_name": document_fields["first_name"],
+            "birth_date": document_fields["date_of_birth"],
+        },
     )
 
     threshold = settings.identity_similarity_threshold
-    retrieval_threshold = (
-        settings.identity_similarity_retrieval_threshold
-    )
+    if not applicant_result["applicant_verified"]:
+        return _build_applicant_mismatch_result(
+            threshold=threshold,
+            field_matches=applicant_result["field_matches"],
+        )
 
-    # 낮은 조회 기준으로 후보 유사도를 확보한 뒤 운영 기준으로 판정한다.
     response = compare_faces(
         source_image_bytes=source_image_bytes,
         target_image_bytes=target_image_bytes,
-        similarity_threshold=retrieval_threshold,
+        similarity_threshold=(
+            settings.identity_similarity_retrieval_threshold
+        ),
     )
+    face_result = _analyze_face_response(response, threshold)
 
+    return {
+        **face_result,
+        "verified": face_result["face_verified"],
+        "applicant_verified": True,
+        "document_type": DocumentType.PASSPORT.value,
+        "field_matches": applicant_result["field_matches"],
+        "message": (
+            "본인 인증에 성공했습니다."
+            if face_result["face_verified"]
+            else "얼굴이 일치하지 않습니다."
+        ),
+    }
+
+
+def _build_applicant_mismatch_result(
+    threshold: float,
+    field_matches: dict[str, bool],
+) -> dict[str, Any]:
+    # 얼굴 비교 미실행 상태에서도 기존 숫자형 API 계약을 유지한다.
+    return {
+        "verified": False,
+        "face_verified": False,
+        "similarity": 0.0,
+        "threshold": threshold,
+        "matched_face_count": 0,
+        "unmatched_face_count": 0,
+        "applicant_verified": False,
+        "document_type": DocumentType.PASSPORT.value,
+        "field_matches": field_matches,
+        "message": "신분증 정보와 신청 정보가 일치하지 않습니다.",
+    }
+
+
+def _analyze_face_response(
+    response: dict[str, Any],
+    threshold: float,
+) -> dict[str, Any]:
     candidate_matches = response.get("FaceMatches", [])
     aws_unmatched_faces = response.get("UnmatchedFaces", [])
     best_match = max(
@@ -58,7 +116,6 @@ def verify_identity(
         key=lambda match: match.get("Similarity", 0.0),
         default=None,
     )
-
     similarity = (
         float(best_match.get("Similarity", 0.0))
         if best_match is not None
@@ -69,33 +126,15 @@ def verify_identity(
         float(match.get("Similarity", 0.0)) >= threshold
         for match in candidate_matches
     )
-    unmatched_face_count = (
-        len(candidate_matches)
-        - matched_face_count
-        + len(aws_unmatched_faces)
-    )
-
-    # OCR 미사용 기간에는 신청 정보 검증을 얼굴 인증과 분리해 통과시킨다.
-    applicant_verified = True
-    field_matches = {
-        "last_name": True,
-        "first_name": True,
-        "birth_date": True,
-    }
 
     return {
-        "verified": face_verified,
         "face_verified": face_verified,
         "similarity": round(similarity, 2),
         "threshold": threshold,
         "matched_face_count": matched_face_count,
-        "unmatched_face_count": unmatched_face_count,
-        "applicant_verified": applicant_verified,
-        "document_type": document_type.value,
-        "field_matches": field_matches,
-        "message": (
-            "본인 인증에 성공했습니다."
-            if face_verified
-            else "얼굴이 일치하지 않습니다."
+        "unmatched_face_count": (
+            len(candidate_matches)
+            - matched_face_count
+            + len(aws_unmatched_faces)
         ),
     }

@@ -7,6 +7,7 @@ exceptions.py
 - 본인 인증 예외
 - 시험 모니터링 예외
 - AWS Rekognition 예외
+- Azure Document Intelligence 예외
 - 이미지 검증 예외
 - 신청 정보 검증 예외
 - 신분증 OCR 예외
@@ -27,6 +28,10 @@ class MonitoringError(ProctoringError):
 
 class RekognitionAPIError(ProctoringError):
     """AWS Rekognition API 호출 중 발생하는 예외."""
+
+
+class DocumentIntelligenceAPIError(IdentityVerificationError):
+    """Azure Document Intelligence API 호출 중 발생하는 예외."""
 
 
 class InvalidImageError(ProctoringError):
