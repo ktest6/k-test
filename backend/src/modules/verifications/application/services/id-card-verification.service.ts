@@ -4,6 +4,7 @@ import {
   ForbiddenDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import { describeError } from '../../../../common/utils/describe-error.util';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import {
   IDENTITY_PROVIDER,
@@ -107,7 +108,10 @@ export class IdCardVerificationService {
         // TODO(AUTH-02): 가드를 꺼놔서 idType이 null일 수 있다 — non-null 단언은 임시 조치.
         documentType: DOCUMENT_TYPE_INPUT_BY_USER_ID_TYPE[user.idType!],
       });
-    } catch {
+    } catch (err) {
+      this.logger.warn(
+        `본인인증 서비스 통신 실패 (examId=${dto.examId}, userId=${userId}): ${describeError(err)}`,
+      );
       throw new ConflictDomainException(
         '본인인증 서비스와 통신에 실패했습니다. 잠시 후 다시 시도해주세요.',
       );
