@@ -11,6 +11,7 @@ function buildConfig(overrides: Partial<{ url: string; apiKey: string }> = {}): 
     port: 3000,
     corsOrigin: '*',
     swaggerEnabled: false,
+    requireIdentityVerification: true,
     supabase: { url: 'https://project.supabase.co', anonKey: '', serviceRoleKey: '' },
     identityVerification: {
       minIntervalMinutes: 5,

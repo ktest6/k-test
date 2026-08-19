@@ -5,6 +5,13 @@ export interface AppConfig {
   port: number;
   corsOrigin: string;
   swaggerEnabled: boolean;
+  /**
+   * 시험 시작 시 본인인증(matched:true 기록) 완료를 요구할지 여부. AI팀의 본인인증
+   * 서비스가 아직 배포되지 않은 개발/테스트 기간에만 false로 내려 임시로 우회한다.
+   * 기본값은 true(강제)라 값을 명시적으로 안 내리면 항상 안전한 쪽으로 동작한다 —
+   * 실제 서비스 배포 전에는 반드시 다시 true로(또는 env var 자체를 제거) 되돌릴 것.
+   */
+  requireIdentityVerification: boolean;
   supabase: {
     url: string;
     anonKey: string;
@@ -51,6 +58,7 @@ export const appConfig = registerAs('app', (): AppConfig => ({
   port: parseInt(process.env.PORT ?? '3000', 10),
   corsOrigin: process.env.CORS_ORIGIN ?? '*',
   swaggerEnabled: (process.env.SWAGGER_ENABLED ?? 'true') === 'true',
+  requireIdentityVerification: (process.env.REQUIRE_IDENTITY_VERIFICATION ?? 'true') === 'true',
   supabase: {
     url: process.env.SUPABASE_URL ?? '',
     anonKey: process.env.SUPABASE_ANON_KEY ?? '',

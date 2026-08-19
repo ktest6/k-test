@@ -11,6 +11,7 @@ function buildConfig(url = 'https://monitoring.internal'): AppConfig {
     port: 3000,
     corsOrigin: '*',
     swaggerEnabled: false,
+    requireIdentityVerification: true,
     supabase: { url: '', anonKey: '', serviceRoleKey: '' },
     identityVerification: {
       minIntervalMinutes: 5,
