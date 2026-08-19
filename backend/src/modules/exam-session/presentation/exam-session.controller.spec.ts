@@ -125,6 +125,7 @@ describe('ExamSessionController.start', () => {
     expect(start).toHaveBeenCalledWith('1', '1');
     expect(result).toEqual({
       id: '1',
+      examSessionId: '1',
       examId: '1',
       status: SessionStatus.INPROGRESS,
       startedAt: session.startedAt,

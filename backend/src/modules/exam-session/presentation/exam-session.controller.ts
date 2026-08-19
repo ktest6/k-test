@@ -52,6 +52,7 @@ export class ExamSessionController {
     const session = await this.examSessionService.start(examId, user.id);
     return {
       id: session.id,
+      examSessionId: session.id,
       examId: session.examId,
       status: session.status,
       startedAt: session.startedAt,
