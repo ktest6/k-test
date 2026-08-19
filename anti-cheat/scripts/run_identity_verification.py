@@ -46,6 +46,7 @@ TARGET_IMAGE_PATH = Path(
 LAST_NAME = "KIM"
 FIRST_NAME = "DOYEONG"
 BIRTH_DATE = "1998-09-26"
+DOCUMENT_NUMBER = "M00579616"
 
 
 def validate_image_path(
@@ -90,6 +91,7 @@ def main() -> None:
             last_name=LAST_NAME,
             first_name=FIRST_NAME,
             birth_date=date.fromisoformat(BIRTH_DATE),
+            document_number=DOCUMENT_NUMBER,
             document_type=DocumentType.PASSPORT,
         )
 

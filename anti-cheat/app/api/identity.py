@@ -79,6 +79,10 @@ async def verify_identity_api(
         ...,
         description="신청 정보의 생년월일",
     ),
+    document_number: str = Form(
+        ...,
+        description="신청 정보의 여권번호",
+    ),
     document_type: DocumentType = Form(
         ...,
         description="신분증 종류",
@@ -96,6 +100,7 @@ async def verify_identity_api(
             last_name=last_name,
             first_name=first_name,
             birth_date=birth_date,
+            document_number=document_number,
             document_type=document_type,
         )
 

@@ -31,6 +31,7 @@ def verify_identity(
     last_name: str,
     first_name: str,
     birth_date: date,
+    document_number: str,
     document_type: DocumentType = DocumentType.PASSPORT,
 ) -> dict[str, Any]:
     """여권 정보와 얼굴을 순서대로 검증해 본인 여부를 판단한다."""
@@ -48,11 +49,13 @@ def verify_identity(
             "last_name": last_name,
             "first_name": first_name,
             "birth_date": birth_date,
+            "document_number": document_number,
         },
         document_fields={
             "last_name": document_fields["last_name"],
             "first_name": document_fields["first_name"],
             "birth_date": document_fields["date_of_birth"],
+            "document_number": document_fields["document_number"],
         },
     )
 

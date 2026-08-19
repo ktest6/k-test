@@ -4,7 +4,7 @@ identity.py
 본인 인증 API의 요청 및 응답 데이터 구조를 정의하는 schema 모듈.
 
 - 본인 인증 요청에 포함되는 시험 및 응시자 정보 정의
-- 신청자의 이름과 생년월일 정보 정의
+- 신청자의 이름, 생년월일, 여권번호 정보 정의
 - 백엔드에서 전달받는 신분증 종류 정의
 - 얼굴 비교 및 신청 정보 검증 결과 구조 정의
 - 필드별 신청 정보 일치 여부 구조 정의
@@ -26,6 +26,7 @@ class FieldMatches(BaseModel):
     last_name: bool
     first_name: bool
     birth_date: bool
+    document_number: bool
 
 
 # 얼굴 비교 및 신청 정보 검증 결과
