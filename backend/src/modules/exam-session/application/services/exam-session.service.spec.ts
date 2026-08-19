@@ -1,3 +1,5 @@
+import { ConfigType } from '@nestjs/config';
+import { appConfig } from '../../../../config/configuration';
 import {
   ConflictDomainException,
   ForbiddenDomainException,
@@ -68,6 +70,14 @@ function buildIdCardVerificationService(
   } as unknown as IdCardVerificationService;
 }
 
+function buildConfig(
+  overrides: Partial<{ requireIdentityVerification: boolean }> = {},
+): ConfigType<typeof appConfig> {
+  return {
+    requireIdentityVerification: overrides.requireIdentityVerification ?? true,
+  } as ConfigType<typeof appConfig>;
+}
+
 describe('ExamSessionService.start', () => {
   it('rejects when the exam is not currently OPEN', async () => {
     const exam = buildExam({ openAt: new Date('2099-01-01T00:00:00.000Z') });
@@ -81,6 +91,7 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     await expect(service.start('1', '1')).rejects.toThrow(ConflictDomainException);
@@ -98,6 +109,7 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     await expect(service.start('1', '1')).rejects.toThrow(ForbiddenDomainException);
@@ -119,10 +131,34 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       idCardVerificationService,
+      buildConfig(),
     );
 
     await expect(service.start('1', '1')).rejects.toThrow(ForbiddenDomainException);
     expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it('skips the identity verification check when requireIdentityVerification is false', async () => {
+    const exam = buildExam();
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
+    const examApplicationService = {
+      hasActiveApplication: jest.fn().mockResolvedValue(true),
+    } as unknown as ExamApplicationService;
+    const created = buildSession();
+    const repository = buildRepository({ create: jest.fn().mockResolvedValue(created) });
+    const hasVerifiedExam = jest.fn().mockResolvedValue(false);
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService({ hasVerifiedExam }),
+      buildConfig({ requireIdentityVerification: false }),
+    );
+
+    const result = await service.start('1', '1');
+
+    expect(hasVerifiedExam).not.toHaveBeenCalled();
+    expect(result).toBe(created);
   });
 
   it('rejects starting again once the existing session is already SUBMITTED', async () => {
@@ -140,6 +176,7 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     await expect(service.start('1', '1')).rejects.toThrow(ConflictDomainException);
@@ -164,6 +201,7 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     const result = await service.start('1', '1');
@@ -192,6 +230,7 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     await expect(service.start('1', '1')).rejects.toThrow(ForbiddenDomainException);
@@ -216,6 +255,7 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     await expect(service.start('1', '1')).rejects.toThrow(ConflictDomainException);
@@ -235,6 +275,7 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     const result = await service.start('1', '1');
@@ -254,6 +295,7 @@ describe('ExamSessionService.getStatus', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     await expect(service.getStatus('1', '1')).rejects.toThrow(NotFoundDomainException);
@@ -269,6 +311,7 @@ describe('ExamSessionService.getStatus', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     await expect(service.getStatus('1', '1')).rejects.toThrow(ForbiddenDomainException);
@@ -285,6 +328,7 @@ describe('ExamSessionService.getStatus', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     const result = await service.getStatus('1', '1');
@@ -303,6 +347,7 @@ describe('ExamSessionService.getStatus', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     const result = await service.getStatus('1', '1');
@@ -322,6 +367,7 @@ describe('ExamSessionService.getStatus', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     const result = await service.getStatus('1', '1');
@@ -341,6 +387,7 @@ describe('ExamSessionService.getStatus', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService({ cleanupVerifiedFaceImage }),
+      buildConfig(),
     );
 
     await service.getStatus('6', '1');
@@ -360,6 +407,7 @@ describe('ExamSessionService.getStatus', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService({ cleanupVerifiedFaceImage }),
+      buildConfig(),
     );
 
     await service.getStatus('1', '1');
@@ -378,6 +426,7 @@ describe('ExamSessionService.assertActiveSession', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     await expect(service.assertActiveSession('1', '1')).rejects.toThrow(NotFoundDomainException);
@@ -393,6 +442,7 @@ describe('ExamSessionService.assertActiveSession', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     await expect(service.assertActiveSession('1', '1')).rejects.toThrow(ForbiddenDomainException);
@@ -408,6 +458,7 @@ describe('ExamSessionService.assertActiveSession', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     await expect(service.assertActiveSession('1', '1')).rejects.toThrow(ConflictDomainException);
@@ -423,6 +474,7 @@ describe('ExamSessionService.assertActiveSession', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     await expect(service.assertActiveSession('1', '1')).rejects.toThrow(ConflictDomainException);
@@ -439,6 +491,7 @@ describe('ExamSessionService.assertActiveSession', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     await expect(service.assertActiveSession('1', '1')).rejects.toThrow(ConflictDomainException);
@@ -455,6 +508,7 @@ describe('ExamSessionService.assertActiveSession', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     const result = await service.assertActiveSession('1', '1');
@@ -478,6 +532,7 @@ describe('ExamSessionService.listMine', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     const [result] = await service.listMine('1');
@@ -501,6 +556,7 @@ describe('ExamSessionService.listMine', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     const [result] = await service.listMine('1');
@@ -523,6 +579,7 @@ describe('ExamSessionService.listMine', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildConfig(),
     );
 
     const [result] = await service.listMine('1');

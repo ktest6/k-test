@@ -1,4 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ConfigType } from '@nestjs/config';
+import { appConfig } from '../../../../config/configuration';
 import {
   ConflictDomainException,
   ForbiddenDomainException,
@@ -42,6 +44,7 @@ export class ExamSessionService {
     private readonly examService: ExamService,
     private readonly examApplicationService: ExamApplicationService,
     private readonly idCardVerificationService: IdCardVerificationService,
+    @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>,
   ) {}
 
   async start(examId: string, userId: string): Promise<ExamSession> {
@@ -56,9 +59,13 @@ export class ExamSessionService {
       throw new ForbiddenDomainException('신청한 회차가 아닙니다.');
     }
 
-    const verified = await this.idCardVerificationService.hasVerifiedExam(examId, userId);
-    if (!verified) {
-      throw new ForbiddenDomainException('본인인증을 먼저 완료해야 합니다.');
+    // AI팀 본인인증 서비스가 아직 배포되지 않은 기간 한정으로 REQUIRE_IDENTITY_VERIFICATION=false
+    // 로 이 게이트를 임시 우회할 수 있다. 기본값은 강제(true) — 실제 서비스 배포 전 반드시 되돌릴 것.
+    if (this.config.requireIdentityVerification) {
+      const verified = await this.idCardVerificationService.hasVerifiedExam(examId, userId);
+      if (!verified) {
+        throw new ForbiddenDomainException('본인인증을 먼저 완료해야 합니다.');
+      }
     }
 
     const existing = await this.examSessionRepository.findByUserAndExam(userId, examId);

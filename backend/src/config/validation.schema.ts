@@ -5,6 +5,7 @@ export const validationSchema = Joi.object({
   PORT: Joi.number().default(3000),
   CORS_ORIGIN: Joi.string().default('*'),
   SWAGGER_ENABLED: Joi.string().valid('true', 'false').default('true'),
+  REQUIRE_IDENTITY_VERIFICATION: Joi.string().valid('true', 'false').default('true'),
 
   SUPABASE_URL: Joi.string().uri().required(),
   SUPABASE_ANON_KEY: Joi.string().required(),
