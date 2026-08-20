@@ -1,4 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigType } from '@nestjs/config';
+import { appConfig } from '../../../../config/configuration';
 import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
 import { describeError } from '../../../../common/utils/describe-error.util';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
@@ -16,6 +18,13 @@ interface GazeCalibrationRow {
   eye_pitch_center: number;
 }
 
+const NEUTRAL_RESULT: GazeCalibrationResponseDto = {
+  calibrated: false,
+  sampleCount: 0,
+  eyeYawCenter: 0,
+  eyePitchCenter: 0,
+};
+
 /**
  * 시험 시작 전 시선 캘리브레이션(화면 중앙 응시 이미지 여러 장 → 개인별
  * Eye Yaw/Pitch 기준값). 결과가 있으면 이후 모니터링(부정행위 감지)
@@ -26,6 +35,10 @@ interface GazeCalibrationRow {
  * 전달만 한다 — 계산된 기준값 외에는 다시 쓸 일이 없는 일회성 판정이다.
  * 선택 기능이라(ANALYZE에서 eye_yaw_center/eye_pitch_center는 선택값)
  * 시험 시작을 막는 게이트는 아니다.
+ *
+ * AI팀 모니터링 서비스가 아직 배포되지 않은 기간에는 REQUIRE_MONITORING_SERVICE=false로
+ * 통신 실패를 에러 대신 "캘리브레이션 안 됨"으로 조용히 처리할 수 있다(analyze처럼).
+ * 기본값은 강제(true, 실패 시 에러) — 실제 서비스 배포 전 반드시 되돌릴 것.
  */
 @Injectable()
 export class GazeCalibrationService {
@@ -35,6 +48,7 @@ export class GazeCalibrationService {
     private readonly supabaseService: SupabaseService,
     private readonly examAccessService: ExamAccessService,
     @Inject(MONITORING_PROVIDER) private readonly monitoringProvider: MonitoringProviderPort,
+    @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>,
   ) {}
 
   async calibrate(
@@ -55,6 +69,9 @@ export class GazeCalibrationService {
       this.logger.warn(
         `시선 캘리브레이션 서비스 통신 실패 (examId=${examId}, userId=${userId}): ${describeError(err)}`,
       );
+      if (!this.config.requireMonitoringService) {
+        return NEUTRAL_RESULT;
+      }
       throw new ConflictDomainException(
         '시선 캘리브레이션 서비스와 통신에 실패했습니다. 잠시 후 다시 시도해주세요.',
       );

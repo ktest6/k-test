@@ -13,6 +13,7 @@ function buildConfig(url = 'https://monitoring.internal'): AppConfig {
     swaggerEnabled: false,
     requireIdentityVerification: true,
     requireEarphoneCheck: true,
+    requireMonitoringService: true,
     supabase: { url: '', anonKey: '', serviceRoleKey: '' },
     identityVerification: {
       minIntervalMinutes: 5,

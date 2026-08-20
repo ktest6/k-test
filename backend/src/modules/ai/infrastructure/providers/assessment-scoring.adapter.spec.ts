@@ -13,6 +13,7 @@ function buildConfig(overrides: Partial<{ url: string; apiKey: string }> = {}): 
     swaggerEnabled: false,
     requireIdentityVerification: true,
     requireEarphoneCheck: true,
+    requireMonitoringService: true,
     supabase: { url: 'https://project.supabase.co', anonKey: '', serviceRoleKey: '' },
     identityVerification: {
       minIntervalMinutes: 5,

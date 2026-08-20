@@ -18,6 +18,15 @@ export interface AppConfig {
    * 기본값은 true(강제) — 실제 서비스 배포 전에는 반드시 다시 true로 되돌릴 것.
    */
   requireEarphoneCheck: boolean;
+  /**
+   * 시선 캘리브레이션(calibrate) 통신 실패를 에러로 알릴지 여부. 기본값 true(강제)일 때
+   * 실패하면 409 에러를 던진다. AI팀 모니터링 서비스가 아직 배포되지 않은 개발/테스트
+   * 기간에는 false로 내려 실패해도 조용히 "캘리브레이션 안 됨"으로 처리할 수 있다.
+   * analyze(웹캠 프레임 분석)는 이 플래그와 무관하게 항상 실패를 조용히 처리한다 —
+   * 시험 진행 중 계속 호출되는 API라 실패할 때마다 에러를 던지면 응시 화면이 깨지기
+   * 때문에 이건 배포 여부와 상관없는 영구적인 설계 원칙이다.
+   */
+  requireMonitoringService: boolean;
   supabase: {
     url: string;
     anonKey: string;
@@ -66,6 +75,7 @@ export const appConfig = registerAs('app', (): AppConfig => ({
   swaggerEnabled: (process.env.SWAGGER_ENABLED ?? 'true') === 'true',
   requireIdentityVerification: (process.env.REQUIRE_IDENTITY_VERIFICATION ?? 'true') === 'true',
   requireEarphoneCheck: (process.env.REQUIRE_EARPHONE_CHECK ?? 'true') === 'true',
+  requireMonitoringService: (process.env.REQUIRE_MONITORING_SERVICE ?? 'true') === 'true',
   supabase: {
     url: process.env.SUPABASE_URL ?? '',
     anonKey: process.env.SUPABASE_ANON_KEY ?? '',

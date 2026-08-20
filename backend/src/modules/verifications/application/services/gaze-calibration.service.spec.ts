@@ -1,3 +1,5 @@
+import { ConfigType } from '@nestjs/config';
+import { appConfig } from '../../../../config/configuration';
 import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import {
@@ -49,11 +51,20 @@ function buildClient(overrides: { insert?: jest.Mock; maybeSingle?: jest.Mock } 
   return { from: jest.fn().mockReturnValue(queryBuilder) };
 }
 
+function buildConfig(
+  overrides: Partial<{ requireMonitoringService: boolean }> = {},
+): ConfigType<typeof appConfig> {
+  return {
+    requireMonitoringService: overrides.requireMonitoringService ?? true,
+  } as ConfigType<typeof appConfig>;
+}
+
 function buildService(
   overrides: {
     examAccessService?: Partial<ExamAccessService>;
     monitoringProvider?: Partial<MonitoringProviderPort>;
     client?: { insert?: jest.Mock; maybeSingle?: jest.Mock };
+    config?: ConfigType<typeof appConfig>;
   } = {},
 ) {
   const examAccessService = {
@@ -71,9 +82,15 @@ function buildService(
   const supabaseService = {
     getAdminClient: jest.fn().mockReturnValue(client),
   } as unknown as SupabaseService;
+  const config = overrides.config ?? buildConfig();
 
   return {
-    service: new GazeCalibrationService(supabaseService, examAccessService, monitoringProvider),
+    service: new GazeCalibrationService(
+      supabaseService,
+      examAccessService,
+      monitoringProvider,
+      config,
+    ),
     client,
   };
 }
@@ -145,13 +162,33 @@ describe('GazeCalibrationService.calibrate', () => {
     expect(insert).not.toHaveBeenCalled();
   });
 
-  it('does not treat a provider failure as a pass — throws instead of silently skipping', async () => {
+  it('does not treat a provider failure as a pass — throws instead of silently skipping by default', async () => {
     const calibrate = jest.fn().mockRejectedValue(new Error('fastapi unreachable'));
     const { service } = buildService({ monitoringProvider: { calibrate } });
 
     await expect(service.calibrate('9', '7', [buildImage('center_1')])).rejects.toThrow(
       ConflictDomainException,
     );
+  });
+
+  it('returns a neutral result instead of throwing when requireMonitoringService is false', async () => {
+    const calibrate = jest.fn().mockRejectedValue(new Error('fastapi unreachable'));
+    const insert = jest.fn();
+    const { service } = buildService({
+      monitoringProvider: { calibrate },
+      client: { insert },
+      config: buildConfig({ requireMonitoringService: false }),
+    });
+
+    const result = await service.calibrate('9', '7', [buildImage('center_1')]);
+
+    expect(result).toEqual({
+      calibrated: false,
+      sampleCount: 0,
+      eyeYawCenter: 0,
+      eyePitchCenter: 0,
+    });
+    expect(insert).not.toHaveBeenCalled();
   });
 });
 
