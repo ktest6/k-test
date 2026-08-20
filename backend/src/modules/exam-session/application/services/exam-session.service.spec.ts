@@ -587,3 +587,120 @@ describe('ExamSessionService.listMine', () => {
     expect(result.session?.status).toBe(SessionStatus.EXPIRED);
   });
 });
+
+describe('ExamSessionService.disqualify', () => {
+  it('rejects when the session does not exist', async () => {
+    const examService = {} as unknown as ExamService;
+    const examApplicationService = {} as unknown as ExamApplicationService;
+    const repository = buildRepository();
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+      buildConfig(),
+    );
+
+    await expect(service.disqualify('1')).rejects.toThrow(NotFoundDomainException);
+  });
+
+  it('rejects disqualifying an already-SUBMITTED session', async () => {
+    const session = buildSession({ status: SessionStatus.SUBMITTED });
+    const examService = {} as unknown as ExamService;
+    const examApplicationService = {} as unknown as ExamApplicationService;
+    const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+      buildConfig(),
+    );
+
+    await expect(service.disqualify('1')).rejects.toThrow(ConflictDomainException);
+    expect(repository.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('rejects disqualifying an already-EXPIRED session', async () => {
+    const session = buildSession({ status: SessionStatus.EXPIRED });
+    const examService = {} as unknown as ExamService;
+    const examApplicationService = {} as unknown as ExamApplicationService;
+    const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+      buildConfig(),
+    );
+
+    await expect(service.disqualify('1')).rejects.toThrow(ConflictDomainException);
+  });
+
+  it('returns the session as-is when already DISQUALIFIED (idempotent)', async () => {
+    const session = buildSession({ status: SessionStatus.DISQUALIFIED });
+    const examService = {} as unknown as ExamService;
+    const examApplicationService = {} as unknown as ExamApplicationService;
+    const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+      buildConfig(),
+    );
+
+    const result = await service.disqualify('1');
+
+    expect(result).toBe(session);
+    expect(repository.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('disqualifies an INPROGRESS session', async () => {
+    const session = buildSession({ status: SessionStatus.INPROGRESS });
+    const disqualified = buildSession({ status: SessionStatus.DISQUALIFIED });
+    const examService = {} as unknown as ExamService;
+    const examApplicationService = {} as unknown as ExamApplicationService;
+    const updateStatus = jest.fn().mockResolvedValue(disqualified);
+    const repository = buildRepository({
+      findById: jest.fn().mockResolvedValue(session),
+      updateStatus,
+    });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+      buildConfig(),
+    );
+
+    const result = await service.disqualify('1');
+
+    expect(updateStatus).toHaveBeenCalledWith('1', SessionStatus.DISQUALIFIED);
+    expect(result).toBe(disqualified);
+  });
+
+  it('disqualifies a BLOCKED session', async () => {
+    const session = buildSession({ status: SessionStatus.BLOCKED });
+    const disqualified = buildSession({ status: SessionStatus.DISQUALIFIED });
+    const examService = {} as unknown as ExamService;
+    const examApplicationService = {} as unknown as ExamApplicationService;
+    const updateStatus = jest.fn().mockResolvedValue(disqualified);
+    const repository = buildRepository({
+      findById: jest.fn().mockResolvedValue(session),
+      updateStatus,
+    });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+      buildConfig(),
+    );
+
+    const result = await service.disqualify('1');
+
+    expect(updateStatus).toHaveBeenCalledWith('1', SessionStatus.DISQUALIFIED);
+    expect(result).toBe(disqualified);
+  });
+});
