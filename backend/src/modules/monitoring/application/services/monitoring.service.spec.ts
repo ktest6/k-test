@@ -14,6 +14,7 @@ import {
   ProctoringEventRepository,
 } from '../../domain/proctoring-event.repository.interface';
 import { ProctoringEvent } from '../../domain/entities/proctoring-event.entity';
+import { ClientViolationType } from '../../domain/enums/client-violation-type.enum';
 import { MonitoringService } from './monitoring.service';
 
 function buildSession(): ExamSession {
@@ -346,6 +347,130 @@ describe('MonitoringService.analyze', () => {
     expect(analyze).toHaveBeenCalledWith(
       expect.objectContaining({ eyeYawCenter: undefined, eyePitchCenter: undefined }),
     );
+  });
+});
+
+function buildEvent(
+  overrides: Partial<{ eventType: string; severity: 'LOW' | 'MEDIUM' | 'HIGH' }> = {},
+): ProctoringEvent {
+  return new ProctoringEvent(
+    '1',
+    '100',
+    overrides.eventType ?? 'TAB_SWITCH',
+    overrides.severity ?? 'MEDIUM',
+    {},
+    new Date(),
+    null,
+  );
+}
+
+describe('MonitoringService.reportViolation', () => {
+  it('gates on assertActiveSession before recording anything', async () => {
+    const assertActiveSession = jest.fn().mockRejectedValue(new Error('not active'));
+    const create = jest.fn();
+    const service = buildService({
+      examSessionService: { assertActiveSession },
+      proctoringEventRepository: { create },
+    });
+
+    await expect(
+      service.reportViolation('100', '9', { violationType: ClientViolationType.TAB_SWITCH }),
+    ).rejects.toThrow('not active');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('records a non-dual-monitor violation with its mapped severity and no snapshot', async () => {
+    const saved = buildEvent({ eventType: 'PASTE', severity: 'MEDIUM' });
+    const create = jest
+      .fn<Promise<ProctoringEvent>, [CreateProctoringEventInput]>()
+      .mockResolvedValue(saved);
+    const disqualify = jest.fn();
+    const service = buildService({
+      proctoringEventRepository: { create },
+      examSessionService: {
+        assertActiveSession: jest.fn().mockResolvedValue(buildSession()),
+        disqualify,
+      },
+    });
+
+    const result = await service.reportViolation('100', '9', {
+      violationType: ClientViolationType.PASTE,
+      meta: { pastedLength: 42 },
+    });
+
+    expect(create).toHaveBeenCalledWith({
+      examSessionId: '100',
+      eventType: 'PASTE',
+      severity: 'MEDIUM',
+      meta: { pastedLength: 42 },
+      snapshotPath: null,
+    });
+    expect(disqualify).not.toHaveBeenCalled();
+    expect(result).toBe(saved);
+  });
+
+  it('does not auto-disqualify on the first DUAL_MONITOR occurrence', async () => {
+    const create = jest.fn().mockResolvedValue(buildEvent({ eventType: 'DUAL_MONITOR' }));
+    const findByExamSessionId = jest
+      .fn()
+      .mockResolvedValue([buildEvent({ eventType: 'DUAL_MONITOR', severity: 'HIGH' })]);
+    const disqualify = jest.fn();
+    const service = buildService({
+      proctoringEventRepository: { create, findByExamSessionId },
+      examSessionService: {
+        assertActiveSession: jest.fn().mockResolvedValue(buildSession()),
+        disqualify,
+      },
+    });
+
+    await service.reportViolation('100', '9', { violationType: ClientViolationType.DUAL_MONITOR });
+
+    expect(disqualify).not.toHaveBeenCalled();
+  });
+
+  it('auto-disqualifies the session on the 2nd DUAL_MONITOR occurrence', async () => {
+    const create = jest.fn().mockResolvedValue(buildEvent({ eventType: 'DUAL_MONITOR' }));
+    const findByExamSessionId = jest
+      .fn()
+      .mockResolvedValue([
+        buildEvent({ eventType: 'DUAL_MONITOR', severity: 'HIGH' }),
+        buildEvent({ eventType: 'DUAL_MONITOR', severity: 'HIGH' }),
+      ]);
+    const disqualify = jest.fn().mockResolvedValue(undefined);
+    const service = buildService({
+      proctoringEventRepository: { create, findByExamSessionId },
+      examSessionService: {
+        assertActiveSession: jest.fn().mockResolvedValue(buildSession()),
+        disqualify,
+      },
+    });
+
+    await service.reportViolation('100', '9', { violationType: ClientViolationType.DUAL_MONITOR });
+
+    expect(disqualify).toHaveBeenCalledWith('100');
+  });
+
+  it('does not count other violation types toward the DUAL_MONITOR threshold', async () => {
+    const create = jest.fn().mockResolvedValue(buildEvent({ eventType: 'DUAL_MONITOR' }));
+    const findByExamSessionId = jest
+      .fn()
+      .mockResolvedValue([
+        buildEvent({ eventType: 'DUAL_MONITOR', severity: 'HIGH' }),
+        buildEvent({ eventType: 'TAB_SWITCH', severity: 'MEDIUM' }),
+        buildEvent({ eventType: 'WINDOW_CLOSE_ATTEMPT', severity: 'HIGH' }),
+      ]);
+    const disqualify = jest.fn();
+    const service = buildService({
+      proctoringEventRepository: { create, findByExamSessionId },
+      examSessionService: {
+        assertActiveSession: jest.fn().mockResolvedValue(buildSession()),
+        disqualify,
+      },
+    });
+
+    await service.reportViolation('100', '9', { violationType: ClientViolationType.DUAL_MONITOR });
+
+    expect(disqualify).not.toHaveBeenCalled();
   });
 });
 

@@ -15,6 +15,8 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { AnalyzeFrameDto } from '../application/dto/analyze-frame.dto';
 import { MonitoringAnalyzeResponseDto } from '../application/dto/monitoring-analyze-response.dto';
+import { ProctoringEventResponseDto } from '../application/dto/proctoring-event-response.dto';
+import { ReportViolationDto } from '../application/dto/report-violation.dto';
 import { MonitoringService } from '../application/services/monitoring.service';
 import { toEventDto } from './proctoring-event.mapper';
 
@@ -74,5 +76,22 @@ export class MonitoringController {
       eventCount: result.eventCount,
       recordedEvents: result.recordedEvents.map(toEventDto),
     };
+  }
+
+  @Post('violations')
+  @ApiOperation({
+    summary: '브라우저 감지 부정행위 신고 (탭 이탈/포커스 이탈/붙여넣기/듀얼 모니터 등)',
+    description:
+      'AI 모니터링(analyze)과 별개로, 프런트가 브라우저 이벤트로 직접 감지한 위반을 기록한다. ' +
+      '웹캠 프레임이 없는 신호라 스냅샷은 남기지 않는다. DUAL_MONITOR는 누적 2회부터 자동으로 세션이 실격 처리된다.',
+  })
+  @ApiStandardResponse(ProctoringEventResponseDto, { status: 201, message: '위반 신고 접수 완료' })
+  async reportViolation(
+    @Param('examSessionId') examSessionId: string,
+    @Body() dto: ReportViolationDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ProctoringEventResponseDto> {
+    const event = await this.monitoringService.reportViolation(examSessionId, user.id, dto);
+    return toEventDto(event);
   }
 }

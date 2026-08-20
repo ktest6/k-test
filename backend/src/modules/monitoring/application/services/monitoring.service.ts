@@ -10,11 +10,13 @@ import { SupabaseService } from '../../../../infrastructure/supabase/supabase.se
 import { GazeCalibrationService } from '../../../verifications/application/services/gaze-calibration.service';
 import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
 import { ExamSessionService } from '../../../exam-session/application/services/exam-session.service';
-import { ProctoringEvent } from '../../domain/entities/proctoring-event.entity';
+import { ProctoringEvent, ProctoringSeverity } from '../../domain/entities/proctoring-event.entity';
+import { ClientViolationType } from '../../domain/enums/client-violation-type.enum';
 import {
   PROCTORING_EVENT_REPOSITORY,
   ProctoringEventRepository,
 } from '../../domain/proctoring-event.repository.interface';
+import { ReportViolationDto } from '../dto/report-violation.dto';
 
 const IDENTITY_DOCS_BUCKET = 'identity-docs';
 const PROCTORING_SNAPSHOTS_BUCKET = 'proctoring-snapshots';
@@ -22,6 +24,19 @@ const PROCTORING_SNAPSHOTS_BUCKET = 'proctoring-snapshots';
 // 자동 실격 정책 초안 — 아직 확정 전이라 비활성 상태(주석)로만 둔다. 활성화하려면
 // analyze() 안의 해당 블록 주석을 풀면 된다(추가 배선 필요 없음, 아래 상수만 조정).
 // const AUTO_DISQUALIFY_HIGH_THRESHOLD = 3;
+
+/** 프런트 부정행위 방지 플로우 기준 — 종류별 심각도. */
+const CLIENT_VIOLATION_SEVERITY: Record<ClientViolationType, ProctoringSeverity> = {
+  [ClientViolationType.DUAL_MONITOR]: 'HIGH',
+  [ClientViolationType.WINDOW_CLOSE_ATTEMPT]: 'HIGH',
+  [ClientViolationType.TAB_SWITCH]: 'MEDIUM',
+  [ClientViolationType.PASTE]: 'MEDIUM',
+  [ClientViolationType.BLUR]: 'LOW',
+  [ClientViolationType.MOUSE_LEAVE]: 'LOW',
+};
+
+/** 듀얼 모니터가 이 횟수만큼 누적되면 자동으로 실격 처리한다(프런트 부정행위 방지 플로우 기준). */
+const DUAL_MONITOR_DISQUALIFY_THRESHOLD = 2;
 
 export interface AnalyzeFrameCommand {
   capturedAt: string;
@@ -162,6 +177,42 @@ export class MonitoringService {
     }
 
     return { ...result.eventSummary, recordedEvents };
+  }
+
+  /**
+   * AI 모니터링(analyze)과 별개로, 프런트가 브라우저 이벤트(탭 이탈/포커스
+   * 이탈/붙여넣기/듀얼 모니터 등)로 직접 감지한 위반을 기록한다. 웹캠 프레임이
+   * 없는 신호라 스냅샷은 남기지 않는다. DUAL_MONITOR는 누적 2회부터 자동
+   * 실격(프런트 부정행위 방지 플로우 기준) — 그 외 종류는 기록만 하고 별도
+   * 자동 조치는 없다.
+   */
+  async reportViolation(
+    examSessionId: string,
+    userId: string,
+    dto: ReportViolationDto,
+  ): Promise<ProctoringEvent> {
+    await this.examSessionService.assertActiveSession(examSessionId, userId);
+
+    const saved = await this.proctoringEventRepository.create({
+      examSessionId,
+      eventType: dto.violationType,
+      severity: CLIENT_VIOLATION_SEVERITY[dto.violationType],
+      meta: dto.meta ?? {},
+      snapshotPath: null,
+    });
+
+    if (dto.violationType === ClientViolationType.DUAL_MONITOR) {
+      const events = await this.proctoringEventRepository.findByExamSessionId(examSessionId);
+      const dualMonitorEventType: string = ClientViolationType.DUAL_MONITOR;
+      const dualMonitorCount = events.filter(
+        (event) => event.eventType === dualMonitorEventType,
+      ).length;
+      if (dualMonitorCount >= DUAL_MONITOR_DISQUALIFY_THRESHOLD) {
+        await this.examSessionService.disqualify(examSessionId);
+      }
+    }
+
+    return saved;
   }
 
   getEvents(examSessionId: string): Promise<ProctoringEvent[]> {
