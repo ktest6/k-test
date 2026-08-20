@@ -8,6 +8,7 @@ import {
 import { Exam } from '../../../exam/domain/entities/exam.entity';
 import { ExamApplicationService } from '../../../exam/application/services/exam-application.service';
 import { ExamService } from '../../../exam/application/services/exam.service';
+import { EarphoneDetectionService } from '../../../verifications/application/services/earphone-detection.service';
 import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
 import { ExamSession } from '../../domain/entities/exam-session.entity';
 import { SessionStatus } from '../../domain/enums/session-status.enum';
@@ -70,11 +71,19 @@ function buildIdCardVerificationService(
   } as unknown as IdCardVerificationService;
 }
 
+function buildEarphoneDetectionService(overrides: Partial<{ hasPassedCheck: jest.Mock }> = {}) {
+  return {
+    hasPassedCheck: jest.fn().mockResolvedValue(true),
+    ...overrides,
+  } as unknown as EarphoneDetectionService;
+}
+
 function buildConfig(
-  overrides: Partial<{ requireIdentityVerification: boolean }> = {},
+  overrides: Partial<{ requireIdentityVerification: boolean; requireEarphoneCheck: boolean }> = {},
 ): ConfigType<typeof appConfig> {
   return {
     requireIdentityVerification: overrides.requireIdentityVerification ?? true,
+    requireEarphoneCheck: overrides.requireEarphoneCheck ?? true,
   } as ConfigType<typeof appConfig>;
 }
 
@@ -91,6 +100,7 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -109,6 +119,7 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -131,6 +142,7 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       idCardVerificationService,
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -152,12 +164,60 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService({ hasVerifiedExam }),
+      buildEarphoneDetectionService(),
       buildConfig({ requireIdentityVerification: false }),
     );
 
     const result = await service.start('1', '1');
 
     expect(hasVerifiedExam).not.toHaveBeenCalled();
+    expect(result).toBe(created);
+  });
+
+  it('rejects when the caller has not passed the earphone check', async () => {
+    const exam = buildExam();
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
+    const examApplicationService = {
+      hasActiveApplication: jest.fn().mockResolvedValue(true),
+    } as unknown as ExamApplicationService;
+    const repository = buildRepository();
+    const earphoneDetectionService = buildEarphoneDetectionService({
+      hasPassedCheck: jest.fn().mockResolvedValue(false),
+    });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+      earphoneDetectionService,
+      buildConfig(),
+    );
+
+    await expect(service.start('1', '1')).rejects.toThrow(ForbiddenDomainException);
+    expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it('skips the earphone check when requireEarphoneCheck is false', async () => {
+    const exam = buildExam();
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
+    const examApplicationService = {
+      hasActiveApplication: jest.fn().mockResolvedValue(true),
+    } as unknown as ExamApplicationService;
+    const created = buildSession();
+    const repository = buildRepository({ create: jest.fn().mockResolvedValue(created) });
+    const hasPassedCheck = jest.fn().mockResolvedValue(false);
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+      buildEarphoneDetectionService({ hasPassedCheck }),
+      buildConfig({ requireEarphoneCheck: false }),
+    );
+
+    const result = await service.start('1', '1');
+
+    expect(hasPassedCheck).not.toHaveBeenCalled();
     expect(result).toBe(created);
   });
 
@@ -176,6 +236,7 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -201,6 +262,7 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -230,6 +292,7 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -255,6 +318,7 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -275,6 +339,7 @@ describe('ExamSessionService.start', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -295,6 +360,7 @@ describe('ExamSessionService.getStatus', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -311,6 +377,7 @@ describe('ExamSessionService.getStatus', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -328,6 +395,7 @@ describe('ExamSessionService.getStatus', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -347,6 +415,7 @@ describe('ExamSessionService.getStatus', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -367,6 +436,7 @@ describe('ExamSessionService.getStatus', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -387,6 +457,7 @@ describe('ExamSessionService.getStatus', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService({ cleanupVerifiedFaceImage }),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -407,6 +478,7 @@ describe('ExamSessionService.getStatus', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService({ cleanupVerifiedFaceImage }),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -426,6 +498,7 @@ describe('ExamSessionService.assertActiveSession', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -442,6 +515,7 @@ describe('ExamSessionService.assertActiveSession', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -458,6 +532,7 @@ describe('ExamSessionService.assertActiveSession', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -474,6 +549,7 @@ describe('ExamSessionService.assertActiveSession', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -491,6 +567,7 @@ describe('ExamSessionService.assertActiveSession', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -508,6 +585,7 @@ describe('ExamSessionService.assertActiveSession', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -532,6 +610,7 @@ describe('ExamSessionService.listMine', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -556,6 +635,7 @@ describe('ExamSessionService.listMine', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -579,6 +659,7 @@ describe('ExamSessionService.listMine', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
