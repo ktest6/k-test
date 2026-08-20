@@ -11,6 +11,7 @@ import { ExamService } from '../../../exam/application/services/exam.service';
 import { Exam } from '../../../exam/domain/entities/exam.entity';
 import { ExamStatus } from '../../../exam/domain/enums/exam-status.enum';
 import { computeExamStatus } from '../../../exam/domain/exam-status.util';
+import { EarphoneDetectionService } from '../../../verifications/application/services/earphone-detection.service';
 import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
 import { ExamSession } from '../../domain/entities/exam-session.entity';
 import { SessionStatus } from '../../domain/enums/session-status.enum';
@@ -44,6 +45,7 @@ export class ExamSessionService {
     private readonly examService: ExamService,
     private readonly examApplicationService: ExamApplicationService,
     private readonly idCardVerificationService: IdCardVerificationService,
+    private readonly earphoneDetectionService: EarphoneDetectionService,
     @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>,
   ) {}
 
@@ -65,6 +67,18 @@ export class ExamSessionService {
       const verified = await this.idCardVerificationService.hasVerifiedExam(examId, userId);
       if (!verified) {
         throw new ForbiddenDomainException('본인인증을 먼저 완료해야 합니다.');
+      }
+    }
+
+    // requireIdentityVerification과 같은 이유(AI팀 서비스 미배포 기간)로 임시 우회 가능.
+    // 기본값은 강제(true) — 실제 서비스 배포 전 반드시 되돌릴 것.
+    if (this.config.requireEarphoneCheck) {
+      const earphoneCheckPassed = await this.earphoneDetectionService.hasPassedCheck(
+        examId,
+        userId,
+      );
+      if (!earphoneCheckPassed) {
+        throw new ForbiddenDomainException('이어폰 미착용 확인을 먼저 완료해야 합니다.');
       }
     }
 

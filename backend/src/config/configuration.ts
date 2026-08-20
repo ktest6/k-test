@@ -12,6 +12,12 @@ export interface AppConfig {
    * 실제 서비스 배포 전에는 반드시 다시 true로(또는 env var 자체를 제거) 되돌릴 것.
    */
   requireIdentityVerification: boolean;
+  /**
+   * 시험 시작 시 이어폰 미착용 확인(earphone_detected:false 기록) 완료를 요구할지 여부.
+   * requireIdentityVerification과 같은 이유(AI팀 서비스 미배포 기간)로 임시 우회용.
+   * 기본값은 true(강제) — 실제 서비스 배포 전에는 반드시 다시 true로 되돌릴 것.
+   */
+  requireEarphoneCheck: boolean;
   supabase: {
     url: string;
     anonKey: string;
@@ -59,6 +65,7 @@ export const appConfig = registerAs('app', (): AppConfig => ({
   corsOrigin: process.env.CORS_ORIGIN ?? '*',
   swaggerEnabled: (process.env.SWAGGER_ENABLED ?? 'true') === 'true',
   requireIdentityVerification: (process.env.REQUIRE_IDENTITY_VERIFICATION ?? 'true') === 'true',
+  requireEarphoneCheck: (process.env.REQUIRE_EARPHONE_CHECK ?? 'true') === 'true',
   supabase: {
     url: process.env.SUPABASE_URL ?? '',
     anonKey: process.env.SUPABASE_ANON_KEY ?? '',

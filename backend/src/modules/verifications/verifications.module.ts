@@ -21,6 +21,6 @@ import { IdCardController } from './presentation/id-card.controller';
     EarphoneDetectionService,
     GazeCalibrationService,
   ],
-  exports: [IdCardVerificationService, GazeCalibrationService],
+  exports: [IdCardVerificationService, GazeCalibrationService, EarphoneDetectionService],
 })
 export class VerificationsModule {}
