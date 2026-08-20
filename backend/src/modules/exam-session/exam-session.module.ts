@@ -9,12 +9,13 @@ import { ExamSessionAnswerService } from './application/services/exam-session-an
 import { ExamSessionQuestionService } from './application/services/exam-session-question.service';
 import { ExamSessionService } from './application/services/exam-session.service';
 import { SupabaseExamSessionRepository } from './infrastructure/repositories/supabase-exam-session.repository';
+import { AdminExamSessionController } from './presentation/admin-exam-session.controller';
 import { ExamSessionController } from './presentation/exam-session.controller';
 import { MypageController } from './presentation/mypage.controller';
 
 @Module({
   imports: [ExamModule, ExamQuestionModule, VerificationsModule, AnswerModule, ScoringModule],
-  controllers: [ExamSessionController, MypageController],
+  controllers: [ExamSessionController, MypageController, AdminExamSessionController],
   providers: [
     ExamSessionService,
     ExamSessionQuestionService,

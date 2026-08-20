@@ -152,4 +152,28 @@ export class ExamSessionService {
 
     return session;
   }
+
+  /**
+   * 부정행위로 판단돼 세션을 실격 처리한다. 모니터링(듀얼 모니터 반복 감지 등)이
+   * 자동으로 부르기도 하고, 관리자가 검토 후 수동으로 부르기도 한다(관리자 전용
+   * 엔드포인트 참고). 이미 끝난 세션(SUBMITTED/EXPIRED)은 실격으로 덮어쓰지
+   * 않는다 — 이미 제출/만료된 응시 결과를 뒤집을 이유가 없다. BLOCKED/이미
+   * DISQUALIFIED된 세션에 다시 걸어도 멱등하게 처리한다.
+   */
+  async disqualify(examSessionId: string): Promise<ExamSession> {
+    const session = await this.examSessionRepository.findById(examSessionId);
+    if (!session) {
+      throw new NotFoundDomainException(`응시 세션(${examSessionId})을 찾을 수 없습니다.`);
+    }
+    if (session.status === SessionStatus.DISQUALIFIED) {
+      return session;
+    }
+    if (session.status === SessionStatus.SUBMITTED || session.status === SessionStatus.EXPIRED) {
+      throw new ConflictDomainException(
+        `응시 세션(${examSessionId})은 이미 종료되어 실격시킬 수 없습니다.`,
+      );
+    }
+
+    return this.examSessionRepository.updateStatus(examSessionId, SessionStatus.DISQUALIFIED);
+  }
 }
