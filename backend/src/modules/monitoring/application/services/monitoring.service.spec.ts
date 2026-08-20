@@ -406,7 +406,8 @@ describe('MonitoringService.reportViolation', () => {
       snapshotPath: null,
     });
     expect(disqualify).not.toHaveBeenCalled();
-    expect(result).toBe(saved);
+    expect(result.event).toBe(saved);
+    expect(result.sessionStatus).toBe(SessionStatus.INPROGRESS);
   });
 
   it('does not auto-disqualify on the first DUAL_MONITOR occurrence', async () => {
@@ -428,7 +429,7 @@ describe('MonitoringService.reportViolation', () => {
     expect(disqualify).not.toHaveBeenCalled();
   });
 
-  it('auto-disqualifies the session on the 2nd DUAL_MONITOR occurrence', async () => {
+  it('auto-disqualifies the session on the 2nd DUAL_MONITOR occurrence and reports the new status', async () => {
     const create = jest.fn().mockResolvedValue(buildEvent({ eventType: 'DUAL_MONITOR' }));
     const findByExamSessionId = jest
       .fn()
@@ -436,7 +437,19 @@ describe('MonitoringService.reportViolation', () => {
         buildEvent({ eventType: 'DUAL_MONITOR', severity: 'HIGH' }),
         buildEvent({ eventType: 'DUAL_MONITOR', severity: 'HIGH' }),
       ]);
-    const disqualify = jest.fn().mockResolvedValue(undefined);
+    const disqualifiedSession = new ExamSession(
+      '100',
+      '7',
+      '9',
+      SessionStatus.DISQUALIFIED,
+      0,
+      new Date('2026-08-04T00:00:00.000Z'),
+      null,
+      null,
+      null,
+      new Date(),
+    );
+    const disqualify = jest.fn().mockResolvedValue(disqualifiedSession);
     const service = buildService({
       proctoringEventRepository: { create, findByExamSessionId },
       examSessionService: {
@@ -445,9 +458,12 @@ describe('MonitoringService.reportViolation', () => {
       },
     });
 
-    await service.reportViolation('100', '9', { violationType: ClientViolationType.DUAL_MONITOR });
+    const result = await service.reportViolation('100', '9', {
+      violationType: ClientViolationType.DUAL_MONITOR,
+    });
 
     expect(disqualify).toHaveBeenCalledWith('100');
+    expect(result.sessionStatus).toBe(SessionStatus.DISQUALIFIED);
   });
 
   it('does not count other violation types toward the DUAL_MONITOR threshold', async () => {
