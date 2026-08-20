@@ -679,6 +679,7 @@ describe('ExamSessionService.disqualify', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -695,6 +696,7 @@ describe('ExamSessionService.disqualify', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -712,6 +714,7 @@ describe('ExamSessionService.disqualify', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -728,6 +731,7 @@ describe('ExamSessionService.disqualify', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -752,6 +756,7 @@ describe('ExamSessionService.disqualify', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
@@ -776,6 +781,7 @@ describe('ExamSessionService.disqualify', () => {
       examService,
       examApplicationService,
       buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
       buildConfig(),
     );
 
