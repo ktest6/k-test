@@ -137,7 +137,7 @@ describe('GazeCalibrationService.calibrate', () => {
       examineeId: '9',
       calibrationImages: images,
     });
-    expect(client.from).toHaveBeenCalledWith('gaze_calibrations');
+    expect(client.from).toHaveBeenCalledWith('tb_gaze_calibrations');
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({
         exam_id: 7,
@@ -210,7 +210,7 @@ describe('GazeCalibrationService.getLatestCalibration', () => {
 
     const result = await service.getLatestCalibration('7', '9');
 
-    expect(client.from).toHaveBeenCalledWith('gaze_calibrations');
+    expect(client.from).toHaveBeenCalledWith('tb_gaze_calibrations');
     expect(result).toEqual({ eyeYawCenter: -2.1937, eyePitchCenter: -20.7994 });
   });
 });

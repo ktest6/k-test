@@ -57,7 +57,7 @@ export class EarphoneDetectionService {
     }
 
     const client = this.supabaseService.getAdminClient();
-    await client.from('earphone_logs').insert({
+    await client.from('tb_earphone_logs').insert({
       exam_id: Number(examId),
       user_id: Number(userId),
       earphone_detected: result.earphoneDetected,
@@ -71,8 +71,8 @@ export class EarphoneDetectionService {
   async hasPassedCheck(examId: string, userId: string): Promise<boolean> {
     const client = this.supabaseService.getAdminClient();
     const { data } = await client
-      .from('earphone_logs')
-      .select('id')
+      .from('tb_earphone_logs')
+      .select('earphone_log_id')
       .eq('exam_id', Number(examId))
       .eq('user_id', Number(userId))
       .eq('earphone_detected', false)
