@@ -5,6 +5,7 @@ export interface CreateProctoringEventInput {
   eventType: string;
   severity: ProctoringSeverity;
   meta: Record<string, unknown>;
+  snapshotPath?: string | null;
 }
 
 export const PROCTORING_EVENT_REPOSITORY = Symbol('PROCTORING_EVENT_REPOSITORY');

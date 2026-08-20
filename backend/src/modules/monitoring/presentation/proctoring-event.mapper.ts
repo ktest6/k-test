@@ -8,5 +8,6 @@ export function toEventDto(event: ProctoringEvent): ProctoringEventResponseDto {
     severity: event.severity,
     meta: event.meta,
     createdAt: event.createdAt,
+    snapshotPath: event.snapshotPath,
   };
 }

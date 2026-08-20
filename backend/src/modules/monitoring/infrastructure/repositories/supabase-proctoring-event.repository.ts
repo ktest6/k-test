@@ -16,6 +16,7 @@ interface ProctoringEventRow {
   severity: ProctoringSeverity;
   meta: Record<string, unknown>;
   created_at: string;
+  snapshot_path: string | null;
 }
 
 function toDomain(row: ProctoringEventRow): ProctoringEvent {
@@ -26,6 +27,7 @@ function toDomain(row: ProctoringEventRow): ProctoringEvent {
     row.severity,
     row.meta,
     new Date(row.created_at),
+    row.snapshot_path,
   );
 }
 
@@ -42,6 +44,7 @@ export class SupabaseProctoringEventRepository implements ProctoringEventReposit
         event_type: input.eventType,
         severity: input.severity,
         meta: input.meta,
+        snapshot_path: input.snapshotPath ?? null,
       })
       .select()
       .single<ProctoringEventRow>();

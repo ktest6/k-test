@@ -19,6 +19,7 @@ describe('AdminMonitoringController.getEvents', () => {
       'HIGH',
       { label: 'Mobile Phone' },
       new Date(),
+      '100/snapshot.jpg',
     );
     const getEvents = jest.fn().mockResolvedValue([event]);
     const controller = buildController({ getEvents });
@@ -33,6 +34,7 @@ describe('AdminMonitoringController.getEvents', () => {
         severity: 'HIGH',
         meta: { label: 'Mobile Phone' },
         createdAt: event.createdAt,
+        snapshotPath: '100/snapshot.jpg',
       },
     ]);
   });

@@ -9,7 +9,10 @@ import {
   MonitoringProviderPort,
 } from '../../../ai/domain/ports/monitoring-provider.port';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
-import { ProctoringEventRepository } from '../../domain/proctoring-event.repository.interface';
+import {
+  CreateProctoringEventInput,
+  ProctoringEventRepository,
+} from '../../domain/proctoring-event.repository.interface';
 import { ProctoringEvent } from '../../domain/entities/proctoring-event.entity';
 import { MonitoringService } from './monitoring.service';
 
@@ -67,8 +70,9 @@ function buildService(overrides: {
     getLatestCalibration: jest.fn().mockResolvedValue(null),
     ...overrides.gazeCalibrationService,
   } as unknown as GazeCalibrationService;
+  const upload = jest.fn().mockResolvedValue({ data: { path: 'snapshot.jpg' }, error: null });
   const supabaseService = {
-    getAdminClient: jest.fn(),
+    getAdminClient: jest.fn().mockReturnValue({ storage: { from: () => ({ upload }) } }),
     ...overrides.supabaseService,
   } as unknown as SupabaseService;
   const monitoringProvider = {
@@ -130,7 +134,7 @@ describe('MonitoringService.analyze', () => {
     expect(result.severity).toBe('NORMAL');
   });
 
-  it('records each detected event with the batch severity', async () => {
+  it('records each detected event with the batch severity and the uploaded snapshot path', async () => {
     const savedEvent = new ProctoringEvent(
       '1',
       '100',
@@ -138,8 +142,11 @@ describe('MonitoringService.analyze', () => {
       'MEDIUM',
       { face_count: 0 },
       new Date(),
+      'proctoring/snapshot.jpg',
     );
-    const create = jest.fn().mockResolvedValue(savedEvent);
+    const create = jest
+      .fn<Promise<ProctoringEvent>, [CreateProctoringEventInput]>()
+      .mockResolvedValue(savedEvent);
     const analyze = jest.fn().mockResolvedValue(
       buildAnalyzedResult({
         eventSummary: {
@@ -164,14 +171,57 @@ describe('MonitoringService.analyze', () => {
       buildFrame(),
     );
 
-    expect(create).toHaveBeenCalledWith({
-      examSessionId: '100',
-      eventType: 'FACE_OUT_OF_FRAME',
-      severity: 'MEDIUM',
-      meta: { face_count: 0 },
-    });
+    const createInput = create.mock.calls[0][0];
+    expect(createInput.examSessionId).toBe('100');
+    expect(createInput.eventType).toBe('FACE_OUT_OF_FRAME');
+    expect(createInput.severity).toBe('MEDIUM');
+    expect(createInput.meta).toEqual({ face_count: 0 });
+    expect(createInput.snapshotPath).toMatch(/^100\/\d+-.+\.jpg$/);
     expect(result.recordedEvents).toEqual([savedEvent]);
     expect(result.severity).toBe('MEDIUM');
+  });
+
+  it('records the event with a null snapshot path when the snapshot upload fails', async () => {
+    const savedEvent = new ProctoringEvent(
+      '1',
+      '100',
+      'FACE_OUT_OF_FRAME',
+      'MEDIUM',
+      { face_count: 0 },
+      new Date(),
+      null,
+    );
+    const create = jest.fn().mockResolvedValue(savedEvent);
+    const analyze = jest.fn().mockResolvedValue(
+      buildAnalyzedResult({
+        eventSummary: {
+          eventDetected: true,
+          eventCount: 1,
+          severity: 'MEDIUM',
+          decision: 'RECORD_EVENT',
+          createClip: false,
+        },
+        events: [{ eventType: 'FACE_OUT_OF_FRAME', details: { face_count: 0 } }],
+      }),
+    );
+    const upload = jest.fn().mockResolvedValue({ data: null, error: { message: 'boom' } });
+    const getAdminClient = jest.fn().mockReturnValue({ storage: { from: () => ({ upload }) } });
+    const service = buildService({
+      monitoringProvider: { analyze },
+      proctoringEventRepository: { create },
+      supabaseService: { getAdminClient },
+    });
+
+    await service.analyze(
+      '100',
+      '9',
+      { capturedAt: '2026-08-04T00:00:00+09:00', elapsedMs: 1000, captureSequence: 1 },
+      buildFrame(),
+    );
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'FACE_OUT_OF_FRAME', snapshotPath: null }),
+    );
   });
 
   it('returns a neutral result and does not throw when the provider call fails', async () => {
