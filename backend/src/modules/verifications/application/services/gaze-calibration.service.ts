@@ -62,7 +62,7 @@ export class GazeCalibrationService {
 
     if (result.calibrated) {
       const client = this.supabaseService.getAdminClient();
-      await client.from('gaze_calibrations').insert({
+      await client.from('tb_gaze_calibrations').insert({
         exam_id: Number(examId),
         user_id: Number(userId),
         eye_yaw_center: result.eyeYawCenter,
@@ -82,7 +82,7 @@ export class GazeCalibrationService {
   ): Promise<{ eyeYawCenter: number; eyePitchCenter: number } | null> {
     const client = this.supabaseService.getAdminClient();
     const { data } = await client
-      .from('gaze_calibrations')
+      .from('tb_gaze_calibrations')
       .select('eye_yaw_center, eye_pitch_center')
       .eq('exam_id', Number(examId))
       .eq('user_id', Number(userId))

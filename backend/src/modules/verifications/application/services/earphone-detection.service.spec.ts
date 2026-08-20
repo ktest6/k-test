@@ -124,7 +124,7 @@ describe('EarphoneDetectionService.detect', () => {
       leftEarImage: left,
       rightEarImage: right,
     });
-    expect(client.from).toHaveBeenCalledWith('earphone_logs');
+    expect(client.from).toHaveBeenCalledWith('tb_earphone_logs');
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({ exam_id: 7, user_id: 9, earphone_detected: true }),
     );
@@ -159,7 +159,7 @@ describe('EarphoneDetectionService.hasPassedCheck', () => {
 
     const result = await service.hasPassedCheck('7', '9');
 
-    expect(client.from).toHaveBeenCalledWith('earphone_logs');
+    expect(client.from).toHaveBeenCalledWith('tb_earphone_logs');
     expect(result).toBe(true);
   });
 });
