@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Role } from '../../../common/enums/role.enum';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { ProctoringEvent } from '../domain/entities/proctoring-event.entity';
+import { ClientViolationType } from '../domain/enums/client-violation-type.enum';
 import { MonitoringService } from '../application/services/monitoring.service';
 import { MonitoringController } from './monitoring.controller';
 
@@ -21,9 +22,12 @@ function buildDto() {
   return { capturedAt: '2026-08-04T00:00:00+09:00', elapsedMs: 1000, captureSequence: 1 };
 }
 
-function buildController(overrides: Partial<{ analyze: jest.Mock }> = {}) {
+function buildController(
+  overrides: Partial<{ analyze: jest.Mock; reportViolation: jest.Mock }> = {},
+) {
   const monitoringService = {
     analyze: jest.fn(),
+    reportViolation: jest.fn(),
     ...overrides,
   } as unknown as MonitoringService;
   return new MonitoringController(monitoringService);
@@ -86,6 +90,35 @@ describe('MonitoringController.analyze', () => {
           snapshotPath: null,
         },
       ],
+    });
+  });
+});
+
+describe('MonitoringController.reportViolation', () => {
+  it('delegates to MonitoringService.reportViolation and maps the response', async () => {
+    const savedEvent = new ProctoringEvent(
+      '2',
+      '100',
+      ClientViolationType.DUAL_MONITOR,
+      'HIGH',
+      { screens: 2 },
+      new Date(),
+      null,
+    );
+    const reportViolation = jest.fn().mockResolvedValue(savedEvent);
+    const controller = buildController({ reportViolation });
+    const dto = { violationType: ClientViolationType.DUAL_MONITOR, meta: { screens: 2 } };
+
+    const result = await controller.reportViolation('100', dto, buildUser());
+
+    expect(reportViolation).toHaveBeenCalledWith('100', '9', dto);
+    expect(result).toEqual({
+      id: '2',
+      eventType: ClientViolationType.DUAL_MONITOR,
+      severity: 'HIGH',
+      meta: { screens: 2 },
+      createdAt: savedEvent.createdAt,
+      snapshotPath: null,
     });
   });
 });
