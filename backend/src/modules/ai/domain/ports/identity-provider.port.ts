@@ -19,8 +19,8 @@ export interface VerifyIdentityInput {
   lastName: string;
   /** ISO date string (YYYY-MM-DD). */
   birthDate: string;
-  /** user 모듈의 IdentityDocumentType 값을 그대로 받는다 — 외부 API 형식으로의 변환은 어댑터가 담당(ai 모듈이 user 모듈에 의존하지 않도록). */
-  documentType: 'PASSPORT' | 'ARC';
+  /** 가입 시 등록된 여권번호. */
+  documentNumber: string;
 }
 
 export interface VerifyIdentityResult {
