@@ -24,11 +24,18 @@ function buildDto() {
 }
 
 function buildController(
-  overrides: Partial<{ analyze: jest.Mock; reportViolation: jest.Mock }> = {},
+  overrides: Partial<{
+    analyze: jest.Mock;
+    reportViolation: jest.Mock;
+    createClipUploadUrl: jest.Mock;
+    attachClip: jest.Mock;
+  }> = {},
 ) {
   const monitoringService = {
     analyze: jest.fn(),
     reportViolation: jest.fn(),
+    createClipUploadUrl: jest.fn(),
+    attachClip: jest.fn(),
     ...overrides,
   } as unknown as MonitoringService;
   return new MonitoringController(monitoringService);
@@ -56,6 +63,7 @@ describe('MonitoringController.analyze', () => {
       'MEDIUM',
       { a: 1 },
       new Date(),
+      null,
       null,
     );
     const analyze = jest.fn().mockResolvedValue({
@@ -89,6 +97,7 @@ describe('MonitoringController.analyze', () => {
           meta: { a: 1 },
           createdAt: savedEvent.createdAt,
           snapshotPath: null,
+          clipPath: null,
         },
       ],
     });
@@ -104,6 +113,7 @@ describe('MonitoringController.reportViolation', () => {
       'HIGH',
       { screens: 2 },
       new Date(),
+      null,
       null,
     );
     const reportViolation = jest
@@ -122,7 +132,54 @@ describe('MonitoringController.reportViolation', () => {
       meta: { screens: 2 },
       createdAt: savedEvent.createdAt,
       snapshotPath: null,
+      clipPath: null,
       sessionStatus: SessionStatus.DISQUALIFIED,
+    });
+  });
+});
+
+describe('MonitoringController.createClipUploadUrl', () => {
+  it('delegates to MonitoringService.createClipUploadUrl', async () => {
+    const createClipUploadUrl = jest
+      .fn()
+      .mockResolvedValue({ path: '9/100/2.webm', signedUrl: 'https://signed', token: 'token' });
+    const controller = buildController({ createClipUploadUrl });
+    const dto = { contentType: 'video/webm' };
+
+    const result = await controller.createClipUploadUrl('100', '2', dto, buildUser());
+
+    expect(createClipUploadUrl).toHaveBeenCalledWith('100', '9', '2', 'video/webm');
+    expect(result).toEqual({ path: '9/100/2.webm', signedUrl: 'https://signed', token: 'token' });
+  });
+});
+
+describe('MonitoringController.attachClip', () => {
+  it('delegates to MonitoringService.attachClip and maps the response', async () => {
+    const savedEvent = new ProctoringEvent(
+      '2',
+      '100',
+      'FACE_OUT_OF_FRAME',
+      'HIGH',
+      {},
+      new Date(),
+      null,
+      '9/100/2.webm',
+    );
+    const attachClip = jest.fn().mockResolvedValue(savedEvent);
+    const controller = buildController({ attachClip });
+    const dto = { clipPath: '9/100/2.webm' };
+
+    const result = await controller.attachClip('100', '2', dto, buildUser());
+
+    expect(attachClip).toHaveBeenCalledWith('100', '9', '2', '9/100/2.webm');
+    expect(result).toEqual({
+      id: '2',
+      eventType: 'FACE_OUT_OF_FRAME',
+      severity: 'HIGH',
+      meta: {},
+      createdAt: savedEvent.createdAt,
+      snapshotPath: null,
+      clipPath: '9/100/2.webm',
     });
   });
 });

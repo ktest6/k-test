@@ -20,6 +20,7 @@ describe('AdminMonitoringController.getEvents', () => {
       { label: 'Mobile Phone' },
       new Date(),
       '100/snapshot.jpg',
+      null,
     );
     const getEvents = jest.fn().mockResolvedValue([event]);
     const controller = buildController({ getEvents });
@@ -35,6 +36,7 @@ describe('AdminMonitoringController.getEvents', () => {
         meta: { label: 'Mobile Phone' },
         createdAt: event.createdAt,
         snapshotPath: '100/snapshot.jpg',
+        clipPath: null,
       },
     ]);
   });

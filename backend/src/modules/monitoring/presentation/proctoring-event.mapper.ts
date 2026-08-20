@@ -9,5 +9,6 @@ export function toEventDto(event: ProctoringEvent): ProctoringEventResponseDto {
     meta: event.meta,
     createdAt: event.createdAt,
     snapshotPath: event.snapshotPath,
+    clipPath: event.clipPath,
   };
 }
