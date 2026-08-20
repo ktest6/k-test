@@ -10,6 +10,7 @@ import { SupabaseService } from '../../../../infrastructure/supabase/supabase.se
 import { GazeCalibrationService } from '../../../verifications/application/services/gaze-calibration.service';
 import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
 import { ExamSessionService } from '../../../exam-session/application/services/exam-session.service';
+import { SessionStatus } from '../../../exam-session/domain/enums/session-status.enum';
 import { ProctoringEvent, ProctoringSeverity } from '../../domain/entities/proctoring-event.entity';
 import { ClientViolationType } from '../../domain/enums/client-violation-type.enum';
 import {
@@ -43,6 +44,12 @@ export interface AnalyzeFrameCommand {
   elapsedMs: number;
   captureSequence: number;
   runIdentityCheck?: boolean;
+}
+
+export interface ReportViolationResult {
+  event: ProctoringEvent;
+  /** 이 위반 신고를 처리한 직후의 세션 상태 — DISQUALIFIED면 프런트가 바로 결과 화면으로 전환하면 된다. */
+  sessionStatus: SessionStatus;
 }
 
 export interface AnalyzeFrameResult {
@@ -184,14 +191,16 @@ export class MonitoringService {
    * 이탈/붙여넣기/듀얼 모니터 등)로 직접 감지한 위반을 기록한다. 웹캠 프레임이
    * 없는 신호라 스냅샷은 남기지 않는다. DUAL_MONITOR는 누적 2회부터 자동
    * 실격(프런트 부정행위 방지 플로우 기준) — 그 외 종류는 기록만 하고 별도
-   * 자동 조치는 없다.
+   * 자동 조치는 없다. 응답에 처리 직후의 세션 상태를 같이 실어줘서, 프런트가
+   * 이 호출 하나로 "방금 실격됐는지"까지 바로 알 수 있게 한다(별도 상태 조회
+   * 필요 없음).
    */
   async reportViolation(
     examSessionId: string,
     userId: string,
     dto: ReportViolationDto,
-  ): Promise<ProctoringEvent> {
-    await this.examSessionService.assertActiveSession(examSessionId, userId);
+  ): Promise<ReportViolationResult> {
+    const session = await this.examSessionService.assertActiveSession(examSessionId, userId);
 
     const saved = await this.proctoringEventRepository.create({
       examSessionId,
@@ -201,6 +210,7 @@ export class MonitoringService {
       snapshotPath: null,
     });
 
+    let sessionStatus = session.status;
     if (dto.violationType === ClientViolationType.DUAL_MONITOR) {
       const events = await this.proctoringEventRepository.findByExamSessionId(examSessionId);
       const dualMonitorEventType: string = ClientViolationType.DUAL_MONITOR;
@@ -208,11 +218,12 @@ export class MonitoringService {
         (event) => event.eventType === dualMonitorEventType,
       ).length;
       if (dualMonitorCount >= DUAL_MONITOR_DISQUALIFY_THRESHOLD) {
-        await this.examSessionService.disqualify(examSessionId);
+        const disqualified = await this.examSessionService.disqualify(examSessionId);
+        sessionStatus = disqualified.status;
       }
     }
 
-    return saved;
+    return { event: saved, sessionStatus };
   }
 
   getEvents(examSessionId: string): Promise<ProctoringEvent[]> {

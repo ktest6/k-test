@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { Role } from '../../../common/enums/role.enum';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
+import { SessionStatus } from '../../exam-session/domain/enums/session-status.enum';
 import { ProctoringEvent } from '../domain/entities/proctoring-event.entity';
 import { ClientViolationType } from '../domain/enums/client-violation-type.enum';
 import { MonitoringService } from '../application/services/monitoring.service';
@@ -105,7 +106,9 @@ describe('MonitoringController.reportViolation', () => {
       new Date(),
       null,
     );
-    const reportViolation = jest.fn().mockResolvedValue(savedEvent);
+    const reportViolation = jest
+      .fn()
+      .mockResolvedValue({ event: savedEvent, sessionStatus: SessionStatus.DISQUALIFIED });
     const controller = buildController({ reportViolation });
     const dto = { violationType: ClientViolationType.DUAL_MONITOR, meta: { screens: 2 } };
 
@@ -119,6 +122,7 @@ describe('MonitoringController.reportViolation', () => {
       meta: { screens: 2 },
       createdAt: savedEvent.createdAt,
       snapshotPath: null,
+      sessionStatus: SessionStatus.DISQUALIFIED,
     });
   });
 });
