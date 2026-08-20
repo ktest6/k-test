@@ -13,21 +13,12 @@ import {
   VerifyIdentityInput,
   VerifyIdentityResult,
 } from '../../../ai/domain/ports/identity-provider.port';
-import { IdentityDocumentType } from '../../../user/domain/enums/identity-document-type.enum';
 import { UserService } from '../../../user/application/services/user.service';
 import { VerifyIdCardDto } from '../dto/verify-id-card.dto';
 import { VerifyIdCardResponseDto } from '../dto/verify-id-card-response.dto';
 import { ExamAccessService } from './exam-access.service';
 
 const IDENTITY_DOCS_BUCKET = 'identity-docs';
-
-const DOCUMENT_TYPE_INPUT_BY_USER_ID_TYPE: Record<
-  IdentityDocumentType,
-  VerifyIdentityInput['documentType']
-> = {
-  [IdentityDocumentType.PASSPORT]: 'PASSPORT',
-  [IdentityDocumentType.ARC]: 'ARC',
-};
 
 /**
  * 시험 시작 전 본인인증(신분증-얼굴 대조). 이미지 자체는 프론트가
@@ -82,12 +73,11 @@ export class IdCardVerificationService {
     // 3) FastAPI로 얼굴 대조 요청 — first_name/last_name/birth_date/documentType은
     // 프론트가 아니라 가입 시 등록된 정보를 그대로 쓴다(신청 정보와의 대조가 목적이므로).
     const user = await this.userService.findById(userId);
-    // TODO(AUTH-02): idType/idNumber 없는 사용자를 어떻게 처리할지 AI 쪽 확인 후 다시 켜기.
-    // if (!user.idType || !user.idNumber) {
-    //   throw new ConflictDomainException(
-    //     '먼저 신분증 종류와 번호를 등록해야 본인인증을 진행할 수 있습니다.',
-    //   );
-    // }
+    if (!user.idNumber) {
+      throw new ConflictDomainException(
+        '먼저 여권번호를 등록해야 본인인증을 진행할 수 있습니다.',
+      );
+    }
 
     const [idCardImage, faceImage] = await Promise.all([
       this.downloadImage(client, dto.idCardPath),
@@ -105,8 +95,7 @@ export class IdCardVerificationService {
         firstName: user.firstName,
         lastName: user.lastName,
         birthDate: user.birthDate,
-        // TODO(AUTH-02): 가드를 꺼놔서 idType이 null일 수 있다 — non-null 단언은 임시 조치.
-        documentType: DOCUMENT_TYPE_INPUT_BY_USER_ID_TYPE[user.idType!],
+        documentNumber: user.idNumber,
       });
     } catch (err) {
       this.logger.warn(

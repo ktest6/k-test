@@ -45,7 +45,7 @@ function buildInput(overrides: Partial<VerifyIdentityInput> = {}): VerifyIdentit
     firstName: 'GILDONG',
     lastName: 'HONG',
     birthDate: '1995-03-21',
-    documentType: 'PASSPORT',
+    documentNumber: 'M12345678',
     ...overrides,
   };
 }
@@ -67,7 +67,7 @@ function buildRawResponse(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 describe('FastApiIdentityAdapter.verify', () => {
-  it('posts multipart form data with the mapped document_type and camelCases the response', async () => {
+  it('posts multipart form data with a fixed document_type of passport and the caller document_number, and camelCases the response', async () => {
     const post = jest.fn().mockReturnValue(of({ data: buildRawResponse() }));
     const httpService = { post } as unknown as HttpService;
     const adapter = new FastApiIdentityAdapter(httpService, buildConfig());
@@ -84,8 +84,10 @@ describe('FastApiIdentityAdapter.verify', () => {
     const body = form.getBuffer().toString();
     expect(body).toContain('name="exam_id"');
     expect(body).toContain('7');
-    expect(body).toContain('document_type');
+    expect(body).toContain('name="document_type"');
     expect(body).toContain('passport');
+    expect(body).toContain('name="document_number"');
+    expect(body).toContain('M12345678');
     expect(body).toContain('GILDONG');
     expect(body).toContain('HONG');
 
@@ -102,16 +104,5 @@ describe('FastApiIdentityAdapter.verify', () => {
       message: '본인인증 성공',
       raw: buildRawResponse(),
     });
-  });
-
-  it('maps ARC to alien_registration_card', async () => {
-    const post = jest.fn().mockReturnValue(of({ data: buildRawResponse() }));
-    const httpService = { post } as unknown as HttpService;
-    const adapter = new FastApiIdentityAdapter(httpService, buildConfig());
-
-    await adapter.verify(buildInput({ documentType: 'ARC' }));
-
-    const [, form] = post.mock.calls[0] as [string, { getBuffer: () => Buffer }];
-    expect(form.getBuffer().toString()).toContain('alien_registration_card');
   });
 });

@@ -24,11 +24,6 @@ interface RawVerifyResponse {
   [key: string]: unknown;
 }
 
-const DOCUMENT_TYPE_BY_INPUT: Record<VerifyIdentityInput['documentType'], string> = {
-  PASSPORT: 'passport',
-  ARC: 'alien_registration_card',
-};
-
 /** 신분증-얼굴 대조를 맡는 FastAPI 서비스의 POST /identity/verify를 호출하는 실제 어댑터. */
 @Injectable()
 export class FastApiIdentityAdapter implements IdentityProviderPort {
@@ -45,7 +40,9 @@ export class FastApiIdentityAdapter implements IdentityProviderPort {
     form.append('first_name', input.firstName);
     form.append('last_name', input.lastName);
     form.append('birth_date', input.birthDate);
-    form.append('document_type', DOCUMENT_TYPE_BY_INPUT[input.documentType]);
+    // 현재는 여권 신청자만 지원 — document_type은 고정값으로 보낸다.
+    form.append('document_type', 'passport');
+    form.append('document_number', input.documentNumber);
     form.append('source_image', input.sourceImage.buffer, {
       filename: input.sourceImage.filename,
       contentType: input.sourceImage.contentType,

@@ -168,7 +168,7 @@ describe('IdCardVerificationService.verify', () => {
     expect(assertApplied).not.toHaveBeenCalled();
   });
 
-  it('calls the identity provider with the mapped document type and stores the result', async () => {
+  it("calls the identity provider with the user's passport number and stores the result", async () => {
     const identityProvider = {
       verify: jest
         .fn<Promise<VerifyIdentityResult>, [VerifyIdentityInput]>()
@@ -192,7 +192,7 @@ describe('IdCardVerificationService.verify', () => {
         firstName: 'GILDONG',
         lastName: 'HONG',
         birthDate: '1995-03-21',
-        documentType: 'PASSPORT',
+        documentNumber: 'M12345678',
       }),
     );
     expect(insert).toHaveBeenCalledWith(
@@ -267,24 +267,6 @@ describe('IdCardVerificationService.verify', () => {
     await expect(service.verify('9', buildDto())).resolves.toMatchObject({ matched: true });
   });
 
-  it('maps ARC users to the ARC document type input', async () => {
-    const identityProvider = {
-      verify: jest
-        .fn<Promise<VerifyIdentityResult>, [VerifyIdentityInput]>()
-        .mockResolvedValue(buildResult()),
-    };
-    const userService = {
-      findById: jest.fn().mockResolvedValue(buildUser(IdentityDocumentType.ARC)),
-    };
-    const { service } = buildService({ identityProvider, userService });
-
-    await service.verify('9', buildDto());
-
-    expect(identityProvider.verify).toHaveBeenCalledWith(
-      expect.objectContaining({ documentType: 'ARC' }),
-    );
-  });
-
   it('does not treat a provider failure as a pass — throws instead of defaulting to matched', async () => {
     const identityProvider = {
       verify: jest.fn().mockRejectedValue(new Error('fastapi unreachable')),
@@ -303,8 +285,7 @@ describe('IdCardVerificationService.verify', () => {
     await expect(service.verify('9', buildDto())).rejects.toThrow(NotFoundDomainException);
   });
 
-  // TODO(AUTH-02): 서비스 쪽 가드를 주석 처리해둔 동안 같이 skip — AI 쪽 확인되면 둘 다 복구.
-  it.skip('rejects when the caller never registered an identity document', async () => {
+  it('rejects when the caller never registered a passport number', async () => {
     const userService = { findById: jest.fn().mockResolvedValue(buildUser(null, null)) };
     const identityProvider = { verify: jest.fn() };
     const { service } = buildService({ userService, identityProvider });
