@@ -7,6 +7,7 @@ import {
 } from '../../../ai/domain/ports/monitoring-provider.port';
 import { describeError } from '../../../../common/utils/describe-error.util';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
+import { GazeCalibrationService } from '../../../verifications/application/services/gaze-calibration.service';
 import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
 import { ExamSessionService } from '../../../exam-session/application/services/exam-session.service';
 import { ProctoringEvent } from '../../domain/entities/proctoring-event.entity';
@@ -52,6 +53,7 @@ export class MonitoringService {
   constructor(
     private readonly examSessionService: ExamSessionService,
     private readonly idCardVerificationService: IdCardVerificationService,
+    private readonly gazeCalibrationService: GazeCalibrationService,
     private readonly supabaseService: SupabaseService,
     @Inject(MONITORING_PROVIDER) private readonly monitoringProvider: MonitoringProviderPort,
     @Inject(PROCTORING_EVENT_REPOSITORY)
@@ -84,6 +86,11 @@ export class MonitoringService {
       }
     }
 
+    const calibration = await this.gazeCalibrationService.getLatestCalibration(
+      session.examId,
+      userId,
+    );
+
     let result: {
       eventSummary: AnalyzeFrameResult;
       events: { eventType: string; details: Record<string, unknown> }[];
@@ -99,6 +106,8 @@ export class MonitoringService {
         runIdentityCheck,
         currentImage,
         referenceImage,
+        eyeYawCenter: calibration?.eyeYawCenter,
+        eyePitchCenter: calibration?.eyePitchCenter,
       });
       result = {
         eventSummary: {

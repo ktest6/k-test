@@ -113,4 +113,76 @@ describe('MonitoringAdapter.analyze', () => {
     expect(raw).toContain('name="run_identity_check"');
     expect(raw).toContain('true');
   });
+
+  it('includes eye_yaw_center/eye_pitch_center only when both are provided', async () => {
+    const post = jest.fn().mockReturnValue(of({ data: RAW_RESPONSE }));
+    const httpService = { post } as unknown as HttpService;
+    const adapter = new MonitoringAdapter(httpService, buildConfig());
+    const input = buildInput({ eyeYawCenter: -2.1937, eyePitchCenter: -20.7994 });
+
+    await adapter.analyze(input);
+
+    const [, body] = post.mock.calls[0] as [string, FormData];
+    const raw = body.getBuffer().toString('utf-8');
+    expect(raw).toContain('name="eye_yaw_center"');
+    expect(raw).toContain('-2.1937');
+    expect(raw).toContain('name="eye_pitch_center"');
+    expect(raw).toContain('-20.7994');
+  });
+
+  it('omits eye_yaw_center/eye_pitch_center when not provided', async () => {
+    const post = jest.fn().mockReturnValue(of({ data: RAW_RESPONSE }));
+    const httpService = { post } as unknown as HttpService;
+    const adapter = new MonitoringAdapter(httpService, buildConfig());
+
+    await adapter.analyze(buildInput());
+
+    const [, body] = post.mock.calls[0] as [string, FormData];
+    const raw = body.getBuffer().toString('utf-8');
+    expect(raw).not.toContain('name="eye_yaw_center"');
+    expect(raw).not.toContain('name="eye_pitch_center"');
+  });
+});
+
+describe('MonitoringAdapter.calibrate', () => {
+  const RAW_CALIBRATE_RESPONSE = {
+    calibrated: true,
+    sample_count: 6,
+    eye_yaw_center: -2.1937,
+    eye_pitch_center: -20.7994,
+  };
+
+  it('posts to {url}/monitoring/gaze-calibration with the expected fields and parses the response', async () => {
+    const post = jest.fn().mockReturnValue(of({ data: RAW_CALIBRATE_RESPONSE }));
+    const httpService = { post } as unknown as HttpService;
+    const adapter = new MonitoringAdapter(httpService, buildConfig());
+
+    const result = await adapter.calibrate({
+      examId: '7',
+      examineeId: '9',
+      calibrationImages: [
+        { buffer: Buffer.from('a'), filename: 'center_1.jpg', contentType: 'image/jpeg' },
+        { buffer: Buffer.from('b'), filename: 'center_2.jpg', contentType: 'image/jpeg' },
+      ],
+    });
+
+    expect(post).toHaveBeenCalledTimes(1);
+    const [url, body, options] = post.mock.calls[0] as [string, FormData, { headers: unknown }];
+    expect(url).toBe('https://monitoring.internal/monitoring/gaze-calibration');
+    expect(body).toBeInstanceOf(FormData);
+    expect(options.headers).toEqual(body.getHeaders());
+
+    const raw = body.getBuffer().toString('utf-8');
+    expect(raw).toContain('name="exam_id"');
+    expect(raw).toContain('name="examinee_id"');
+    const calibrationImageOccurrences = raw.match(/name="calibration_images"/g) ?? [];
+    expect(calibrationImageOccurrences).toHaveLength(2);
+
+    expect(result).toEqual({
+      calibrated: true,
+      sampleCount: 6,
+      eyeYawCenter: -2.1937,
+      eyePitchCenter: -20.7994,
+    });
+  });
 });

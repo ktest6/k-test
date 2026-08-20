@@ -7,6 +7,8 @@ import { appConfig } from '../../../../config/configuration';
 import {
   AnalyzeFrameInput,
   AnalyzeFrameResult,
+  CalibrateGazeInput,
+  CalibrateGazeResult,
   MonitoringDetectedEvent,
   MonitoringEventSummary,
   MonitoringProviderPort,
@@ -29,6 +31,13 @@ interface RawAnalyzeResponse {
   event_summary: RawEventSummary;
   events: RawDetectedEvent[];
   [key: string]: unknown;
+}
+
+interface RawCalibrateResponse {
+  calibrated: boolean;
+  sample_count: number;
+  eye_yaw_center: number;
+  eye_pitch_center: number;
 }
 
 /** 도영님 담당 부정행위 감지 서비스의 POST /monitoring/analyze를 호출하는 실제 어댑터. */
@@ -58,6 +67,10 @@ export class MonitoringAdapter implements MonitoringProviderPort {
         contentType: input.referenceImage.contentType,
       });
     }
+    if (input.eyeYawCenter !== undefined && input.eyePitchCenter !== undefined) {
+      form.append('eye_yaw_center', String(input.eyeYawCenter));
+      form.append('eye_pitch_center', String(input.eyePitchCenter));
+    }
 
     const response = await firstValueFrom(
       this.httpService.post<RawAnalyzeResponse>(
@@ -83,6 +96,34 @@ export class MonitoringAdapter implements MonitoringProviderPort {
       },
       events,
       raw: raw as unknown as Record<string, unknown>,
+    };
+  }
+
+  async calibrate(input: CalibrateGazeInput): Promise<CalibrateGazeResult> {
+    const form = new FormData();
+    form.append('exam_id', input.examId);
+    form.append('examinee_id', input.examineeId);
+    for (const image of input.calibrationImages) {
+      form.append('calibration_images', image.buffer, {
+        filename: image.filename,
+        contentType: image.contentType,
+      });
+    }
+
+    const response = await firstValueFrom(
+      this.httpService.post<RawCalibrateResponse>(
+        `${this.config.monitoring.url}/monitoring/gaze-calibration`,
+        form,
+        { headers: form.getHeaders() },
+      ),
+    );
+
+    const raw = response.data;
+    return {
+      calibrated: raw.calibrated,
+      sampleCount: raw.sample_count,
+      eyeYawCenter: raw.eye_yaw_center,
+      eyePitchCenter: raw.eye_pitch_center,
     };
   }
 }
