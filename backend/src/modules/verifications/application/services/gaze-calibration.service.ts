@@ -1,0 +1,98 @@
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
+import { describeError } from '../../../../common/utils/describe-error.util';
+import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
+import {
+  CalibrateGazeResult,
+  MONITORING_PROVIDER,
+  MonitoringImageInput,
+  MonitoringProviderPort,
+} from '../../../ai/domain/ports/monitoring-provider.port';
+import { GazeCalibrationResponseDto } from '../dto/gaze-calibration-response.dto';
+import { ExamAccessService } from './exam-access.service';
+
+interface GazeCalibrationRow {
+  eye_yaw_center: number;
+  eye_pitch_center: number;
+}
+
+/**
+ * 시험 시작 전 시선 캘리브레이션(화면 중앙 응시 이미지 여러 장 → 개인별
+ * Eye Yaw/Pitch 기준값). 결과가 있으면 이후 모니터링(부정행위 감지)
+ * ANALYZE 요청마다 자동으로 실어 보낸다 — 본인인증 얼굴 사진을 동일인
+ * 검사에 자동 재사용하는 것과 같은 패턴이다.
+ *
+ * 이어폰 감지와 마찬가지로 원본 이미지는 Storage에 올리지 않고 그대로
+ * 전달만 한다 — 계산된 기준값 외에는 다시 쓸 일이 없는 일회성 판정이다.
+ * 선택 기능이라(ANALYZE에서 eye_yaw_center/eye_pitch_center는 선택값)
+ * 시험 시작을 막는 게이트는 아니다.
+ */
+@Injectable()
+export class GazeCalibrationService {
+  private readonly logger = new Logger(GazeCalibrationService.name);
+
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    private readonly examAccessService: ExamAccessService,
+    @Inject(MONITORING_PROVIDER) private readonly monitoringProvider: MonitoringProviderPort,
+  ) {}
+
+  async calibrate(
+    userId: string,
+    examId: string,
+    calibrationImages: MonitoringImageInput[],
+  ): Promise<GazeCalibrationResponseDto> {
+    await this.examAccessService.assertApplied(userId, examId);
+
+    let result: CalibrateGazeResult;
+    try {
+      result = await this.monitoringProvider.calibrate({
+        examId,
+        examineeId: userId,
+        calibrationImages,
+      });
+    } catch (err) {
+      this.logger.warn(
+        `시선 캘리브레이션 서비스 통신 실패 (examId=${examId}, userId=${userId}): ${describeError(err)}`,
+      );
+      throw new ConflictDomainException(
+        '시선 캘리브레이션 서비스와 통신에 실패했습니다. 잠시 후 다시 시도해주세요.',
+      );
+    }
+
+    if (result.calibrated) {
+      const client = this.supabaseService.getAdminClient();
+      await client.from('gaze_calibrations').insert({
+        exam_id: Number(examId),
+        user_id: Number(userId),
+        eye_yaw_center: result.eyeYawCenter,
+        eye_pitch_center: result.eyePitchCenter,
+        sample_count: result.sampleCount,
+        calibrated_at: new Date().toISOString(),
+      });
+    }
+
+    return result;
+  }
+
+  /** 모니터링(부정행위 감지) ANALYZE 요청에 자동으로 실어 보낼 캘리브레이션 기준값 조회. */
+  async getLatestCalibration(
+    examId: string,
+    userId: string,
+  ): Promise<{ eyeYawCenter: number; eyePitchCenter: number } | null> {
+    const client = this.supabaseService.getAdminClient();
+    const { data } = await client
+      .from('gaze_calibrations')
+      .select('eye_yaw_center, eye_pitch_center')
+      .eq('exam_id', Number(examId))
+      .eq('user_id', Number(userId))
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle<GazeCalibrationRow>();
+
+    if (!data) {
+      return null;
+    }
+    return { eyeYawCenter: data.eye_yaw_center, eyePitchCenter: data.eye_pitch_center };
+  }
+}

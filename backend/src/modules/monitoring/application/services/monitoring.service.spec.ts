@@ -1,6 +1,7 @@
 import { ExamSession } from '../../../exam-session/domain/entities/exam-session.entity';
 import { SessionStatus } from '../../../exam-session/domain/enums/session-status.enum';
 import { ExamSessionService } from '../../../exam-session/application/services/exam-session.service';
+import { GazeCalibrationService } from '../../../verifications/application/services/gaze-calibration.service';
 import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
 import {
   AnalyzeFrameInput,
@@ -49,6 +50,7 @@ function buildAnalyzedResult(overrides: Partial<AnalyzeFrameResult> = {}): Analy
 function buildService(overrides: {
   examSessionService?: Partial<ExamSessionService>;
   idCardVerificationService?: Partial<IdCardVerificationService>;
+  gazeCalibrationService?: Partial<GazeCalibrationService>;
   supabaseService?: Partial<SupabaseService>;
   monitoringProvider?: Partial<MonitoringProviderPort>;
   proctoringEventRepository?: Partial<ProctoringEventRepository>;
@@ -61,12 +63,17 @@ function buildService(overrides: {
     getVerifiedFacePath: jest.fn().mockResolvedValue(null),
     ...overrides.idCardVerificationService,
   } as unknown as IdCardVerificationService;
+  const gazeCalibrationService = {
+    getLatestCalibration: jest.fn().mockResolvedValue(null),
+    ...overrides.gazeCalibrationService,
+  } as unknown as GazeCalibrationService;
   const supabaseService = {
     getAdminClient: jest.fn(),
     ...overrides.supabaseService,
   } as unknown as SupabaseService;
   const monitoringProvider = {
     analyze: jest.fn().mockResolvedValue(buildAnalyzedResult()),
+    calibrate: jest.fn(),
     ...overrides.monitoringProvider,
   };
   const proctoringEventRepository = {
@@ -78,6 +85,7 @@ function buildService(overrides: {
   return new MonitoringService(
     examSessionService,
     idCardVerificationService,
+    gazeCalibrationService,
     supabaseService,
     monitoringProvider,
     proctoringEventRepository,
@@ -248,6 +256,45 @@ describe('MonitoringService.analyze', () => {
 
     expect(analyze).toHaveBeenCalledWith(
       expect.objectContaining({ runIdentityCheck: false, referenceImage: undefined }),
+    );
+  });
+
+  it('attaches the saved gaze calibration values when one exists', async () => {
+    const getLatestCalibration = jest
+      .fn()
+      .mockResolvedValue({ eyeYawCenter: -2.1937, eyePitchCenter: -20.7994 });
+    const analyze = jest.fn().mockResolvedValue(buildAnalyzedResult());
+    const service = buildService({
+      gazeCalibrationService: { getLatestCalibration },
+      monitoringProvider: { analyze },
+    });
+
+    await service.analyze(
+      '100',
+      '9',
+      { capturedAt: '2026-08-04T00:00:00+09:00', elapsedMs: 1000, captureSequence: 1 },
+      buildFrame(),
+    );
+
+    expect(getLatestCalibration).toHaveBeenCalledWith('7', '9');
+    expect(analyze).toHaveBeenCalledWith(
+      expect.objectContaining({ eyeYawCenter: -2.1937, eyePitchCenter: -20.7994 }),
+    );
+  });
+
+  it('omits calibration values when none is saved', async () => {
+    const analyze = jest.fn().mockResolvedValue(buildAnalyzedResult());
+    const service = buildService({ monitoringProvider: { analyze } });
+
+    await service.analyze(
+      '100',
+      '9',
+      { capturedAt: '2026-08-04T00:00:00+09:00', elapsedMs: 1000, captureSequence: 1 },
+      buildFrame(),
+    );
+
+    expect(analyze).toHaveBeenCalledWith(
+      expect.objectContaining({ eyeYawCenter: undefined, eyePitchCenter: undefined }),
     );
   });
 });
