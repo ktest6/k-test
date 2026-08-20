@@ -12,5 +12,7 @@ export const PROCTORING_EVENT_REPOSITORY = Symbol('PROCTORING_EVENT_REPOSITORY')
 
 export interface ProctoringEventRepository {
   create(input: CreateProctoringEventInput): Promise<ProctoringEvent>;
+  findById(id: string): Promise<ProctoringEvent | null>;
   findByExamSessionId(examSessionId: string): Promise<ProctoringEvent[]>;
+  updateClipPath(id: string, clipPath: string): Promise<ProctoringEvent>;
 }

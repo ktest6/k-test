@@ -1,3 +1,7 @@
+import {
+  ForbiddenDomainException,
+  NotFoundDomainException,
+} from '../../../../common/exceptions/domain.exception';
 import { ExamSession } from '../../../exam-session/domain/entities/exam-session.entity';
 import { SessionStatus } from '../../../exam-session/domain/enums/session-status.enum';
 import { ExamSessionService } from '../../../exam-session/application/services/exam-session.service';
@@ -9,6 +13,7 @@ import {
   MonitoringProviderPort,
 } from '../../../ai/domain/ports/monitoring-provider.port';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
+import { StorageUploadUrlService } from '../../../../infrastructure/supabase/storage-upload-url.service';
 import {
   CreateProctoringEventInput,
   ProctoringEventRepository,
@@ -56,11 +61,15 @@ function buildService(overrides: {
   idCardVerificationService?: Partial<IdCardVerificationService>;
   gazeCalibrationService?: Partial<GazeCalibrationService>;
   supabaseService?: Partial<SupabaseService>;
+  storageUploadUrlService?: Partial<StorageUploadUrlService>;
   monitoringProvider?: Partial<MonitoringProviderPort>;
   proctoringEventRepository?: Partial<ProctoringEventRepository>;
 }) {
   const examSessionService = {
     assertActiveSession: jest.fn().mockResolvedValue(buildSession()),
+    getStatus: jest
+      .fn()
+      .mockResolvedValue({ session: buildSession(), status: SessionStatus.INPROGRESS }),
     ...overrides.examSessionService,
   } as unknown as ExamSessionService;
   const idCardVerificationService = {
@@ -76,6 +85,12 @@ function buildService(overrides: {
     getAdminClient: jest.fn().mockReturnValue({ storage: { from: () => ({ upload }) } }),
     ...overrides.supabaseService,
   } as unknown as SupabaseService;
+  const storageUploadUrlService = {
+    createSignedUploadUrl: jest
+      .fn()
+      .mockResolvedValue({ path: 'clip.webm', signedUrl: 'https://signed', token: 'token' }),
+    ...overrides.storageUploadUrlService,
+  } as unknown as StorageUploadUrlService;
   const monitoringProvider = {
     analyze: jest.fn().mockResolvedValue(buildAnalyzedResult()),
     calibrate: jest.fn(),
@@ -83,7 +98,9 @@ function buildService(overrides: {
   };
   const proctoringEventRepository = {
     create: jest.fn(),
+    findById: jest.fn(),
     findByExamSessionId: jest.fn(),
+    updateClipPath: jest.fn(),
     ...overrides.proctoringEventRepository,
   };
 
@@ -92,6 +109,7 @@ function buildService(overrides: {
     idCardVerificationService,
     gazeCalibrationService,
     supabaseService,
+    storageUploadUrlService,
     monitoringProvider,
     proctoringEventRepository,
   );
@@ -144,6 +162,7 @@ describe('MonitoringService.analyze', () => {
       { face_count: 0 },
       new Date(),
       'proctoring/snapshot.jpg',
+      null,
     );
     const create = jest
       .fn<Promise<ProctoringEvent>, [CreateProctoringEventInput]>()
@@ -190,6 +209,7 @@ describe('MonitoringService.analyze', () => {
       'MEDIUM',
       { face_count: 0 },
       new Date(),
+      null,
       null,
     );
     const create = jest.fn().mockResolvedValue(savedEvent);
@@ -361,6 +381,7 @@ function buildEvent(
     {},
     new Date(),
     null,
+    null,
   );
 }
 
@@ -498,5 +519,69 @@ describe('MonitoringService.getEvents', () => {
     await service.getEvents('100');
 
     expect(findByExamSessionId).toHaveBeenCalledWith('100');
+  });
+});
+
+describe('MonitoringService.createClipUploadUrl', () => {
+  it('rejects when the caller is not the session owner', async () => {
+    const getStatus = jest.fn().mockRejectedValue(new Error('not owner'));
+    const service = buildService({ examSessionService: { getStatus } });
+
+    await expect(service.createClipUploadUrl('100', '9', '2', 'video/webm')).rejects.toThrow(
+      'not owner',
+    );
+  });
+
+  it('rejects when the event does not belong to this session', async () => {
+    const findById = jest.fn().mockResolvedValue(buildEvent({ eventType: 'DUAL_MONITOR' }));
+    const service = buildService({ proctoringEventRepository: { findById } });
+
+    await expect(service.createClipUploadUrl('999', '9', '2', 'video/webm')).rejects.toThrow(
+      NotFoundDomainException,
+    );
+  });
+
+  it('issues a signed upload URL scoped to the user/session/event', async () => {
+    const savedEvent = buildEvent({ eventType: 'DUAL_MONITOR' });
+    const findById = jest.fn().mockResolvedValue(savedEvent);
+    const createSignedUploadUrl = jest
+      .fn()
+      .mockResolvedValue({ path: '9/100/1.webm', signedUrl: 'https://signed', token: 'token' });
+    const service = buildService({
+      proctoringEventRepository: { findById },
+      storageUploadUrlService: { createSignedUploadUrl },
+    });
+
+    const result = await service.createClipUploadUrl('100', '9', '1', 'video/webm');
+
+    expect(createSignedUploadUrl).toHaveBeenCalledWith('proctoring-clips', '9/100/1.webm', {
+      upsert: true,
+    });
+    expect(result).toEqual({ path: '9/100/1.webm', signedUrl: 'https://signed', token: 'token' });
+  });
+});
+
+describe('MonitoringService.attachClip', () => {
+  it('rejects when the clip path does not belong to this user/session', async () => {
+    const findById = jest.fn().mockResolvedValue(buildEvent());
+    const service = buildService({ proctoringEventRepository: { findById } });
+
+    await expect(service.attachClip('100', '9', '1', 'someone-else/100/1.webm')).rejects.toThrow(
+      ForbiddenDomainException,
+    );
+  });
+
+  it('updates the clip path when everything checks out', async () => {
+    const findById = jest.fn().mockResolvedValue(buildEvent());
+    const updated = buildEvent();
+    const updateClipPath = jest.fn().mockResolvedValue(updated);
+    const service = buildService({
+      proctoringEventRepository: { findById, updateClipPath },
+    });
+
+    const result = await service.attachClip('100', '9', '1', '9/100/1.webm');
+
+    expect(updateClipPath).toHaveBeenCalledWith('1', '9/100/1.webm');
+    expect(result).toBe(updated);
   });
 });

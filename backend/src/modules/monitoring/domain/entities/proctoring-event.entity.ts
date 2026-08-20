@@ -12,5 +12,7 @@ export class ProctoringEvent {
     readonly createdAt: Date,
     /** Storage(proctoring-snapshots) 상 이 이벤트가 감지된 프레임 경로. 업로드 실패 시에도 이벤트 자체는 기록하므로 null일 수 있다. */
     readonly snapshotPath: string | null,
+    /** Storage(proctoring-clips) 상 이 이벤트 전후 구간의 웹캠 영상 클립 경로. 생성 시점엔 항상 null — 프런트가 나중에 업로드하면 채워진다. */
+    readonly clipPath: string | null,
   ) {}
 }

@@ -14,7 +14,11 @@ import { ApiStandardResponse } from '../../../common/decorators/api-standard-res
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { AnalyzeFrameDto } from '../application/dto/analyze-frame.dto';
+import { AttachClipDto } from '../application/dto/attach-clip.dto';
+import { ClipUploadUrlResponseDto } from '../application/dto/clip-upload-url-response.dto';
 import { MonitoringAnalyzeResponseDto } from '../application/dto/monitoring-analyze-response.dto';
+import { ProctoringEventResponseDto } from '../application/dto/proctoring-event-response.dto';
+import { RequestClipUploadUrlDto } from '../application/dto/request-clip-upload-url.dto';
 import { ReportViolationResponseDto } from '../application/dto/report-violation-response.dto';
 import { ReportViolationDto } from '../application/dto/report-violation.dto';
 import { MonitoringService } from '../application/services/monitoring.service';
@@ -98,5 +102,50 @@ export class MonitoringController {
       dto,
     );
     return { ...toEventDto(event), sessionStatus };
+  }
+
+  @Post('events/:eventId/clip-upload-url')
+  @ApiOperation({
+    summary: '부정행위 이벤트 영상 클립 업로드용 signed URL 발급',
+    description:
+      'AI가 createClip:true로 판단한 순간의 웹캠 영상 클립을 올릴 URL을 발급한다. 백엔드는 정지 프레임만 받으므로 ' +
+      '영상 자체는 프런트가 녹화해서 올려야 한다. 프론트는 이 URL로 Supabase Storage에 직접 업로드한 뒤, 응답의 ' +
+      'path를 그대로 클립 첨부(POST .../clip)의 clipPath로 전달하면 된다.',
+  })
+  @ApiStandardResponse(ClipUploadUrlResponseDto, { status: 201, message: '업로드 URL 발급 완료' })
+  createClipUploadUrl(
+    @Param('examSessionId') examSessionId: string,
+    @Param('eventId') eventId: string,
+    @Body() dto: RequestClipUploadUrlDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ClipUploadUrlResponseDto> {
+    return this.monitoringService.createClipUploadUrl(
+      examSessionId,
+      user.id,
+      eventId,
+      dto.contentType,
+    );
+  }
+
+  @Post('events/:eventId/clip')
+  @ApiOperation({
+    summary: '업로드된 영상 클립을 이벤트에 연결',
+    description:
+      '클립 업로드 URL로 직접 업로드를 마친 뒤, 그 경로를 해당 부정행위 이벤트 로그에 연결한다.',
+  })
+  @ApiStandardResponse(ProctoringEventResponseDto, { status: 201, message: '영상 클립 연결 완료' })
+  async attachClip(
+    @Param('examSessionId') examSessionId: string,
+    @Param('eventId') eventId: string,
+    @Body() dto: AttachClipDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ProctoringEventResponseDto> {
+    const event = await this.monitoringService.attachClip(
+      examSessionId,
+      user.id,
+      eventId,
+      dto.clipPath,
+    );
+    return toEventDto(event);
   }
 }

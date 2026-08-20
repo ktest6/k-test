@@ -27,4 +27,13 @@ export class ProctoringEventResponseDto {
     example: null,
   })
   snapshotPath: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Storage(proctoring-clips, 비공개 버킷) 상 이 이벤트 전후 구간의 웹캠 영상 클립 경로. 프런트가 아직 업로드하지 않았으면 null.',
+    example: null,
+  })
+  clipPath: string | null;
 }

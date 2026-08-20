@@ -17,6 +17,7 @@ interface ProctoringEventRow {
   meta: Record<string, unknown>;
   created_at: string;
   snapshot_path: string | null;
+  clip_path: string | null;
 }
 
 function toDomain(row: ProctoringEventRow): ProctoringEvent {
@@ -28,6 +29,7 @@ function toDomain(row: ProctoringEventRow): ProctoringEvent {
     row.meta,
     new Date(row.created_at),
     row.snapshot_path,
+    row.clip_path,
   );
 }
 
@@ -55,6 +57,18 @@ export class SupabaseProctoringEventRepository implements ProctoringEventReposit
     return toDomain(data);
   }
 
+  async findById(id: string): Promise<ProctoringEvent | null> {
+    const client = this.supabaseService.getAdminClient();
+    const { data } = await client
+      .from(TABLE)
+      .select('*')
+      .eq('proctoring_events_id', Number(id))
+      .is('deleted_at', null)
+      .maybeSingle<ProctoringEventRow>();
+
+    return data ? toDomain(data) : null;
+  }
+
   async findByExamSessionId(examSessionId: string): Promise<ProctoringEvent[]> {
     const client = this.supabaseService.getAdminClient();
     const { data } = await client
@@ -66,5 +80,20 @@ export class SupabaseProctoringEventRepository implements ProctoringEventReposit
       .returns<ProctoringEventRow[]>();
 
     return (data ?? []).map(toDomain);
+  }
+
+  async updateClipPath(id: string, clipPath: string): Promise<ProctoringEvent> {
+    const client = this.supabaseService.getAdminClient();
+    const { data, error } = await client
+      .from(TABLE)
+      .update({ clip_path: clipPath })
+      .eq('proctoring_events_id', Number(id))
+      .select()
+      .single<ProctoringEventRow>();
+
+    if (error || !data) {
+      throw new ConflictDomainException(error?.message ?? '영상 클립 경로 저장에 실패했습니다.');
+    }
+    return toDomain(data);
   }
 }

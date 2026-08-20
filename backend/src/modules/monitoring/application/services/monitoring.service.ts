@@ -5,8 +5,16 @@ import {
   MonitoringImageInput,
   MonitoringProviderPort,
 } from '../../../ai/domain/ports/monitoring-provider.port';
+import {
+  ForbiddenDomainException,
+  NotFoundDomainException,
+} from '../../../../common/exceptions/domain.exception';
 import { describeError } from '../../../../common/utils/describe-error.util';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
+import {
+  SignedUploadUrl,
+  StorageUploadUrlService,
+} from '../../../../infrastructure/supabase/storage-upload-url.service';
 import { GazeCalibrationService } from '../../../verifications/application/services/gaze-calibration.service';
 import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
 import { ExamSessionService } from '../../../exam-session/application/services/exam-session.service';
@@ -21,6 +29,13 @@ import { ReportViolationDto } from '../dto/report-violation.dto';
 
 const IDENTITY_DOCS_BUCKET = 'identity-docs';
 const PROCTORING_SNAPSHOTS_BUCKET = 'proctoring-snapshots';
+const PROCTORING_CLIPS_BUCKET = 'proctoring-clips';
+
+const CLIP_EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
+  'video/webm': 'webm',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+};
 
 // 자동 실격 정책 초안 — 아직 확정 전이라 비활성 상태(주석)로만 둔다. 활성화하려면
 // analyze() 안의 해당 블록 주석을 풀면 된다(추가 배선 필요 없음, 아래 상수만 조정).
@@ -82,6 +97,7 @@ export class MonitoringService {
     private readonly idCardVerificationService: IdCardVerificationService,
     private readonly gazeCalibrationService: GazeCalibrationService,
     private readonly supabaseService: SupabaseService,
+    private readonly storageUploadUrlService: StorageUploadUrlService,
     @Inject(MONITORING_PROVIDER) private readonly monitoringProvider: MonitoringProviderPort,
     @Inject(PROCTORING_EVENT_REPOSITORY)
     private readonly proctoringEventRepository: ProctoringEventRepository,
@@ -228,6 +244,59 @@ export class MonitoringService {
 
   getEvents(examSessionId: string): Promise<ProctoringEvent[]> {
     return this.proctoringEventRepository.findByExamSessionId(examSessionId);
+  }
+
+  /**
+   * AI가 createClip:true로 판단한 순간의 웹캠 영상 클립을 올릴 signed URL 발급.
+   * 실제 녹화·버퍼링은 프런트가 하고(백엔드는 프레임 정지 이미지만 받으므로 영상
+   * 자체를 만들 수 없다), 그 결과 파일을 여기로 올린 뒤 attachClip으로 이벤트에
+   * 연결한다. 경로는 서버가 정해서 발급 단계부터 바꿔치기를 막는다.
+   */
+  async createClipUploadUrl(
+    examSessionId: string,
+    userId: string,
+    eventId: string,
+    contentType: string,
+  ): Promise<SignedUploadUrl> {
+    await this.assertOwnedEvent(examSessionId, userId, eventId);
+
+    const extension = CLIP_EXTENSION_BY_CONTENT_TYPE[contentType];
+    const path = `${userId}/${examSessionId}/${eventId}.${extension}`;
+
+    return this.storageUploadUrlService.createSignedUploadUrl(PROCTORING_CLIPS_BUCKET, path, {
+      upsert: true,
+    });
+  }
+
+  /** 업로드가 끝난 영상 클립 경로를 해당 이벤트 로그에 연결한다. */
+  async attachClip(
+    examSessionId: string,
+    userId: string,
+    eventId: string,
+    clipPath: string,
+  ): Promise<ProctoringEvent> {
+    await this.assertOwnedEvent(examSessionId, userId, eventId);
+
+    const expectedPrefix = `${userId}/${examSessionId}/`;
+    if (!clipPath.startsWith(expectedPrefix)) {
+      throw new ForbiddenDomainException('본인 세션의 클립 경로가 아닙니다.');
+    }
+
+    return this.proctoringEventRepository.updateClipPath(eventId, clipPath);
+  }
+
+  /** 이벤트가 실제로 이 세션 소속인지, 그 세션이 이 사용자 소유인지 확인한다. */
+  private async assertOwnedEvent(
+    examSessionId: string,
+    userId: string,
+    eventId: string,
+  ): Promise<void> {
+    await this.examSessionService.getStatus(examSessionId, userId);
+
+    const event = await this.proctoringEventRepository.findById(eventId);
+    if (!event || event.examSessionId !== examSessionId) {
+      throw new NotFoundDomainException(`모니터링 이벤트(${eventId})를 찾을 수 없습니다.`);
+    }
   }
 
   private async uploadSnapshot(
