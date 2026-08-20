@@ -18,4 +18,13 @@ export class ProctoringEventResponseDto {
 
   @ApiProperty()
   createdAt: Date;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Storage(proctoring-snapshots, 비공개 버킷) 상 이 이벤트가 감지된 웹캠 프레임 경로. 스냅샷 업로드에 실패했으면 null.',
+    example: null,
+  })
+  snapshotPath: string | null;
 }

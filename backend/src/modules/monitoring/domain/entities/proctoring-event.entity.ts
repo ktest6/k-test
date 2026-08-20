@@ -10,5 +10,7 @@ export class ProctoringEvent {
     /** 모니터링 서비스 응답의 해당 이벤트 details를 그대로 저장. */
     readonly meta: Record<string, unknown>,
     readonly createdAt: Date,
+    /** Storage(proctoring-snapshots) 상 이 이벤트가 감지된 프레임 경로. 업로드 실패 시에도 이벤트 자체는 기록하므로 null일 수 있다. */
+    readonly snapshotPath: string | null,
   ) {}
 }

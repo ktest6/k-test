@@ -17,6 +17,11 @@ import {
 } from '../../domain/proctoring-event.repository.interface';
 
 const IDENTITY_DOCS_BUCKET = 'identity-docs';
+const PROCTORING_SNAPSHOTS_BUCKET = 'proctoring-snapshots';
+
+// 자동 실격 정책 초안 — 아직 확정 전이라 비활성 상태(주석)로만 둔다. 활성화하려면
+// analyze() 안의 해당 블록 주석을 풀면 된다(추가 배선 필요 없음, 아래 상수만 조정).
+// const AUTO_DISQUALIFY_HIGH_THRESHOLD = 3;
 
 export interface AnalyzeFrameCommand {
   capturedAt: string;
@@ -129,15 +134,31 @@ export class MonitoringService {
     const severity = result.eventSummary.severity;
     const recordedEvents: ProctoringEvent[] = [];
     if (severity === 'LOW' || severity === 'MEDIUM' || severity === 'HIGH') {
+      // 위반이 감지된 프레임만 스냅샷으로 남긴다 — 매 프레임을 다 저장하면 스토리지
+      // 비용이 크게 늘어난다. 업로드 실패는 이벤트 기록 자체를 막을 이유가 아니라
+      // snapshotPath만 null로 남긴다.
+      const snapshotPath = await this.uploadSnapshot(examSessionId, currentImage);
+
       for (const event of result.events) {
         const saved = await this.proctoringEventRepository.create({
           examSessionId,
           eventType: event.eventType,
           severity: severity,
           meta: event.details,
+          snapshotPath,
         });
         recordedEvents.push(saved);
       }
+
+      // 자동 실격 정책 초안(비활성) — 정책 확정 전까지 주석 처리. 활성화하려면
+      // 파일 상단의 AUTO_DISQUALIFY_HIGH_THRESHOLD 상수 주석도 함께 풀 것.
+      // if (severity === 'HIGH') {
+      //   const events = await this.proctoringEventRepository.findByExamSessionId(examSessionId);
+      //   const highCount = events.filter((e) => e.severity === 'HIGH').length;
+      //   if (highCount >= AUTO_DISQUALIFY_HIGH_THRESHOLD) {
+      //     await this.examSessionService.disqualify(examSessionId);
+      //   }
+      // }
     }
 
     return { ...result.eventSummary, recordedEvents };
@@ -145,6 +166,24 @@ export class MonitoringService {
 
   getEvents(examSessionId: string): Promise<ProctoringEvent[]> {
     return this.proctoringEventRepository.findByExamSessionId(examSessionId);
+  }
+
+  private async uploadSnapshot(
+    examSessionId: string,
+    image: { buffer: Buffer; contentType: string },
+  ): Promise<string | null> {
+    const client = this.supabaseService.getAdminClient();
+    const path = `${examSessionId}/${Date.now()}-${randomUUID()}.jpg`;
+    const { error } = await client.storage
+      .from(PROCTORING_SNAPSHOTS_BUCKET)
+      .upload(path, image.buffer, { contentType: image.contentType });
+    if (error) {
+      this.logger.warn(
+        `부정행위 스냅샷 업로드 실패 (examSessionId=${examSessionId}): ${error.message}`,
+      );
+      return null;
+    }
+    return path;
   }
 
   private async downloadReferenceImage(path: string): Promise<MonitoringImageInput | undefined> {

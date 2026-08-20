@@ -51,6 +51,7 @@ describe('MonitoringController.analyze', () => {
       'MEDIUM',
       { a: 1 },
       new Date(),
+      null,
     );
     const analyze = jest.fn().mockResolvedValue({
       severity: 'MEDIUM',
@@ -82,6 +83,7 @@ describe('MonitoringController.analyze', () => {
           severity: 'MEDIUM',
           meta: { a: 1 },
           createdAt: savedEvent.createdAt,
+          snapshotPath: null,
         },
       ],
     });
