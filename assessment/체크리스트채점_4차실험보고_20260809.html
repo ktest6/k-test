@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>체크리스트 채점 4차 실험 보고 — 확률 판정 — 2026-08-09</title>
+<style>
+:root{
+  color-scheme:light;
+  --ground:#f5f7f9; --surface:#ffffff; --surface-2:#eceff4;
+  --ink:#12161d; --ink-2:#4c5665; --muted:#7f8a99;
+  --rule:#dfe4ea; --rule-strong:#c7d0da;
+  --blue:#2a78d6; --orange:#eb6834; --neutral:#8b96a5; --good:#0f7a56;
+  --shadow:0 1px 2px rgba(18,22,29,.05), 0 10px 28px rgba(18,22,29,.05);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#111419; --surface:#191d24; --surface-2:#222831;
+    --ink:#eef1f5; --ink-2:#b4bdc9; --muted:#8792a1;
+    --rule:#2a313b; --rule-strong:#3b4552;
+    --blue:#3987e5; --orange:#d95926; --neutral:#7d8899; --good:#199e70;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#111419; --surface:#191d24; --surface-2:#222831;
+  --ink:#eef1f5; --ink-2:#b4bdc9; --muted:#8792a1;
+  --rule:#2a313b; --rule-strong:#3b4552;
+  --blue:#3987e5; --orange:#d95926; --neutral:#7d8899; --good:#199e70;
+  --shadow:none;
+}
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font-family:"Malgun Gothic","Apple SD Gothic Neo","Segoe UI",system-ui,sans-serif;
+  font-size:16px;line-height:1.75;letter-spacing:-.01em;}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px 40px;}
+.col{max-width:730px;}
+h1,h2,h3{font-family:"Batang","Nanum Myeongjo",Georgia,serif;font-weight:700;
+  text-wrap:balance;letter-spacing:-.02em;line-height:1.32;margin:0;}
+h1{font-size:34px;} h2{font-size:25px;margin:0 0 8px;} h3{font-size:17px;margin:0 0 4px;}
+p{margin:0 0 14px;} a{color:var(--blue);}
+.eyebrow{font-size:11.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 8px;font-family:Consolas,"D2Coding",monospace;}
+header.top{border-bottom:1px solid var(--rule);background:var(--surface);}
+header.top .wrap{padding-top:46px;padding-bottom:34px;}
+.kicker{color:var(--orange);font-weight:700;font-size:13px;letter-spacing:.06em;margin:0 0 12px;}
+.sub{color:var(--ink-2);font-size:18px;margin:14px 0 0;max-width:730px;}
+.meta{display:flex;flex-wrap:wrap;gap:4px 26px;margin-top:22px;padding-top:16px;
+  border-top:1px solid var(--rule);font-family:Consolas,"D2Coding",monospace;
+  font-size:12.5px;color:var(--muted);}
+.meta b{color:var(--ink-2);font-weight:600;}
+section{margin-top:54px;}
+.lead{background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--orange);
+  padding:22px 24px;box-shadow:var(--shadow);margin-top:34px;}
+.lead p:last-child{margin-bottom:0;}
+.lead .big{font-size:19px;line-height:1.65;}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(228px,1fr));gap:14px;margin:20px 0 4px;}
+.card{background:var(--surface);border:1px solid var(--rule);padding:16px 18px;box-shadow:var(--shadow);}
+.card .tag{font-family:Consolas,"D2Coding",monospace;font-size:11.5px;color:var(--muted);letter-spacing:.06em;}
+.card p{font-size:14.5px;color:var(--ink-2);margin:6px 0 0;line-height:1.65;}
+.swatch{display:inline-block;width:9px;height:9px;margin-right:6px;}
+figure{margin:22px 0 6px;background:var(--surface);border:1px solid var(--rule);
+  padding:20px 20px 12px;box-shadow:var(--shadow);overflow-x:auto;}
+figure svg{display:block;width:100%;min-width:620px;height:auto;}
+figcaption{font-size:13.5px;color:var(--muted);margin-top:12px;line-height:1.65;}
+.legend{display:flex;flex-wrap:wrap;gap:18px;margin:0 0 14px;font-size:13px;color:var(--ink-2);}
+.legend span{display:inline-flex;align-items:center;gap:7px;}
+.legend i{width:11px;height:11px;display:inline-block;}
+.scroll{overflow-x:auto;margin:18px 0 6px;border:1px solid var(--rule);
+  background:var(--surface);box-shadow:var(--shadow);}
+table{border-collapse:collapse;width:100%;font-size:14px;}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule);white-space:nowrap;
+  vertical-align:top;}
+thead th{background:var(--surface-2);font-size:12px;letter-spacing:.03em;color:var(--ink-2);
+  font-weight:700;border-bottom:1px solid var(--rule-strong);}
+tbody tr:last-child td{border-bottom:none;}
+.num{text-align:right;font-family:Consolas,"D2Coding",monospace;font-variant-numeric:tabular-nums;}
+.q{white-space:normal;display:inline-block;max-width:420px;color:var(--ink-2);line-height:1.55;}
+.wq{white-space:normal;max-width:520px;line-height:1.55;color:var(--ink-2);}
+.wq b{font-family:Consolas,"D2Coding",monospace;color:var(--ink);margin-right:6px;}
+.dot{display:inline-block;width:8px;height:8px;margin-right:8px;}
+.pill{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;font-weight:700;}
+.pill.yes{background:color-mix(in srgb,var(--good) 15%,transparent);color:var(--good);}
+.pill.no{background:var(--surface-2);color:var(--muted);}
+ul,ol{margin:0 0 14px;padding-left:20px;} li{margin-bottom:8px;}
+.note{font-size:14.5px;color:var(--ink-2);border-left:2px solid var(--rule-strong);
+  padding-left:14px;margin:18px 0;}
+code{font-family:Consolas,"D2Coding",monospace;font-size:13px;background:var(--surface-2);
+  padding:1px 5px;}
+pre{background:var(--surface);border:1px solid var(--rule);padding:14px 16px;overflow-x:auto;
+  font-family:Consolas,"D2Coding",monospace;font-size:12.5px;line-height:1.75;color:var(--ink-2);}
+dl{margin:0;} dt{font-weight:700;margin-top:15px;}
+dd{margin:2px 0 0;color:var(--ink-2);font-size:14.5px;}
+footer{margin-top:56px;padding:20px 0 0;border-top:1px solid var(--rule);
+  color:var(--muted);font-size:13px;}
+@media (max-width:700px){
+  h1{font-size:27px;} h2{font-size:21px;} body{font-size:15px;}
+  .wrap{padding:0 16px 32px;}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <p class="kicker">K-TEST 채점 실험 4차 · 팀원 요청 2건</p>
+    <h1>O/X 대신 확률로 채점하면 나아질까</h1>
+    <p class="sub">요청은 ① 체크리스트를 <b>10개</b>로 늘릴 것 ② 판정을 O/X 대신
+    <b>logprobs 정규화 확률</b> p(예)/(p(예)+p(아니오))로 받아 가중치를 다시 학습할 것.
+    둘 다 실행했다. <b>①은 성공했고, ②는 이득이 없었다.</b></p>
+    <div class="meta">
+      <span><b>날짜</b> 2026-08-09</span>
+      <span><b>표본</b> 답안 281건 (1~3차와 동일)</span>
+      <span><b>체크리스트</b> 45벌 · 평균 8.93개</span>
+      <span><b>판정</b> qwen/qwen3-30b-a3b-instruct-2507 · 온도 0</span>
+      <span><b>규모</b> 14,156칸 · 실패 0건 · $0.46</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="lead">
+  <p class="eyebrow">한 줄 결론</p>
+  <p class="big"><b>확률은 진짜로 받아 왔는데, 그 확률이 사실상 O/X였다.</b>
+  판정 2,505칸 중 <b>86.3% 가 0 아니면 1</b>에 붙어 있었고,
+  진짜 중간값(0.25~0.75)은 <b>3.2%</b> 뿐이었다.
+  그래서 확률로 학습한 Q(0.648)와 O/X로 학습한 Q′(0.630)의 차이는
+  <b>+0.018 [-0.017, +0.052] — 구간이 0을 걸쳐 차이를 주장할 수 없다.</b></p>
+  <p class="big" style="margin-top:14px;border-top:1px solid var(--rule);padding-top:14px;">
+  대신 <b>요청 ①은 확실히 성공했다.</b> 항목이 3.5개 → 8.93개로 늘면서
+  3차의 실패 원인이던 ‘너무 쉬운 항목’이 고쳐졌다(전 항목 통과 답안 95건 → 16건).
+  정보 천장도 0.83까지 올랐다. <b>그런데 그 천장을 받아 가는 방식이 이번에도 없었다</b> —
+  네 방식 모두 “글자 수만 세기”(0.636)와 차이를 주장할 수 없다.</p>
+</div>
+
+<div class="note col" style="border-left:2px solid var(--orange);">
+  <b>읽기 전 주의 — 1~3차와 직접 비교하지 마십시오.</b> 판정 모델이 gemini-3.1-flash-lite → qwen3-30b-a3b-instruct-2507 로 바뀌었다. Gemini 는 logprobs 를 주지 않아(3.x 계열에서 제거됨) 확률 판정을 하려면 창구를 옮길 수밖에 없었다. 그래서 v4 와 v1~v3 의 숫자 차이에는 '방식의 차이'와 '모델의 차이'가 섞여 있다.
+  <br><b>비교해도 되는 것</b>: v4 안에서 P·Q·P_bin·Q_bin 은 **완전히 같은 판정 결과**에서 나오므로 서로 직접 비교할 수 있다. 특히 Q vs Q_bin 이 '확률이 O/X 보다 나은가'의 답이다.
+</div>
+
+<section class="col">
+  <p class="eyebrow">요청 ①</p>
+  <h2>체크리스트 10개 — 성공했고, 3차의 병이 고쳐졌다</h2>
+  <p>3차와 똑같이 <b>겹마다 따로</b> 만들었다(문항 9종 × 5겹 = 45벌). 겹 k 의 체크리스트는 겹 k 답안을 한 건도 보지 않고,
+  학습 겹에서 사람 점수대가 고르게 퍼지도록 뽑은 실제 답안 12건만 보고 만든다.
+  프로그램으로 <b>45벌 · 예시 540건을 전수 대조</b>한 결과 시험 겹 답안 혼입 <b>0건</b>이다.</p>
+  <p>3차가 진 이유는 “항목이 너무 쉬워서 다 통과”였다. 이번엔 프롬프트에
+  <b>“최소한만 말한 답안은 떨어지는 어려운 항목을 반드시 섞어라”</b>를 넣었고, 실제로 고쳐졌다.</p>
+</section>
+
+<div class="scroll"><table><thead><tr><th class="">진단</th><th class="num">v3 (항목 3.5개)</th><th class="num">v4 (항목 8.9개)</th></tr></thead><tbody><tr><td class="">항목 평균 통과율</td><td class="num">65.4%</td><td class="num"><b>49.7%</b></td></tr><tr><td class="">모든 항목을 통과한 답안</td><td class="num">95건 (33.8%)</td><td class="num"><b>16건 (5.7%)</b></td></tr><tr><td class="">벌당 평균 항목 수</td><td class="num">3.5개</td><td class="num"><b>8.93개</b></td></tr></tbody></table></div>
+
+<section>
+  <h2 class="col" style="margin-top:30px;">모델이 “어렵다”고 붙인 항목이 실제로 어려웠다</h2>
+  <div class="scroll"><table><thead><tr><th class="">모델이 붙인 난이도</th><th class="num">판정 칸</th><th class="num">실제 통과율</th></tr></thead><tbody><tr><td class="">쉬움</td><td class="num">587칸</td><td class="num">75.6%</td></tr><tr><td class="">보통</td><td class="num">977칸</td><td class="num">50.3%</td></tr><tr><td class="">어려움</td><td class="num">941칸</td><td class="num">33.0%</td></tr></tbody></table></div>
+  <p class="col" style="margin-top:12px;color:var(--ink-2);font-size:14.5px;">
+  난이도를 섞으라는 지시가 말로만 지켜진 게 아니라 <b>실제 통과율로 확인</b>된다(75.6% / 50.3% / 33.0%).
+  다만 겹마다 시험지가 달라지는 값은 그대로다 — 같은 문항 5벌의 문구 닮음 0.292.</p>
+</section>
+
+<section class="col">
+  <p class="eyebrow">요청 ②</p>
+  <h2>확률 판정 — 진짜 logprobs 로 받았다</h2>
+  <p>Gemini 는 3.x 계열에서 logprobs 를 없앴으므로(구글 공식 “의도된 동작”) 판정 창구를
+  <b>OpenRouter · qwen/qwen3-30b-a3b-instruct-2507</b> 로 옮겼다. 항목마다 “예/아니오” 한 낱말만 답하게 하고,
+  <b>첫 토큰의 확률표</b>에서 p(예)/(p(예)+p(아니오))를 계산한다.</p>
+  <p>주의할 점이 하나 있었다. “아니오”는 첫 토큰이 <code>아</code> 로 잘려 나오므로,
+  토큰을 라벨로 접어서(예·네 → 예 쪽 / 아·아니 → 아니오 쪽) 확률을 합산해야 값이 틀어지지 않는다.
+  <b>같은 호출에서 확률과 O/X(p&gt;0.5)를 함께</b> 얻었기 때문에, 두 방식의 비교는 완전히 같은 조건에서 이뤄진다.</p>
+</section>
+
+<section>
+  <h2 class="col">그런데 확률이 사실상 O/X였다</h2>
+  <figure>
+    <svg viewBox="0 0 1000 336" role="img" aria-label="항목 확률값의 분포. 0~0.01 42.9% · 0.01~0.05 3.0% · 0.05~0.25 2.8% · 0.25~0.75 3.2% · 0.75~0.95 2.8% · 0.95~0.99 1.9% · 0.99~1 43.5%">
+<g stroke="var(--rule-strong)" stroke-opacity=".55">
+<line x1="210.0" y1="24" x2="210.0" y2="280.0"></line>
+<line x1="360.0" y1="24" x2="360.0" y2="280.0"></line>
+<line x1="510.0" y1="24" x2="510.0" y2="280.0"></line>
+<line x1="660.0" y1="24" x2="660.0" y2="280.0"></line>
+<line x1="810.0" y1="24" x2="810.0" y2="280.0"></line>
+<line x1="960.0" y1="24" x2="960.0" y2="280.0"></line>
+</g>
+<g font-family="Consolas, D2Coding, monospace" font-size="12" fill="var(--muted)">
+<text x="210.0" y="300" text-anchor="middle">0%</text>
+<text x="360.0" y="300" text-anchor="middle">10%</text>
+<text x="510.0" y="300" text-anchor="middle">20%</text>
+<text x="660.0" y="300" text-anchor="middle">30%</text>
+<text x="810.0" y="300" text-anchor="middle">40%</text>
+<text x="960.0" y="300" text-anchor="middle">50%</text>
+<text x="585" y="322" text-anchor="middle">전체 판정 칸에서 차지하는 비율</text></g>
+<path d="M210.0 32.0 H849.1 a4.0 4.0 0 0 1 4.0 4.0 V44.0 a4.0 4.0 0 0 1 -4.0 4.0 H210.0 Z" fill="var(--orange)" fill-opacity="0.9"><title>p 0~0.01: 1074칸 (42.9%)</title></path>
+<text x="194" y="44.5" text-anchor="end" font-family="Consolas, D2Coding, monospace" font-size="13" fill="var(--ink)">p = 0~0.01</text>
+<text x="865.1" y="44.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">42.9%  (1,074칸)</text>
+<path d="M210.0 68.0 H250.3 a4.0 4.0 0 0 1 4.0 4.0 V80.0 a4.0 4.0 0 0 1 -4.0 4.0 H210.0 Z" fill="var(--blue)" fill-opacity="0.85"><title>p 0.01~0.05: 74칸 (3.0%)</title></path>
+<text x="194" y="80.5" text-anchor="end" font-family="Consolas, D2Coding, monospace" font-size="13" fill="var(--ink)">p = 0.01~0.05</text>
+<text x="266.3" y="80.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">3.0%  (74칸)</text>
+<path d="M210.0 104.0 H247.9 a4.0 4.0 0 0 1 4.0 4.0 V116.0 a4.0 4.0 0 0 1 -4.0 4.0 H210.0 Z" fill="var(--blue)" fill-opacity="0.85"><title>p 0.05~0.25: 70칸 (2.8%)</title></path>
+<text x="194" y="116.5" text-anchor="end" font-family="Consolas, D2Coding, monospace" font-size="13" fill="var(--ink)">p = 0.05~0.25</text>
+<text x="263.9" y="116.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">2.8%  (70칸)</text>
+<path d="M210.0 140.0 H253.3 a4.0 4.0 0 0 1 4.0 4.0 V152.0 a4.0 4.0 0 0 1 -4.0 4.0 H210.0 Z" fill="var(--blue)" fill-opacity="0.85"><title>p 0.25~0.75: 79칸 (3.2%)</title></path>
+<text x="194" y="152.5" text-anchor="end" font-family="Consolas, D2Coding, monospace" font-size="13" fill="var(--ink)">p = 0.25~0.75</text>
+<text x="269.3" y="152.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">3.2%  (79칸)</text>
+<path d="M210.0 176.0 H248.5 a4.0 4.0 0 0 1 4.0 4.0 V188.0 a4.0 4.0 0 0 1 -4.0 4.0 H210.0 Z" fill="var(--blue)" fill-opacity="0.85"><title>p 0.75~0.95: 71칸 (2.8%)</title></path>
+<text x="194" y="188.5" text-anchor="end" font-family="Consolas, D2Coding, monospace" font-size="13" fill="var(--ink)">p = 0.75~0.95</text>
+<text x="264.5" y="188.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">2.8%  (71칸)</text>
+<path d="M210.0 212.0 H234.7 a4.0 4.0 0 0 1 4.0 4.0 V224.0 a4.0 4.0 0 0 1 -4.0 4.0 H210.0 Z" fill="var(--blue)" fill-opacity="0.85"><title>p 0.95~0.99: 48칸 (1.9%)</title></path>
+<text x="194" y="224.5" text-anchor="end" font-family="Consolas, D2Coding, monospace" font-size="13" fill="var(--ink)">p = 0.95~0.99</text>
+<text x="250.7" y="224.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">1.9%  (48칸)</text>
+<path d="M210.0 248.0 H858.1 a4.0 4.0 0 0 1 4.0 4.0 V260.0 a4.0 4.0 0 0 1 -4.0 4.0 H210.0 Z" fill="var(--orange)" fill-opacity="0.9"><title>p 0.99~1: 1089칸 (43.5%)</title></path>
+<text x="194" y="260.5" text-anchor="end" font-family="Consolas, D2Coding, monospace" font-size="13" fill="var(--ink)">p = 0.99~1</text>
+<text x="874.1" y="260.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">43.5%  (1,089칸)</text>
+</svg>
+    <figcaption>주황은 0 또는 1 끝에 붙어 정보가 없는 칸, 파랑은 중간값을 가진 칸이다.
+    전체 2,505칸 중 정보를 가진 칸(0.05~0.95)은 8.8% 뿐이다.</figcaption>
+  </figure>
+  <div class="note col"><b>모델은 거의 항상 확신한다.</b> 그래서 확률을 꺼내 와도 O/X 와 거의 같은 값이 된다.
+  3차에서 “씨앗을 바꿔 투표시키는 대체재”로 재 봤을 때 갈린 칸이 8.2% 였는데,
+  이번에 <b>진짜 확률로 재니 8.8%</b> 였다 — 대체재로 내렸던 판단이 정확했다는 사후 확인이다.</div>
+</section>
+
+<section>
+  <p class="eyebrow">결과</p>
+  <h2 class="col">네 방식 성적</h2>
+  <figure>
+    <div class="legend">
+      <span><i style="background:var(--blue)"></i>확률로 채점</span>
+      <span><i style="background:var(--orange)"></i>O/X 로 채점</span>
+      <span><i style="background:var(--neutral);opacity:.7"></i>기준선·천장</span>
+    </div>
+    <svg viewBox="0 0 1000 346" role="img" aria-label="방식별 QWK 막대그래프. v4 항목의 정보 천장(5겹 범위) 0.827 · Q 확률 + 가중치 학습 ★ 0.648 · P 확률 평균×5 0.648 · P′ O/X 충족율×5 0.645 · 길이 기준선(글자 수만) 0.636 · Q′ O/X + 가중치 학습 ★대조군 0.630">
+<g stroke="var(--rule-strong)" stroke-opacity=".55">
+<line x1="250.0" y1="28" x2="250.0" y2="286.0"></line>
+<line x1="396.0" y1="28" x2="396.0" y2="286.0"></line>
+<line x1="542.0" y1="28" x2="542.0" y2="286.0"></line>
+<line x1="688.0" y1="28" x2="688.0" y2="286.0"></line>
+<line x1="834.0" y1="28" x2="834.0" y2="286.0"></line>
+<line x1="980.0" y1="28" x2="980.0" y2="286.0"></line>
+</g>
+<g font-family="Consolas, D2Coding, monospace" font-size="12" fill="var(--muted)">
+<text x="250.0" y="306" text-anchor="middle">0.0</text>
+<text x="396.0" y="306" text-anchor="middle">0.2</text>
+<text x="542.0" y="306" text-anchor="middle">0.4</text>
+<text x="688.0" y="306" text-anchor="middle">0.6</text>
+<text x="834.0" y="306" text-anchor="middle">0.8</text>
+<text x="980.0" y="306" text-anchor="middle">1.0</text>
+<text x="615" y="330" text-anchor="middle">QWK — 사람 점수와의 일치도 (1.0 = 완전 일치 · 0 = 우연 수준)</text></g>
+<path d="M250.0 38.5 H849.6 a4.0 4.0 0 0 1 4.0 4.0 V49.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--neutral)" fill-opacity="0.45" stroke-dasharray="4 3"><title>v4 항목의 정보 천장(5겹 범위): QWK 0.827 (95% 구간 0.760~0.884)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="804.9" y1="46.0" x2="895.5" y2="46.0"></line><line x1="804.9" y1="41.5" x2="804.9" y2="50.5"></line><line x1="895.5" y1="41.5" x2="895.5" y2="50.5"></line></g>
+<text x="234" y="50.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">v4 항목의 정보 천장(5겹 범위)</text>
+<text x="907.5" y="50.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.827</text>
+<path d="M250.0 80.5 H719.1 a4.0 4.0 0 0 1 4.0 4.0 V91.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--blue)" fill-opacity="1"><title>Q 확률 + 가중치 학습 ★: QWK 0.648 (95% 구간 0.564~0.717)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="662.1" y1="88.0" x2="773.4" y2="88.0"></line><line x1="662.1" y1="83.5" x2="662.1" y2="92.5"></line><line x1="773.4" y1="83.5" x2="773.4" y2="92.5"></line></g>
+<text x="234" y="92.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">Q 확률 + 가중치 학습 ★</text>
+<text x="785.4" y="92.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.648</text>
+<path d="M250.0 122.5 H719.0 a4.0 4.0 0 0 1 4.0 4.0 V133.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--blue)" fill-opacity="0.7"><title>P 확률 평균×5: QWK 0.648 (95% 구간 0.571~0.718)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="667.1" y1="130.0" x2="773.8" y2="130.0"></line><line x1="667.1" y1="125.5" x2="667.1" y2="134.5"></line><line x1="773.8" y1="125.5" x2="773.8" y2="134.5"></line></g>
+<text x="234" y="134.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">P 확률 평균×5</text>
+<text x="785.8" y="134.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.648</text>
+<path d="M250.0 164.5 H717.2 a4.0 4.0 0 0 1 4.0 4.0 V175.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--orange)" fill-opacity="0.7"><title>P′ O/X 충족율×5: QWK 0.645 (95% 구간 0.568~0.716)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="664.4" y1="172.0" x2="772.9" y2="172.0"></line><line x1="664.4" y1="167.5" x2="664.4" y2="176.5"></line><line x1="772.9" y1="167.5" x2="772.9" y2="176.5"></line></g>
+<text x="234" y="176.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">P′ O/X 충족율×5</text>
+<text x="784.9" y="176.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.645</text>
+<path d="M250.0 206.5 H710.5 a4.0 4.0 0 0 1 4.0 4.0 V217.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--neutral)" fill-opacity="0.7"><title>길이 기준선(글자 수만): QWK 0.636 (95% 구간 0.568~0.697)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="664.5" y1="214.0" x2="759.1" y2="214.0"></line><line x1="664.5" y1="209.5" x2="664.5" y2="218.5"></line><line x1="759.1" y1="209.5" x2="759.1" y2="218.5"></line></g>
+<text x="234" y="218.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">길이 기준선(글자 수만)</text>
+<text x="771.1" y="218.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.636</text>
+<path d="M250.0 248.5 H705.7 a4.0 4.0 0 0 1 4.0 4.0 V259.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--orange)" fill-opacity="1"><title>Q′ O/X + 가중치 학습 ★대조군: QWK 0.630 (95% 구간 0.542~0.704)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="645.7" y1="256.0" x2="763.6" y2="256.0"></line><line x1="645.7" y1="251.5" x2="645.7" y2="260.5"></line><line x1="763.6" y1="251.5" x2="763.6" y2="260.5"></line></g>
+<text x="234" y="260.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">Q′ O/X + 가중치 학습 ★대조군</text>
+<text x="775.6" y="260.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.630</text>
+</svg>
+    <figcaption>같은 답안 281건 · 같은 겹 · <b>완전히 같은 판정 결과</b>에서 나온 네 방식이다.
+    점선은 실제로 쓸 수 없는 천장(정답을 보고 맞춘 값).</figcaption>
+  </figure>
+  <div class="scroll"><table><thead><tr><th class="">방식</th><th class="">성격</th><th class="num">QWK</th><th class="num">95% 신뢰구간</th><th class="num">정확 일치</th><th class="num">±1 이내</th></tr></thead><tbody><tr><td class="">Q 확률 벡터 + 문항별 가중치 학습 ★</td><td class="">확률 · 학습 씀</td><td class="num"><b>0.648</b></td><td class="num">[0.564, 0.717]</td><td class="num">46.6%</td><td class="num">90.7%</td></tr><tr><td class="">P 확률 평균×5 (학습 없음)</td><td class="">확률 · 학습 안 씀</td><td class="num"><b>0.648</b></td><td class="num">[0.571, 0.718]</td><td class="num">35.9%</td><td class="num">84.3%</td></tr><tr><td class="">Q_bin 이진 벡터 + 문항별 가중치 학습 ★대조군</td><td class="">O/X · 학습 씀</td><td class="num"><b>0.630</b></td><td class="num">[0.542, 0.704]</td><td class="num">46.3%</td><td class="num">91.1%</td></tr><tr><td class="">P_bin 이진 충족율×5 (학습 없음)</td><td class="">O/X · 학습 안 씀</td><td class="num"><b>0.645</b></td><td class="num">[0.568, 0.716]</td><td class="num">35.2%</td><td class="num">82.9%</td></tr><tr><td class="">길이 기준선(글자 수만)</td><td class="">기준선 · 답안 내용 안 봄</td><td class="num"><b>0.636</b></td><td class="num">[0.568, 0.697]</td><td class="num">45.2%</td><td class="num">92.5%</td></tr></tbody></table></div>
+</section>
+
+<section>
+  <h2 class="col">차이가 우연인가 — 팀원 질문의 답</h2>
+  <div class="scroll"><table><thead><tr><th class="">비교 (앞 − 뒤)</th><th class="num">QWK 차이</th><th class="num">95% 신뢰구간</th><th class="">판정</th></tr></thead><tbody><tr><td class="">Q 확률+학습 − Q′ O/X+학습  ← 팀원 질문의 답</td><td class="num">+0.018</td><td class="num">[-0.017, 0.052]</td><td class=""><span class="pill no">0을 걸친다 → 차이를 주장할 수 없다</span></td></tr><tr><td class="">P 확률 − P′ O/X (학습 없이)</td><td class="num">+0.003</td><td class="num">[-0.015, 0.020]</td><td class=""><span class="pill no">0을 걸친다 → 차이를 주장할 수 없다</span></td></tr><tr><td class="">Q 확률+학습 − P 확률 (학습의 값)</td><td class="num">+0.000</td><td class="num">[-0.062, 0.059]</td><td class=""><span class="pill no">0을 걸친다 → 차이를 주장할 수 없다</span></td></tr><tr><td class="">Q 확률+학습 − 길이 기준선</td><td class="num">+0.013</td><td class="num">[-0.077, 0.102]</td><td class=""><span class="pill no">0을 걸친다 → 차이를 주장할 수 없다</span></td></tr><tr><td class="">Q′ O/X+학습 − 길이 기준선</td><td class="num">-0.005</td><td class="num">[-0.094, 0.077]</td><td class=""><span class="pill no">0을 걸친다 → 차이를 주장할 수 없다</span></td></tr></tbody></table></div>
+  <div class="note col"><b>확률이 O/X 보다 낫다고 말할 수 없다</b>(+0.018, 구간이 0을 걸침).
+  그리고 더 뼈아픈 것은 <b>네 방식 전부가 “답안 글자 수만 세기”와도 차이를 주장할 수 없다</b>는 점이다.
+  항목을 늘려 천장은 0.83(이진 0.82)까지 올려 놨는데, <b>그 천장을 받아 가는 방식이 아직 없다.</b></div>
+</section>
+
+<section class="col">
+  <p class="eyebrow">놀란 점</p>
+  <h2>온도 0인데 확률이 재현되지 않았다</h2>
+  <p>고정 60건을 3회 판정했더니 <b>확률이 소수점까지 같은 칸이 538칸 중 8칸(1.5%)</b> 뿐이었다.
+  대부분은 아주 미세한 차이(중앙값 7.6e-06)지만, <b>O/X 판정이 뒤집힌 칸이 8칸(1.5%)</b> 있고 최대 폭은 0.926였다.
+  1~3차(Gemini)에서는 <b>0/213칸</b>, 즉 완벽히 재현됐던 항목이다.</p>
+  <p>공급자가 바뀌어서 생긴 일인지 확인해 봤다. <b>3회 내내 같은 공급자로 간 146칸 중 141칸도 흔들렸다</b> —
+  라우팅 탓이 아니라 모델·서버의 계산 방식(전문가 혼합 모델의 묶음 추론으로 보인다) 문제다.
+  최종 점수는 반올림에 먹혀 완전일치 100% 로 나오지만, <b>판정 창구를 이쪽으로 옮기면 “재현성 100%”라는 우리 강점이 약해진다.</b></p>
+  <p><b>또 하나 — 이번 판정에는 근거 인용이 없다.</b> 한 낱말로만 답하게 했으므로 “원문에 없는 인용은 폐기”라는
+  우리 규약을 지킬 자리가 없었다. 대신 판정마다 첫 토큰 후보와 확률 원본을 전부 저장했다.
+  <b>운영 채점에 이 규약을 그대로 쓸 수는 없다.</b></p>
+  <p><b>부수 함정</b>: OpenRouter 는 같은 모델을 여러 회사로 나눠 보내는데, 일부 회사는 <code>logprobs</code> 를
+  <b>조용히 빼고 정상 응답</b>을 돌려준다. 파라미터 필수 옵션과 공급자 지정으로 막았고, 줄마다 어디로 갔는지 기록해 두었다.</p>
+</section>
+
+<section>
+  <p class="eyebrow">네 차례를 한눈에</p>
+  <h2 class="col">항목을 늘리면 천장이 오른다 — 그런데 점수는 안 따라온다</h2>
+  <div class="scroll"><table><thead><tr><th class="">실험 · 체크리스트 만든 방법</th><th class="num">벌당 항목 수</th><th class="num">정보 천장(이진·선형)</th><th class="num">가중치 학습 QWK</th><th class="">판정 모델</th></tr></thead><tbody><tr><td class="">1차 · 지시문만 보고 생성</td><td class="num">2.0개</td><td class="num">0.689</td><td class="num">0.620</td><td class="">gemini-3.1-flash-lite</td></tr><tr><td class="">2차 · 지어낸 후보 답안 기반</td><td class="num">6.0개</td><td class="num">0.797</td><td class="num"><b>0.698</b></td><td class="">gemini-3.1-flash-lite</td></tr><tr><td class="">3차 · 실제 답안 기반</td><td class="num">3.5개</td><td class="num">0.750</td><td class="num">0.608</td><td class="">gemini-3.1-flash-lite</td></tr><tr><td class=""><b>4차 · 실제 답안 + 10개 요청</b></td><td class="num"><b>8.93개</b></td><td class="num"><b>0.816</b></td><td class="num">0.630</td><td class=""><b>qwen/qwen3-30b-a3b-instruct-2507</b></td></tr></tbody></table></div>
+  <div class="note col"><b>천장은 항목 수를 따라 움직인다.</b> 2개 → 6개로 늘리자 올랐고, 3차에서 3.5개로 줄자 내려갔고,
+  4차에서 8.9개로 늘리자 다시 올라 역대 최고(0.816)가 됐다. <b>재료를 좋게 만드는 방법은 찾은 셈이다.</b>
+  <br><br>그런데 <b>가중치 학습 점수는 2차(6개)의 0.698이 여전히 최고</b>다.
+  천장이 0.816인데 실제 점수가 0.630에 머무는 것은, 항목이 아니라
+  <b>0/1 을 점수로 바꾸는 층(릿지 회귀)이 못 따라온다</b>는 뜻이다.</div>
+  <div class="note col" style="border-left:2px solid var(--orange);">
+  <b>다만 4차 줄은 판정 모델이 다르다.</b> 확률을 얻으려면 창구를 옮길 수밖에 없었으므로,
+  4차의 천장 상승과 점수에는 <b>‘항목이 늘어난 효과’와 ‘모델이 바뀐 효과’가 섞여 있다.</b>
+  <br><b>가리는 방법은 정해져 있다</b> — v4 체크리스트(8.9개)를 <b>1~3차와 같은 gemini-3.1-flash-lite 로 판정</b>하면
+  판정자를 고정한 사다리가 완성된다. Gemini 는 항목 전부를 한 번에 판정할 수 있어 1,405회면 되고, 아직 하지 않았다.</div>
+</section>
+
+<section>
+  <p class="eyebrow">참고</p>
+  <h2 class="col">1~3차 방식별 숫자 (판정 모델이 다르므로 직접 비교 금지)</h2>
+  <div class="scroll"><table><thead><tr><th class="">방식</th><th class="">판정 모델</th><th class="num">QWK</th><th class="num">95% 신뢰구간</th></tr></thead><tbody><tr><td class="">A1 LLM 직접 채점(퓨샷 앵커) [v1]</td><td class="">gemini-3.1-flash-lite</td><td class="num">0.787</td><td class="num">[0.735, 0.831]</td></tr><tr><td class="">A0 LLM 직접 채점(제로샷) [v1]</td><td class="">gemini-3.1-flash-lite</td><td class="num">0.758</td><td class="num">[0.705, 0.805]</td></tr><tr><td class="">F v2 이진+가중치 학습</td><td class="">gemini-3.1-flash-lite</td><td class="num">0.698</td><td class="num">[0.622, 0.757]</td></tr><tr><td class="">길이 기준선(글자 수만)</td><td class="">gemini-3.1-flash-lite</td><td class="num">0.636</td><td class="num">[0.568, 0.697]</td></tr><tr><td class="">C v1 이진+가중치 학습</td><td class="">gemini-3.1-flash-lite</td><td class="num">0.620</td><td class="num">[0.537, 0.687]</td></tr><tr><td class="">J v3 이진+문항별 가중치 학습 ★</td><td class="">gemini-3.1-flash-lite</td><td class="num">0.608</td><td class="num">[0.515, 0.680]</td></tr><tr><td class="">H v2 0~100 벡터+가중치 학습</td><td class="">gemini-3.1-flash-lite</td><td class="num">0.596</td><td class="num">[0.511, 0.672]</td></tr><tr><td class="">I v3 충족율×5 (자기 겹 체크리스트)</td><td class="">gemini-3.1-flash-lite</td><td class="num">0.582</td><td class="num">[0.495, 0.653]</td></tr><tr><td class="">I′ v3 중요도 가중 충족율×5</td><td class="">gemini-3.1-flash-lite</td><td class="num">0.573</td><td class="num">[0.487, 0.644]</td></tr><tr><td class="">D v2 충족율×5</td><td class="">gemini-3.1-flash-lite</td><td class="num">0.543</td><td class="num">[0.461, 0.610]</td></tr><tr><td class="">G v2 항목 0~100 가중평균×5</td><td class="">gemini-3.1-flash-lite</td><td class="num">0.536</td><td class="num">[0.447, 0.614]</td></tr><tr><td class="">E v2 중요도 가중 충족율×5</td><td class="">gemini-3.1-flash-lite</td><td class="num">0.530</td><td class="num">[0.450, 0.600]</td></tr><tr><td class="">B v1 충족율×5</td><td class="">gemini-3.1-flash-lite</td><td class="num">0.510</td><td class="num">[0.430, 0.584]</td></tr><tr><td class="">바닥선(학습겹 평균, 답안을 안 읽음)</td><td class="">gemini-3.1-flash-lite</td><td class="num">0.000</td><td class="num">[0.000, 0.000]</td></tr></tbody></table></div>
+  <p class="col" style="margin-top:12px;color:var(--ink-2);font-size:14.5px;">
+  이 표는 <b>맥락용</b>이다. v4 와 나란히 놓고 순위를 매기면 “방식의 차이”와 “모델의 차이”가 섞인 숫자를 읽게 된다.</p>
+</section>
+
+<section class="col">
+  <p class="eyebrow">그래서 다음</p>
+  <h2>네 차례 실험이 가리키는 곳</h2>
+  <ol>
+    <li><b>항목을 늘리고 어렵게 만드는 것은 효과가 있다</b>(천장 0.69 → 0.80 → 0.83). 다만 <b>천장을 받아 갈 결합 방식이 아직 없다.</b>
+      릿지 회귀보다 나은 결합(비선형·순서형 모델)을 시도할 자리다.</li>
+    <li><b>확률 판정은 이 과제에서 값이 없다.</b> 모델이 거의 항상 확신하기 때문이다. 이 길은 닫아도 된다 —
+      <b>세 가지 방법(씨앗 투표·0~100 점수·진짜 logprobs)으로 모두 같은 결론</b>이 나왔다.</li>
+    <li><b>판정 창구를 옮기는 값은 비싸다.</b> 재현성이 깨지고 인용 규약을 잃는다. 확률이라는 이득이 없는 이상 Gemini 로 돌아가는 것이 맞다.</li>
+    <li><b>제일 급한 것은 여전히 문항이다.</b> 네 번 모두 AI Hub 문항에서 실험했다. 요구가 3~5개인 우리 직무 문항에서
+      같은 실험을 해야 이 결론들이 우리 시험에 적용되는지 알 수 있다.</li>
+  </ol>
+</section>
+
+<section class="col">
+  <p class="eyebrow">정직하게</p>
+  <h2>이 결과로 말할 수 없는 것</h2>
+  <ul><li>판정 모델이 v1~v3 와 다르다(Qwen). 앞 실험과의 직접 비교는 성립하지 않는다.</li><li>한 낱말 판정이라 인용 검증을 하지 못했다. 운영 채점 규약과 다르다.</li><li>겹마다 체크리스트가 다르다. 실제 시험에 쓰려면 한 벌로 굳히는 절차가 필요하다.</li><li>체크리스트를 만들 때 사람 점수를 보여 주었다(학습 겹만). 사람 점수가 없는 새 문항에는 이 방식을 그대로 쓸 수 없다.</li><li>문항당 답안이 27~40건뿐이고, Q 는 겹마다 항목 수(약 9개)만큼의 가중치를 20~32건으로 배운다. 표본 대비 손잡이가 v2·v3 보다 많아 과적합 위험이 더 크다.</li><li>천장(선형 적합)은 항목이 많을수록 저절로 올라간다. v4 는 항목이 v2·v3 보다 많으므로 천장 값을 앞 실험과 나란히 놓으면 안 된다.</li><li>OpenRouter 는 같은 모델을 여러 회사에 나눠 보낸다. logprobs 를 주는 곳으로만 좁혔지만 실행마다 어디로 가는지는 고정되지 않는다(줄마다 기록해 두었다).</li><li>AI Hub 데이터는 우리 시험(직무 한국어)과 과제 성격이 다르다.</li></ul>
+</section>
+
+<section class="col">
+  <p class="eyebrow">다시 돌리려면</p>
+  <h2>재현 방법</h2>
+  <pre>cd assessment/scripts/checklist_lab
+python gen_checklists_v4.py      # 겹별 체크리스트 45벌 (항목 10개 목표)
+python run_experiment_v4.py      # 확률 판정 14,156칸 (+ 재현성 3회)
+python analyze_v4.py             # QWK·신뢰구간·천장·분포
+python make_report_v4.py         # 이 보고서</pre>
+  <p style="font-size:14.5px;color:var(--ink-2);">모든 수치의 원본은 <code>outputs/checklist_lab/results_summary_v4.json</code>,
+  판정 한 칸 한 칸의 확률 원본은 <code>judgments_v4.jsonl</code> 에 있다.
+  1~3차 결과 파일과 <code>assessment/src/</code> 는 이 실험에서 변경되지 않았다.</p>
+</section>
+
+<footer class="wrap" style="padding-left:0;padding-right:0;">
+  K-TEST 문제·채점 모델 파트 · 4차 실험 2026-08-09 20:48:28 ·
+  판정 qwen/qwen3-30b-a3b-instruct-2507 / 생성 gemini-3.1-flash-lite (v1~v3 와 같다) ·
+  앞 보고서: <code>체크리스트채점_실험보고_20260809.html</code>(1·2차) ·
+  <code>체크리스트채점_3차실험보고_20260809.html</code>(3차) ·
+  이 문서는 <code>make_report_v4.py</code> 가 결과 JSON 에서 자동 생성했다.
+</footer>
+
+</div>
+</body>
+</html>

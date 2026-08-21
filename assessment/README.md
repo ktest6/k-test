@@ -146,7 +146,75 @@ X-API-Key: (전달받은 키)
 
 `items` 에는 **`/score` 응답을 가공 없이 그대로** 담으면 됩니다. 필드명을 맞춰 두었고 모르는 필드는 무시합니다.
 
-**응답**: `overall_score`, `overall_grade`, `percentile`, `subscores[]`, `mode_results[]`(말하기/쓰기 각각), `cross_mode_check`(말하기·쓰기 등급 차이 — 부정행위 교차검증 신호)
+**응답**: `overall_score`, `overall_grade`, `percentile`, `subscores[]`, `mode_results[]`(말하기/쓰기 각각), `cross_mode_check`(말하기·쓰기 등급 차이 — 부정행위 교차검증 신호), `item_coverage`, `warnings`, `meta`
+
+**응답에 없는 것(중요)**: 문항별 답안 원문·STT 전사·체크리스트 충족 내역은 `/finalize` 응답에 실리지 않습니다. 리포트 화면의 "문항별 상세"는 **시험 중 받은 `/score` 응답(`answer_text`는 요청값, `meta.stt_transcript`, `checklist_results[]`, `subscores[].evidence[]`)을 백엔드가 저장해 두었다가 조립**해야 합니다. `/finalize`의 `subscores[].contributions[]`에는 문항별 영역 점수가 `feature_id = item_id`로 남지만, 그것은 점수 기여 내역이지 답안 내용이 아닙니다.
+
+**응답 예시** (`finalize_session`을 실제로 돌려 만든 값 — 문항 4개 중 1개 미수신 상황):
+
+```json
+{
+  "session_id": "sess-001",
+  "candidate_id": "cand-42",
+  "status": "partial",
+  "overall_score": 65.33,
+  "overall_grade": "C",
+  "percentile": 50.7,
+  "subscores": [
+    {
+      "area": "content_task", "label": "내용 및 과제 수행",
+      "score": 61.67, "max_score": 100.0, "weight": 0.45, "status": "scored",
+      "contributions": [
+        { "feature_id": "W1-1", "feature_name": "문항 W1-1 (writing)", "raw_value": 70.0, "normalized": 0.7, "weight": 0.3333, "points": 23.33 },
+        { "feature_id": "W1-2", "feature_name": "문항 W1-2 (writing)", "raw_value": 60.0, "normalized": 0.6, "weight": 0.3333, "points": 20.0 },
+        { "feature_id": "S2-1", "feature_name": "문항 S2-1 (speaking)", "raw_value": 55.0, "normalized": 0.55, "weight": 0.3333, "points": 18.33 }
+      ],
+      "evidence": [], "note": "문항별 채점 결과를 문항 비중으로 평균했다."
+    },
+    {
+      "area": "language_use", "label": "언어 사용",
+      "score": 68.33, "max_score": 100.0, "weight": 0.55, "status": "scored",
+      "contributions": [ "...문항별 기여, 위와 같은 형식..." ],
+      "evidence": [], "note": "문항별 채점 결과를 문항 비중으로 평균했다."
+    },
+    {
+      "area": "delivery", "label": "발화 전달력",
+      "score": null, "max_score": 100.0, "weight": 0.0, "status": "not_evaluated",
+      "contributions": [], "evidence": [],
+      "note": "Azure 발음평가 미도입으로 이번 범위에서 채점하지 않는다(종합 점수에서 제외)."
+    }
+  ],
+  "mode_results": [
+    { "mode": "speaking", "score": 58.0, "grade": "C", "scored_item_count": 1, "expected_item_count": 2 },
+    { "mode": "writing",  "score": 68.5, "grade": "C", "scored_item_count": 2, "expected_item_count": 2 }
+  ],
+  "cross_mode_check": {
+    "comparable": true, "speaking_grade": "C", "writing_grade": "C",
+    "grade_gap": 0, "threshold": 3, "flagged": false,
+    "note": "말하기 C / 쓰기 C, 0등급 차이로 기준값(3등급) 안에 있다."
+  },
+  "item_coverage": {
+    "expected_count": 4, "scored_count": 3,
+    "missing_item_ids": ["S2-2"], "pending_item_ids": [], "failed_item_ids": [],
+    "scored_ratio": 0.75, "min_scored_ratio": 0.7, "min_scored_items": 3
+  },
+  "warnings": [
+    "결과가 넘어오지 않은 문항 1개를 빼고 계산했다: S2-2",
+    "※ 임시 ※ 결합 가중치는 학습된 값이 아니고, 등급 커트라인도 전문가가 확정한 앵커 답안에서 나온 값이 아니다. 백분위 역시 실제 응시자 분포가 아니라 임시 환산표에서 나온 값이다. 확정 등급으로 통보하지 말 것."
+  ],
+  "meta": {
+    "scoring_version": "0.1.0", "weights_profile": "provisional_v0",
+    "weights_provisional": true, "cutoffs_from_anchor_answers": false, "percentile_provisional": true,
+    "grade_cutoffs": { "A": 85.0, "B": 70.0, "C": 55.0, "D": 40.0, "E": 0.0 },
+    "reliability": "full", "reliability_reason": "", "safe_to_show_candidate": true,
+    "unreliable_item_ids": []
+  }
+}
+```
+
+스케일: 점수는 전부 **0~100**(`score`, `overall_score`, `mode_results[].score`, `contributions[].raw_value`), `normalized`는 0~1, `weight`는 재정규화된 비중(영역 안에서 합 1), `percentile`은 0~100(임시 환산표). 등급은 A~E(`meta.grade_cutoffs`에 커트라인 동봉).
+
+`delivery` 영역은 `status: "not_evaluated"`, `score: null`, `weight: 0.0`으로 옵니다 — 0점이 아니라 "채점 안 함"이니 화면에서는 **0으로 그리지 말고** "미채점" 표기(또는 숨김)로 다뤄 주세요. `status` 값으로 분기하면 발음 채점이 붙는 날 화면 코드를 안 고쳐도 됩니다.
 
 ---
 

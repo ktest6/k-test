@@ -1,0 +1,200 @@
+<!-- make_lora_report.py 가 만든다. 손으로 고치지 말 것 -->
+<meta charset="utf-8">
+<title>파인튜닝 실험 보고 — K-TEST</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{
+  color-scheme:light;
+  --ground:#f5f7f9; --surface:#ffffff; --surface-2:#eceff4;
+  --ink:#12161d; --ink-2:#4c5665; --muted:#7f8a99;
+  --rule:#dfe4ea; --rule-strong:#c7d0da;
+  --blue:#2a78d6; --orange:#eb6834; --neutral:#8b96a5; --good:#0f7a56;
+  --shadow:0 1px 2px rgba(18,22,29,.05), 0 10px 28px rgba(18,22,29,.05);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#111419; --surface:#191d24; --surface-2:#222831;
+    --ink:#eef1f5; --ink-2:#b4bdc9; --muted:#8792a1;
+    --rule:#2a313b; --rule-strong:#3b4552;
+    --blue:#3987e5; --orange:#d95926; --neutral:#7d8899; --good:#199e70;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#111419; --surface:#191d24; --surface-2:#222831;
+  --ink:#eef1f5; --ink-2:#b4bdc9; --muted:#8792a1;
+  --rule:#2a313b; --rule-strong:#3b4552;
+  --blue:#3987e5; --orange:#d95926; --neutral:#7d8899; --good:#199e70;
+  --shadow:none;
+}
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font-family:"Malgun Gothic","Apple SD Gothic Neo","Segoe UI",system-ui,sans-serif;
+  font-size:16px;line-height:1.75;letter-spacing:-.01em;}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px 40px;}
+.col{max-width:730px;}
+h1,h2,h3{font-family:"Batang","Nanum Myeongjo",Georgia,serif;font-weight:700;
+  text-wrap:balance;letter-spacing:-.02em;line-height:1.32;margin:0;}
+h1{font-size:34px;} h2{font-size:25px;margin:0 0 8px;} h3{font-size:17px;margin:0 0 4px;}
+p{margin:0 0 14px;} a{color:var(--blue);}
+.eyebrow{font-size:11.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 8px;font-family:Consolas,"D2Coding",monospace;}
+header.top{border-bottom:1px solid var(--rule);background:var(--surface);}
+header.top .wrap{padding-top:46px;padding-bottom:34px;}
+.kicker{color:var(--orange);font-weight:700;font-size:13px;letter-spacing:.06em;margin:0 0 12px;}
+.sub{color:var(--ink-2);font-size:18px;margin:14px 0 0;max-width:730px;}
+.meta{display:flex;flex-wrap:wrap;gap:4px 26px;margin-top:22px;padding-top:16px;
+  border-top:1px solid var(--rule);font-family:Consolas,"D2Coding",monospace;
+  font-size:12.5px;color:var(--muted);}
+.meta b{color:var(--ink-2);font-weight:600;}
+section{margin-top:54px;}
+.lead{background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--orange);
+  padding:22px 24px;box-shadow:var(--shadow);margin-top:34px;}
+.lead p:last-child{margin-bottom:0;}
+.lead .big{font-size:19px;line-height:1.65;}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(228px,1fr));gap:14px;margin:20px 0 4px;}
+.card{background:var(--surface);border:1px solid var(--rule);padding:16px 18px;box-shadow:var(--shadow);}
+.card .tag{font-family:Consolas,"D2Coding",monospace;font-size:11.5px;color:var(--muted);letter-spacing:.06em;}
+.card p{font-size:14.5px;color:var(--ink-2);margin:6px 0 0;line-height:1.65;}
+.swatch{display:inline-block;width:9px;height:9px;margin-right:6px;}
+figure{margin:22px 0 6px;background:var(--surface);border:1px solid var(--rule);
+  padding:20px 20px 12px;box-shadow:var(--shadow);overflow-x:auto;}
+figure svg{display:block;width:100%;min-width:620px;height:auto;}
+figcaption{font-size:13.5px;color:var(--muted);margin-top:12px;line-height:1.65;}
+.legend{display:flex;flex-wrap:wrap;gap:18px;margin:0 0 14px;font-size:13px;color:var(--ink-2);}
+.legend span{display:inline-flex;align-items:center;gap:7px;}
+.legend i{width:11px;height:11px;display:inline-block;}
+.scroll{overflow-x:auto;margin:18px 0 6px;border:1px solid var(--rule);
+  background:var(--surface);box-shadow:var(--shadow);}
+table{border-collapse:collapse;width:100%;font-size:14px;}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule);white-space:nowrap;
+  vertical-align:top;}
+thead th{background:var(--surface-2);font-size:12px;letter-spacing:.03em;color:var(--ink-2);
+  font-weight:700;border-bottom:1px solid var(--rule-strong);}
+tbody tr:last-child td{border-bottom:none;}
+.num{text-align:right;font-family:Consolas,"D2Coding",monospace;font-variant-numeric:tabular-nums;}
+.q{white-space:normal;display:inline-block;max-width:420px;color:var(--ink-2);line-height:1.55;}
+.wq{white-space:normal;max-width:520px;line-height:1.55;color:var(--ink-2);}
+.wq b{font-family:Consolas,"D2Coding",monospace;color:var(--ink);margin-right:6px;}
+.dot{display:inline-block;width:8px;height:8px;margin-right:8px;}
+.pill{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;font-weight:700;}
+.pill.yes{background:color-mix(in srgb,var(--good) 15%,transparent);color:var(--good);}
+.pill.no{background:var(--surface-2);color:var(--muted);}
+ul,ol{margin:0 0 14px;padding-left:20px;} li{margin-bottom:8px;}
+.note{font-size:14.5px;color:var(--ink-2);border-left:2px solid var(--rule-strong);
+  padding-left:14px;margin:18px 0;}
+code{font-family:Consolas,"D2Coding",monospace;font-size:13px;background:var(--surface-2);
+  padding:1px 5px;}
+pre{background:var(--surface);border:1px solid var(--rule);padding:14px 16px;overflow-x:auto;
+  font-family:Consolas,"D2Coding",monospace;font-size:12.5px;line-height:1.75;color:var(--ink-2);}
+dl{margin:0;} dt{font-weight:700;margin-top:15px;}
+dd{margin:2px 0 0;color:var(--ink-2);font-size:14.5px;}
+footer{margin-top:56px;padding:20px 0 0;border-top:1px solid var(--rule);
+  color:var(--muted);font-size:13px;}
+@media (max-width:700px){
+  h1{font-size:27px;} h2{font-size:21px;} body{font-size:15px;}
+  .wrap{padding:0 16px 32px;}
+}
+</style>
+<style>
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:18px 0 6px;}
+.hero{font-family:Consolas,"D2Coding",monospace;font-size:34px;line-height:1.15;color:var(--ink);
+  font-variant-numeric:tabular-nums;margin:0;}
+.hero small{display:block;font-family:inherit;font-size:13.5px;color:var(--muted);margin-top:8px;
+  font-weight:400;letter-spacing:0;}
+.win{color:var(--good);font-weight:700;} .warn{color:var(--orange);font-weight:700;}
+.legend{display:flex;gap:20px;flex-wrap:wrap;font-size:13.5px;color:var(--ink-2);margin:0 0 12px;}
+.sw{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:7px;vertical-align:-1px;}
+.state{display:inline-block;font-family:Consolas,"D2Coding",monospace;font-size:11.5px;
+  padding:2px 8px;border-radius:10px;letter-spacing:.04em;}
+.state.done{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good);}
+.state.now{background:color-mix(in srgb,var(--orange) 16%,transparent);color:var(--orange);}
+.state.todo{background:var(--surface-2);color:var(--muted);}
+</style>
+<header class="top"><div class="wrap">
+<p class="kicker">K-TEST · 채점 모델 파트 · 실험 보고</p>
+<h1>받아쓰기가 지운 실력을 되찾는 법</h1>
+<p class="sub col">받아쓰기 AI 는 외국인이 틀리게 말한 것을 <b>옳게 고쳐서</b> 적는다. 그러면 채점할 실력이 시험지에서 사라진다. 우리는 이것을 <b>재고</b>, <b>고쳐 보고</b>, 고칠 수 없다는 것을 확인한 뒤 <b>표시하는 쪽</b>으로 방향을 틀었다.</p>
+<p class="meta"><b>시험지</b> gold 100건 · <b>학습쌍</b> 10,151건 · <b>모델 오디션</b> 9종 · <b>측정</b> 2026-08-09 22:43:51 · <b>만든이</b> make_lora_report.py</p>
+</div></header>
+<div class="wrap">
+<div class="lead col">
+<p class="hero">29.5%<small>받아쓰기 모델 8종을 통틀어, 외국인이 실제로 틀린 자리 315곳 중 93곳이 <b>표준어로 고쳐져 사라졌다.</b> 가장 정직한 모델도 21.1%를 지웠다.</small></p>
+</div>
+<h2 class="col">우리가 걸어온 네 칸</h2>
+<p class="col">가설을 세우고, 재고, 안 되면 방향을 틀었다. <b>세 번째 칸의 실패가 네 번째 칸의 이유</b>다.</p>
+<figure><svg viewBox="0 0 1000 368" role="img" aria-label="세탁은 실재하는가: Gemini 가 조사를 채우고
+발음 오류를 고치고
+끊긴 말을 지웠다 다음 한 모델만의 문제인가: 모델 8종 실측 → 세탁률 29.5%
+가장 정직한 모델도 21.1%
+한 모델 결함이 아니다 다음 모델을 고치면 되는가: LoRA 두 차례(v0·v1)
+밑바탕과 구분되지 않음
+실패 — 원인은 학습 목표 다음 못 막으면 표시한다: 증인 4명이 10,151건 전수 심사
+세탁 의심 1,116건 제거
+정제 데이터로 재학습"><g><title>세탁은 실재하는가 — Gemini 가 조사를 채우고
+발음 오류를 고치고
+끊긴 말을 지웠다</title><rect x="24.0" y="222.0" width="224.0" height="116.0" rx="6" fill="var(--surface-2)" stroke="var(--blue)" stroke-width="2"></rect><rect x="24.0" y="222.0" width="4" height="116.0" rx="2" fill="var(--blue)"></rect><text x="40.0" y="248.0" font-size="11.5" font-family="Consolas, D2Coding, monospace" fill="var(--blue)" letter-spacing=".08em">계단 1</text><text x="40.0" y="272.0" font-size="15" font-weight="700" fill="var(--ink)">세탁은 실재하는가</text><text x="40.0" y="296.0" font-size="12.5" fill="var(--ink-2)">Gemini 가 조사를 채우고</text><text x="40.0" y="315.0" font-size="12.5" fill="var(--ink-2)">발음 오류를 고치고</text><text x="40.0" y="334.0" font-size="12.5" fill="var(--ink-2)">끊긴 말을 지웠다</text></g><path d="M250.0 280.0 l12.0 -46.0" stroke="var(--neutral)" stroke-width="1.5" fill="none" marker-end="url(#ah)"></path><g><title>한 모델만의 문제인가 — 모델 8종 실측 → 세탁률 29.5%
+가장 정직한 모델도 21.1%
+한 모델 결함이 아니다</title><rect x="266.0" y="176.0" width="224.0" height="116.0" rx="6" fill="var(--surface-2)" stroke="var(--blue)" stroke-width="2"></rect><rect x="266.0" y="176.0" width="4" height="116.0" rx="2" fill="var(--blue)"></rect><text x="282.0" y="202.0" font-size="11.5" font-family="Consolas, D2Coding, monospace" fill="var(--blue)" letter-spacing=".08em">계단 2</text><text x="282.0" y="226.0" font-size="15" font-weight="700" fill="var(--ink)">한 모델만의 문제인가</text><text x="282.0" y="250.0" font-size="12.5" fill="var(--ink-2)">모델 8종 실측 → 세탁률 29.5%</text><text x="282.0" y="269.0" font-size="12.5" fill="var(--ink-2)">가장 정직한 모델도 21.1%</text><text x="282.0" y="288.0" font-size="12.5" fill="var(--ink-2)">한 모델 결함이 아니다</text></g><path d="M492.0 234.0 l12.0 -46.0" stroke="var(--neutral)" stroke-width="1.5" fill="none" marker-end="url(#ah)"></path><g><title>모델을 고치면 되는가 — LoRA 두 차례(v0·v1)
+밑바탕과 구분되지 않음
+실패 — 원인은 학습 목표</title><rect x="508.0" y="130.0" width="224.0" height="116.0" rx="6" fill="var(--surface-2)" stroke="var(--orange)" stroke-width="2"></rect><rect x="508.0" y="130.0" width="4" height="116.0" rx="2" fill="var(--orange)"></rect><text x="524.0" y="156.0" font-size="11.5" font-family="Consolas, D2Coding, monospace" fill="var(--orange)" letter-spacing=".08em">계단 3</text><text x="524.0" y="180.0" font-size="15" font-weight="700" fill="var(--ink)">모델을 고치면 되는가</text><text x="524.0" y="204.0" font-size="12.5" fill="var(--ink-2)">LoRA 두 차례(v0·v1)</text><text x="524.0" y="223.0" font-size="12.5" fill="var(--ink-2)">밑바탕과 구분되지 않음</text><text x="524.0" y="242.0" font-size="12.5" fill="var(--ink-2)">실패 — 원인은 학습 목표</text></g><path d="M734.0 188.0 l12.0 -46.0" stroke="var(--neutral)" stroke-width="1.5" fill="none" marker-end="url(#ah)"></path><g><title>못 막으면 표시한다 — 증인 4명이 10,151건 전수 심사
+세탁 의심 1,116건 제거
+정제 데이터로 재학습</title><rect x="750.0" y="84.0" width="224.0" height="116.0" rx="6" fill="var(--surface-2)" stroke="var(--blue)" stroke-width="2" stroke-dasharray="6 4"></rect><rect x="750.0" y="84.0" width="4" height="116.0" rx="2" fill="var(--blue)"></rect><text x="766.0" y="110.0" font-size="11.5" font-family="Consolas, D2Coding, monospace" fill="var(--blue)" letter-spacing=".08em">계단 4</text><text x="766.0" y="134.0" font-size="15" font-weight="700" fill="var(--ink)">못 막으면 표시한다</text><text x="766.0" y="158.0" font-size="12.5" fill="var(--ink-2)">증인 4명이 10,151건 전수 심사</text><text x="766.0" y="177.0" font-size="12.5" fill="var(--ink-2)">세탁 의심 1,116건 제거</text><text x="766.0" y="196.0" font-size="12.5" fill="var(--ink-2)">정제 데이터로 재학습</text></g><defs><marker id="ah" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--neutral)"></path></marker></defs></svg>
+<figcaption class="col">점선 칸은 진행 중이다. 계단 3 이 없으면 “그냥 파인튜닝하면 되지 않나”라는 물음에 답할 수 없다 — <b>두 번 해 보고 안 됐다는 실측</b>이 계단 4 의 근거다.</figcaption></figure>
+<h2 class="col">계단 2 — 밑바탕을 무엇으로 할 것인가</h2>
+<p class="col">받아쓰기 모델은 크기가 클수록 잘 듣는다. 그런데 <b>우리 기준은 정확도가 아니라 “학습자의 오류를 지우지 않는가”</b>다. Whisper 세 크기를 같은 시험지로 재 보았다.</p>
+<div class="scroll"><table><thead><tr><th class="">모델</th><th class="num">크기</th><th class="num">오류 보존율</th><th class="num">대조군 오탐율</th><th class="num">가운뎃값 CER</th><th class="num">건당</th></tr></thead><tbody><tr><td class=""><b>Whisper small</b></td><td class="num">244M</td><td class="num"><span class="win">73.7%</span></td><td class="num">33.3%</td><td class="num">7.7%</td><td class="num">3.7초</td></tr><tr><td class=""><b>Whisper medium</b></td><td class="num">769M</td><td class="num"><span class="warn">65.0%</span></td><td class="num"><span class="win">22.2%</span></td><td class="num"><span class="win">5.6%</span></td><td class="num">6.8초</td></tr><tr><td class=""><b>Whisper large-v3</b></td><td class="num">1550M</td><td class="num">70.5%</td><td class="num"><span class="warn">51.9%</span></td><td class="num">16.7%</td><td class="num">24.2초</td></tr></tbody></table></div>
+<div class="note col"><b>가장 잘 듣는 모델이 오류를 가장 많이 지웠다.</b> medium 은 가운뎃값 CER 5.6% 로 셋 중 1위지만 오류 보존율은 65.0% 로 꼴찌다. 정확도로 골랐다면 <b>학습자 실력을 가장 많이 지우는 모델</b>을 선택했을 것이다. 우리 기준에서는 small 이 73.7% 로 가장 높았고, 244M 으로 학습 비용도 가장 낮아 파인튜닝 밑바탕으로 적합했다.</div>
+<p class="col" style="font-size:14px;color:var(--muted);">정직한 각주 — 100건 표본에서 세 크기의 보존율 차이는 통계적으로 확정되지 않았다(small − medium +0.087, 95% 구간 [+0.000, +0.204]). 방향은 일관되나 표본 확대가 필요하다. 또한 small 선정은 8/5, medium 실측은 8/9 로, 이 표는 <b>선택을 사후에 검증한 것</b>이다.</p>
+<h2 class="col">계단 3 — 파인튜닝: 절반의 성공</h2>
+<p class="col">Whisper small 에 LoRA 를 붙여 외국인 발화 10,151건으로 학습했다(오류가 든 학습쌍 3,313건 포함, v0·v1 두 차례). 결과를 지표별로 갈라 보면 이렇다.</p>
+<figure><svg viewBox="0 0 1000 370" role="img" aria-label="폭주(같은 말 무한 반복) 2건에서 1건 · 평균 CER 56.7%에서 16.6% · 가운뎃값 CER 7.7%에서 7.1% · 대조군 오탐율 33.3%에서 29.6% · 오류 보존율 ★목표 73.7%에서 69.8%"><text x="198.0" y="45.0" text-anchor="end" font-size="14" fill="var(--ink)">폭주(같은 말 무한 반복)</text><text x="216.0" y="45.0" font-family="Consolas, D2Coding, monospace" font-size="15" fill="var(--muted)">2건</text><path d="M312.0 40.0 h84" stroke="var(--good)" stroke-width="2" fill="none" marker-end="url(#ah2)"></path><text x="412.0" y="45.0" font-family="Consolas, D2Coding, monospace" font-size="15" font-weight="700" fill="var(--good)">1건</text><text x="508.0" y="45.0" font-size="13" fill="var(--good)">▲ 좋아짐</text><text x="598.0" y="45.0" font-size="12.5" fill="var(--muted)">증언이 빠지는 자리가 줄었다</text><text x="198.0" y="107.0" text-anchor="end" font-size="14" fill="var(--ink)">평균 CER</text><text x="216.0" y="107.0" font-family="Consolas, D2Coding, monospace" font-size="15" fill="var(--muted)">56.7%</text><path d="M312.0 102.0 h84" stroke="var(--good)" stroke-width="2" fill="none" marker-end="url(#ah2)"></path><text x="412.0" y="107.0" font-family="Consolas, D2Coding, monospace" font-size="15" font-weight="700" fill="var(--good)">16.6%</text><text x="508.0" y="107.0" font-size="13" fill="var(--good)">▲ 좋아짐</text><text x="598.0" y="107.0" font-size="12.5" fill="var(--muted)">폭주가 줄어 평균이 안정됐다</text><text x="198.0" y="169.0" text-anchor="end" font-size="14" fill="var(--ink)">가운뎃값 CER</text><text x="216.0" y="169.0" font-family="Consolas, D2Coding, monospace" font-size="15" fill="var(--muted)">7.7%</text><path d="M312.0 164.0 h84" stroke="var(--good)" stroke-width="2" fill="none" marker-end="url(#ah2)"></path><text x="412.0" y="169.0" font-family="Consolas, D2Coding, monospace" font-size="15" font-weight="700" fill="var(--good)">7.1%</text><text x="508.0" y="169.0" font-size="13" fill="var(--good)">▲ 좋아짐</text><text x="598.0" y="169.0" font-size="12.5" fill="var(--muted)">차이 미미 — 구간이 0을 걸친다</text><text x="198.0" y="231.0" text-anchor="end" font-size="14" fill="var(--ink)">대조군 오탐율</text><text x="216.0" y="231.0" font-family="Consolas, D2Coding, monospace" font-size="15" fill="var(--muted)">33.3%</text><path d="M312.0 226.0 h84" stroke="var(--good)" stroke-width="2" fill="none" marker-end="url(#ah2)"></path><text x="412.0" y="231.0" font-family="Consolas, D2Coding, monospace" font-size="15" font-weight="700" fill="var(--good)">29.6%</text><text x="508.0" y="231.0" font-size="13" fill="var(--good)">▲ 좋아짐</text><text x="598.0" y="231.0" font-size="12.5" fill="var(--muted)">차이 미미 — 구간이 0을 걸친다</text><text x="198.0" y="293.0" text-anchor="end" font-size="14" fill="var(--ink)">오류 보존율 ★목표</text><text x="216.0" y="293.0" font-family="Consolas, D2Coding, monospace" font-size="15" fill="var(--muted)">73.7%</text><path d="M312.0 288.0 h84" stroke="var(--orange)" stroke-width="2" fill="none" marker-end="url(#ah2)"></path><text x="412.0" y="293.0" font-family="Consolas, D2Coding, monospace" font-size="15" font-weight="700" fill="var(--orange)">69.8%</text><text x="508.0" y="293.0" font-size="13" fill="var(--orange)">▼ 나빠짐</text><text x="598.0" y="293.0" font-size="12.5" fill="var(--muted)">정작 목표였던 자가 오르지 않았다</text><defs><marker id="ah2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="context-stroke"></path></marker></defs></svg>
+<figcaption class="col"><b>보통 때 실력(가운뎃값)은 거의 그대로다.</b> 평균 CER 이 크게 좋아진 것은 폭주 한 건이 빠지면서 생긴 값이다 — 평균은 발작 몇 건에 통째로 망가지므로 가운뎃값을 함께 본다.</figcaption></figure>
+<div class="note col"><b>같은 파일로 짝지어 다시 재니 차이가 사라졌다.</b> 파일 100개를 다시 뽑는 부트스트랩 2000회로 밑바탕과 LoRA 를 짝지어 비교한 결과 — 가운뎃값 CER −0.005 [−0.028, +0.021] · 평균 CER −0.401 [−1.082, +0.084] · 보존율 −0.039 [−0.127, +0.027] · 오탐율 −0.037 [−0.167, +0.087]. <b>네 지표 모두 95% 구간이 0을 걸쳐 개선을 주장할 수 없다.</b></div>
+<h3 class="col">왜 안 됐는지는 특정했다</h3>
+<p class="col">데이터가 부족해서가 아니다. 낭독 학습쌍의 <b>56.5%(3,313건)가 실제로 오류가 든 쌍</b>이었는데도 보존율이 오르지 않았다. 병목은 <b>학습 목표</b>에 있다 — “사람 전사에 가깝게”(CER 최소화)라는 목표는 “오류를 살려 적어라”라는 신호를 직접 주지 못한다. 오류를 지워도 CER 은 거의 안 늘어나기 때문이다.</p>
+<div class="note col"><b>그리고 이 실패를 잡아낸 것은 우리가 만든 검증 체계다.</b> 처음엔 3.4배 개선으로 보였다. ① 평균 CER 이 폭주 몇 건에 망가진다는 것을 발견해 가운뎃값을 병행하고, ② 평가 도구의 무작위성(온도·빔)을 없애 재현성을 확보하고, ③ 같은 파일로 짝지어 다시 재고 나서야 차이가 사라진다는 것을 알았다. <b>이 저울이 없었다면 우리는 지금도 “3.4배 개선”을 발표하고 있었을 것이다.</b></div>
+<h2 class="col">계단 4 — 못 막으면 표시한다 <span class="state now">진행 중</span></h2>
+<p class="col">모델을 고쳐서 세탁을 막을 수 없다면, <b>세탁된 자리를 찾아내 학습에서 빼면 된다.</b> 모델을 바꾸는 대신 <b>모델이 배우는 정답지를 고치는</b> 접근이다.</p>
+<h3 class="col">① 증인 4명 — 성격을 섞어 뽑았다</h3>
+<p class="col">받아쓰기 모델 9종을 같은 시험지 100건으로 겨루게 해 넷을 뽑았다(1종은 저장소 접근 제한으로 탈락). 뽑는 기준은 정확도가 아니라 <b>오류 보존율</b>이다.</p>
+<div class="scroll"><table><thead><tr><th class="">모델</th><th class="">유형</th><th class="num">오류 보존율</th><th class="num">보존/세탁/기타</th><th class="num">대조군 오탐율</th><th class="num">가운뎃값 CER</th><th class="num">폭주</th><th class="num">건당</th><th class="">선발</th></tr></thead><tbody><tr><td class=""><b>OWSM-CTC</b></td><td class="">직청형</td><td class="num">78.9%</td><td class="num">30/8/26</td><td class="num">40.7%</td><td class="num">8.3%</td><td class="num">0건</td><td class="num">12.7초</td><td class=""><span class="state done">★ 증인</span></td></tr><tr><td class=""><b>wav2vec2-ko</b></td><td class="">직청형</td><td class="num">75.0%</td><td class="num">21/7/36</td><td class="num">92.6%</td><td class="num">30.6%</td><td class="num">0건</td><td class="num">3.2초</td><td class="">—</td></tr><tr><td class=""><b>Whisper small</b></td><td class="">문맥형</td><td class="num">73.7%</td><td class="num">28/10/26</td><td class="num">33.3%</td><td class="num">7.7%</td><td class="num">2건</td><td class="num">3.7초</td><td class=""><span class="state done">★ 증인</span></td></tr><tr><td class=""><b>Whisper large-v3</b></td><td class="">문맥형</td><td class="num">70.5%</td><td class="num">31/13/20</td><td class="num">51.9%</td><td class="num">16.7%</td><td class="num">20건</td><td class="num">24.2초</td><td class="">—</td></tr><tr><td class=""><b>LoRA v1 (우리)</b> <span style="color:var(--orange);">우리</span></td><td class="">문맥형</td><td class="num">69.8%</td><td class="num">30/13/21</td><td class="num">29.6%</td><td class="num">7.1%</td><td class="num">1건</td><td class="num">3.4초</td><td class="">—</td></tr><tr><td class=""><b>Qwen3-ASR</b></td><td class="">문맥형</td><td class="num">67.5%</td><td class="num">27/13/24</td><td class="num">25.9%</td><td class="num">5.6%</td><td class="num">10건</td><td class="num">54.3초</td><td class=""><span class="state done">★ 증인</span></td></tr><tr><td class=""><b>SenseVoice</b></td><td class="">직청형</td><td class="num">65.9%</td><td class="num">29/15/20</td><td class="num">37.0%</td><td class="num">11.5%</td><td class="num">0건</td><td class="num">1.3초</td><td class=""><span class="state done">★ 증인</span></td></tr><tr><td class=""><b>Whisper medium</b></td><td class="">문맥형</td><td class="num">65.0%</td><td class="num">26/14/24</td><td class="num">22.2%</td><td class="num">5.6%</td><td class="num">1건</td><td class="num">6.8초</td><td class="">—</td></tr><tr><td class=""><b>Cohere Transcribe</b></td><td class="">문맥형</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class=""><span class="state todo">접근 불가</span></td></tr></tbody></table></div>
+<div class="note col"><b>왜 성격을 섞었나.</b> 말의 문맥을 보고 받아쓰는 ‘문맥형’ 2종(Qwen3-ASR · Whisper small)과 소리만 듣고 받아쓰는 ‘직청형’ 2종(OWSM-CTC · SenseVoice)이다. 같은 성격끼리만 모으면 <b>함께 틀려서 다수결이 ‘다수의 착각’</b>이 된다.<br><br><b>우리 LoRA v1 은 의도적으로 뺐다.</b> 심사 대상인 학습쌍으로 학습한 모델이라 자신이 만든 세탁을 잡지 못할 뿐 아니라, “우리 모델이 우리 학습 데이터를 심사하는” 순환 구조가 되어 방어할 수 없기 때문이다.</div>
+<h3 class="col">② 전수 받아쓰기와 판정 <span class="state done">완료</span></h3>
+<p class="col">증인 4명에게 학습쌍 10,151건을 <b>모두</b> 받아쓰게 했다(전사 40,604줄, GPU 2장 병렬). 그리고 어절 단위로 라벨과 맞춰 보고, <b>증인 둘 이상이 같은 대안으로 일치하는데 라벨만 표준형인 자리</b>를 세탁 의심으로 표시했다. 2:2 동점은 보류하고, <b>라벨이 오류를 살린 자리는 절대 빼지 않는다</b>(방향 판정).</p>
+<figure><svg viewBox="0 0 1000 190" role="img" aria-label="학습쌍 10151건을 셋으로 갈랐다. suspect 1116건 · hold 1165건 · keep 7870건"><g><title>세탁 의심 — 학습에서 뺀다 — 1,116건 (11.0%)</title><rect x="40.0" y="56.0" width="99.1" height="46.0" rx="4" fill="var(--orange)"></rect></g><text x="40.0" y="44.0" font-size="13" fill="var(--ink)">suspect</text><text x="40.0" y="124.0" font-family="Consolas, D2Coding, monospace" font-size="14" font-weight="700" fill="var(--ink)">1,116건</text><text x="40.0" y="144.0" font-size="12.5" fill="var(--muted)">11.0%</text><g><title>보류 — 남긴다 — 1,165건 (11.5%)</title><rect x="141.1" y="56.0" width="103.6" height="46.0" rx="4" fill="var(--neutral)"></rect></g><text x="141.1" y="44.0" font-size="13" fill="var(--ink)">hold</text><text x="141.1" y="124.0" font-family="Consolas, D2Coding, monospace" font-size="14" font-weight="700" fill="var(--ink)">1,165건</text><text x="141.1" y="144.0" font-size="12.5" fill="var(--muted)">11.5%</text><g><title>이상 없음 — 남긴다 — 7,870건 (77.5%)</title><rect x="246.7" y="56.0" width="711.3" height="46.0" rx="4" fill="var(--blue)"></rect></g><text x="246.7" y="44.0" font-size="13" fill="var(--ink)">keep</text><text x="246.7" y="124.0" font-family="Consolas, D2Coding, monospace" font-size="14" font-weight="700" fill="var(--ink)">7,870건</text><text x="246.7" y="144.0" font-size="12.5" fill="var(--muted)">77.5%</text><text x="40.0" y="178.0" font-size="13.5" fill="var(--ink-2)">학습쌍 10,151건 → 세탁 의심 1,116건을 걷어내고 9,035건으로 다시 학습한다</text></svg>
+<figcaption class="col">세탁으로 판정된 <b>자리</b>는 1,270곳, 반대로 <b>라벨이 오류를 제대로 살린 자리</b>는 1,640곳이었다 — 후자가 더 많다는 것은 라벨 대부분이 건강하다는 뜻이고, 걷어낼 곳만 걷어내면 된다는 근거가 된다.</figcaption></figure>
+<h3 class="col">③ 탐지기는 믿을 만한가 — 개발셋 300건 성적</h3>
+<p class="col">감사자 다섯 명이 손으로 고친 <b>gold 300건</b>에서 성적을 냈다. 정답은 “사람이 라벨을 고친 줄”이다 — 사람이 손댔다는 것은 원래 라벨이 틀렸다는 뜻이다.</p>
+<div class="scroll"><table><thead><tr><th class="">구간</th><th class="num">세탁 의심 표시</th><th class="num">맞음</th><th class="num">헛짚음</th><th class="num">정밀도</th><th class="num">재현율</th></tr></thead><tbody><tr><td class=""><b>전체 300건</b></td><td class="num">35건</td><td class="num">17건</td><td class="num">18건</td><td class="num"><b>48.6%</b></td><td class="num">16.2%</td></tr><tr><td class="">자유발화(ATQ)</td><td class="num">22건</td><td class="num">14건</td><td class="num">8건</td><td class="num"><span class="win">63.6%</span></td><td class="num">20.0%</td></tr><tr><td class="">낭독(LAR)</td><td class="num">13건</td><td class="num">3건</td><td class="num">10건</td><td class="num"><span class="warn">23.1%</span></td><td class="num">8.6%</td></tr></tbody></table></div>
+<div class="note col"><b>정직하게 — 표본을 넓히니 정밀도가 떨어졌다.</b> 규칙을 다듬는 데 쓴 gold 100건에서는 61.5% 였는데, 처음 보는 200건을 더한 개발셋 300건에서는 48.6% 다. 그 자리에서만 잘 맞는 규칙이 섞여 있었다는 뜻이고, 우리가 <b>개발셋과 실전셋을 미리 갈라 둔 이유</b>다(실전셋 199건은 규칙 확정 전까지 열지 않는다).<br><br><b>갈래가 갈린다.</b> 자유발화는 63.6% 로 쓸 만하지만 낭독은 23.1% 로 낮다 — 낭독은 제시문이 있어 “라벨=제시문이면 세탁”이라는 규칙을 쓰기 쉬운데, 그 규칙이 오탐 제조기였다. <b>다음 수리 대상은 낭독 규칙</b>이다.<br><br><b>재현율(16.2%)은 과소평가다.</b> 분모가 “사람이 고친 모든 줄”인데, 사람은 세탁이 아닌 단순 오타·띄어쓰기도 고쳤다. 우리는 세탁만 노린다.</div>
+<h3 class="col">④ 정제 데이터로 재학습 <span class="state now">진행 중</span></h3>
+<p class="col">세탁 의심 1,116건을 걷어낸 <b>9,035건</b>으로 LoRA v2 를 학습한다. v1 과 <b>바뀌는 것은 데이터뿐</b>이라, 성적이 달라진다면 그 차이는 전부 정제 효과다(밑바탕·설정·시험지 모두 동일).</p>
+<p class="col">판정할 성적표도 이미 정해 두었다 — <b>오류 보존율</b>이 1순위, 대조군 오탐율이 2순위다. 그리고 v1 때와 같은 실수를 하지 않기 위해, 판정은 <b>같은 파일로 짝지은 부트스트랩</b>으로만 한다.</p>
+<h2 class="col">지금까지 남은 것</h2>
+<div class="grid3">
+<div class="card"><p class="tag">자를 만들었다</p><h3 style="margin:6px 0 0;font-size:18px;">오류 보존율</h3><p>“얼마나 정확한가”가 아니라 “학습자의 실수를 살려 적는가”를 재는 자. 이 자가 없으면 <b>가장 잘 듣는 모델을 고르고 실력을 가장 많이 지우게 된다.</b></p></div>
+<div class="card"><p class="tag">문제를 밝혔다</p><h3 style="margin:6px 0 0;font-size:18px;">세탁률 30%</h3><p>모델 8종 · 100건 실측. <b>한 모델의 결함이 아니라 받아쓰기 기술 전반의 성질</b>임을 숫자로 보였다.</p></div>
+<div class="card"><p class="tag">장치를 만들었다</p><h3 style="margin:6px 0 0;font-size:18px;">세탁 탐지기</h3><p>증인 4명 다수결로 학습쌍 10,151건을 전수 심사. 자유발화 정밀도 64%.</p></div>
+</div>
+<h3 class="col">아직 못 한 것 — 그리고 어떻게 할 것인가</h3>
+<div class="scroll"><table><thead><tr><th class="">못 한 것</th><th class="">지금 상태</th><th class="">돌파 방법</th></tr></thead><tbody><tr><td class="">파인튜닝으로 세탁 억제</td><td class="">v0·v1 실패 (밑바탕과 구분 안 됨)</td><td class="">원인을 학습 목표로 특정 → <b>정제 데이터로 v2</b>, 그다음엔 세탁 자리에 벌점을 주는 손실 함수</td></tr><tr><td class="">낭독(LAR) 세탁 탐지</td><td class="">정밀도 23.1%</td><td class="">“라벨=제시문이면 세탁” 규칙이 오탐 제조기 → <b>제시문은 라벨을 지키는 쪽으로만</b> 쓰도록 수리</td></tr><tr><td class="">증인 4명의 결정성 재확인</td><td class="">검사 코드 버그 수리 완료, 재측정 전</td><td class="">고친 검사로 <b>--refresh 재측정</b> — 증인이 물을 때마다 답을 바꾸면 다수결이 무너진다</td></tr><tr><td class="">실전셋 199건 평가</td><td class="">규칙 확정 전까지 열지 않음</td><td class="">규칙을 확정한 뒤 단 한 번 연다 → “한 번도 보지 않은 199건에서 정밀도 X%”</td></tr></tbody></table></div>
+<h2 class="col">용어 한 줄 풀이</h2>
+<dl class="col">
+<dt>세탁</dt><dd>학습자가 틀리게 말한 것을 받아쓰기 AI 가 표준어로 고쳐서 적는 것. 채점이 실력을 못 보게 만든다.</dd>
+<dt>오류 보존율</dt><dd>학습자가 실제로 틀린 자리를 틀린 그대로 적어 준 비율. 높을수록 정직하다.</dd>
+<dt>대조군 오탐율</dt><dd>제대로 읽은 녹음인데 다르게 적어서 없던 오류를 만들어 낸 비율. 낮을수록 좋다.</dd>
+<dt>CER(글자 오류율)</dt><dd>받아쓴 글을 정답으로 고치는 데 글자를 몇 번 손봐야 하는지. 낮을수록 잘 듣는다.</dd>
+<dt>폭주</dt><dd>같은 말을 끝없이 되풀이해 정답보다 두 배 넘게 길어진 것. 그 자리에서는 증언이 통째로 빠진다.</dd>
+<dt>문맥형 / 직청형</dt><dd>앞말을 보고 다음 글자를 지어내는 쪽 / 소리만 듣고 글자를 붙이는 쪽.</dd>
+<dt>LoRA</dt><dd>큰 모델을 통째로 다시 학습시키지 않고 작은 덧붙임만 학습시켜 성격을 바꾸는 방법.</dd>
+<dt>부트스트랩</dt><dd>가진 자료에서 다시 뽑기를 수천 번 되풀이해 “이 차이가 우연일 수 있나”를 재는 방법.</dd>
+<dt>개발셋 / 실전셋</dt><dd>규칙을 다듬으며 봐도 되는 몫 / 규칙이 굳을 때까지 열지 않는 몫. 자기 데이터에만 맞는 규칙을 막는다.</dd>
+</dl>
+</div>
+<footer class="wrap" style="padding-left:24px;padding-right:24px;">
+K-TEST 문제·채점 모델 파트 · 모델 오디션 2026-08-09 22:43:51 · 학습쌍 정제 10,151건 · 시험지 <code>data/manifests/gold_100.jsonl</code> · 이 문서의 모든 숫자는 <code>make_lora_report.py</code> 가 결과 파일에서 다시 계산한 것이다.
+</footer>

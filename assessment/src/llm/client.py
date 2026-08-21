@@ -4,6 +4,12 @@
 1) temperature = 0  : 같은 답안을 두 번 채점하면 같은 결과가 나와야 한다.
 2) JSON 응답 강제    : 자유 문장 대신 정해진 구조로 받아야 자동 처리가 가능하다.
 3) 인용 강제         : 프롬프트에서 원문 인용을 요구하고, 검증은 citation.py 가 맡는다.
+4) 잘린 답 걸러내기  : 답이 길이 제한에 걸려 끊긴 것을 형식 오류와 구분해서 다룬다.
+                      (아래 DEFAULT_MAX_OUTPUT_TOKENS 설명 참고 — 자질이 조용히 사라지는 사고를 막는다)
+
+여기 기본값은 **채점 호출에만** 적용된다.
+받아쓰기와 문항 만들기는 각자 자기 설정을 따로 들고 있으므로 이 값을 올려도 끌려오지 않는다
+(각 모듈 파일 위쪽 설명 참고. 채점 쪽이 그 둘을 불러다 쓰지 않는 것은 테스트로 못 박혀 있다).
 
 API 키는 환경변수 GEMINI_API_KEY 에서 읽는다. 코드에 키를 적지 않는다.
 프로젝트 루트의 .env 파일도 읽는다(python-dotenv).
@@ -104,14 +110,62 @@ def classify_failure(exc: Exception) -> str:
     return f"LLM 호출에 실패했다({type(exc).__name__})."
 
 
+# 답변 길이 상한. **생각(thinking) 토큰이 이 예산에서 같이 깎인다.**
+#
+# 왜 16384 인가 (2026-08-06 사고 + 2026-08-07 실측):
+# 문법 판정 모델(gemini-3-flash-preview)은 답하기 전에 혼자 생각을 하는데,
+# 그 생각도 이 예산에서 나간다. 4096 으로 두었더니 생각에 3931, 답에 150 을 쓰고
+# 문장 한가운데서 잘렸다(finish=MAX_TOKENS). 잘린 답은 JSON 으로 읽히지 않아
+# **오류 자질 네 개가 통째로 사라지고 언어 사용 점수가 반쪽**이 된다.
+# 사람 전사 15건 중 3건(전부 93자 이상)이 그랬다.
+# 같은 답안을 16384 로 부르면 4번 모두 끝까지 답했다(finish=STOP, JSON 정상).
+#
+# 더 올리지 않는 이유: 생각의 양이 예산에 비례해 늘어난다(실측 — 생각 토큰이
+# 늘 예산의 96% 언저리까지 찬다). 예산을 키운 만큼 대기 시간과 비용이 그대로 늘어난다.
+#   4096 -> 생각 3931 / 21초(그러나 답이 잘림)
+#   16384 -> 생각 15724 / 57~68초 (답 126~230 토큰, 정상)
+#   32768 -> 생각 31455 / 115초 (더 안전하지만 두 배 느리고 두 배 비싸다)
+# 그래서 평소에는 16384 로 돌리고, 그래도 잘리는 드문 답안만 아래 재시도로 건진다.
+#
+# '생각 예산만 따로 묶는' 방법을 안 쓴 이유 (2026-08-07 같은 답안으로 실측):
+# 라이브러리에는 생각의 양을 지정하는 설정(ThinkingConfig)이 있지만 둘 다 못 믿는다.
+#   - thinking_budget=1024 를 줘도 생각을 3931 토큰 했다. 지정이 무시된 것이다
+#     (안 준 호출과 토큰 수가 같았다).
+#   - thinking_level=LOW 는 첫 호출에서 884(먹히는 듯) → 같은 입력 재호출에서 15725.
+#     같은 설정이 호출마다 다르게 동작하니 채점 기준으로 삼을 수 없다.
+# 지켜지지 않는 설정에 기대는 것보다, 예산을 넉넉히 주고 잘림을 직접 확인하는 쪽이 안전하다.
+DEFAULT_MAX_OUTPUT_TOKENS = 16_384
+
+# 기다려 줄 시간.
+#
+# 왜 300초인가 (2026-08-06 실측):
+# 생각하는 모델의 정상 응답이 55~68초 걸리는 일이 흔하다. 60초에서 끊고 있었더니
+# 실패가 전부 56~62초 구간에 몰렸다 — 남의 서버 장애가 아니라 우리가 끊은 것이었다.
+# 300초로 늘리자 3회 연속 실패하던 191자 답안이 첫 시도에 68.1초로 정상 판정됐다.
+# 위 재시도(예산 2배)까지 겹치면 최악이 68+115=183초라 그 위로도 여유가 있어야 한다.
+DEFAULT_TIMEOUT_MS = 300_000
+
+
 @dataclass
 class GeminiConfig:
-    """호출 설정. temperature 는 0에서 바꾸지 않는 것을 전제로 한다."""
+    """호출 설정. temperature 는 0에서 바꾸지 않는 것을 전제로 한다.
+
+    **다만 temperature 0 이 같은 답을 보장하지는 못했다(2026-08-07 실측).**
+    같은 171자 답안을 같은 설정으로 세 번 판정했더니 오류를 4건·2건·2건으로 다르게 잡았고
+    인용한 자리도 달랐다. 재현성은 규칙 자질 쪽에서 지켜지고 있으며,
+    생각하는 모델의 판정은 아직 그렇지 않다. 이 흔들림을 얼마나 줄일 수 있는지는
+    남은 과제이고, 여기 설정을 바꾼다고 해결되는 문제가 아니다.
+    """
 
     model: str = DEFAULT_MODEL
     temperature: float = 0.0
-    max_output_tokens: int = 4096
-    timeout_ms: int = 60_000
+    max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS
+    timeout_ms: int = DEFAULT_TIMEOUT_MS
+    # 답이 예산 안에서 끝나지 못하고 잘렸을 때, 예산을 몇 배로 키워 한 번만 다시 부를지.
+    # 1 로 두면 다시 부르지 않고 그대로 실패로 처리한다.
+    # 잘린 답을 그냥 버리면 그 응시자만 오류 자질 없이 채점되므로, 값을 못 얻는 것보다
+    # 한 번 더 부르는 쪽이 낫다고 보고 기본값을 2로 둔다(실제로 부르는 일은 드물다).
+    retry_budget_multiplier: int = 2
 
 
 class GeminiClient:
@@ -168,25 +222,21 @@ class GeminiClient:
             self._client = genai.Client(api_key=self._api_key)
         return self._client
 
-    def generate_json(
+    def _call_once(
         self,
+        client,
         prompt: str,
-        system_instruction: str = "",
-        response_schema: Any | None = None,
-    ) -> dict[str, Any]:
-        """프롬프트를 보내고 JSON(dict)으로 받는다.
-
-        response_schema 를 주면 Gemini 쪽에서 구조를 강제한다.
-        그래도 모델이 형식을 깨는 경우가 있으므로 파싱 실패도 예외로 다룬다.
-        """
-        # 접속 준비. 키가 없으면 여기서 LLMUnavailable 이 나고 호출은 시도조차 하지 않는다
-        client = self._ensure_client()
+        system_instruction: str,
+        response_schema: Any | None,
+        max_output_tokens: int,
+    ):
+        """실제로 한 번 부르는 자리. 예산만 바꿔 다시 부를 수 있도록 떼어 두었다."""
         from google.genai import types
 
         # 채점 신뢰도를 지키는 설정을 여기서 못 박는다
         config = types.GenerateContentConfig(
             temperature=self.config.temperature,   # 재현성을 위해 0 고정
-            max_output_tokens=self.config.max_output_tokens,
+            max_output_tokens=max_output_tokens,
             response_mime_type="application/json",  # 자유 문장이 아니라 JSON으로 받는다
             system_instruction=system_instruction or None,
             response_schema=response_schema,
@@ -194,7 +244,7 @@ class GeminiClient:
         )
 
         try:
-            response = client.models.generate_content(
+            return client.models.generate_content(
                 model=self.config.model,
                 contents=prompt,
                 config=config,
@@ -207,6 +257,56 @@ class GeminiClient:
             logger.warning("Gemini 호출 실패 [%s]: %s", self.config.model, exc)
             raise LLMUnavailable(reason, detail=str(exc)) from exc
 
+    def generate_json(
+        self,
+        prompt: str,
+        system_instruction: str = "",
+        response_schema: Any | None = None,
+    ) -> dict[str, Any]:
+        """프롬프트를 보내고 JSON(dict)으로 받는다.
+
+        response_schema 를 주면 Gemini 쪽에서 구조를 강제한다.
+        그래도 모델이 형식을 깨는 경우가 있으므로 파싱 실패도 예외로 다룬다.
+
+        답이 길이 제한에 걸려 잘린 경우를 **파싱 실패와 따로 구분한다.**
+        둘 다 결과적으로는 'JSON 을 못 읽었다'지만 원인과 대처가 다르다.
+        잘린 것은 예산을 키우면 살아나고, 형식이 깨진 것은 키워도 소용이 없다.
+        구분하지 않았더니 8/6 사고에서 원인을 찾는 데 시간이 걸렸다.
+        """
+        # 접속 준비. 키가 없으면 여기서 LLMUnavailable 이 나고 호출은 시도조차 하지 않는다
+        client = self._ensure_client()
+
+        response = self._call_once(
+            client, prompt, system_instruction, response_schema,
+            self.config.max_output_tokens,
+        )
+
+        # 답이 끝까지 나오지 못하고 잘렸는지 본다.
+        # 잘린 답은 거의 항상 JSON 이 깨져 있어서, 그대로 두면 자질이 통째로 사라진다
+        if _is_truncated(response):
+            multiplier = max(1, int(self.config.retry_budget_multiplier))
+            bigger = self.config.max_output_tokens * multiplier
+            if multiplier <= 1:
+                # 다시 부르지 않기로 설정된 경우. 무슨 일이 있었는지는 분명히 남긴다
+                raise LLMUnavailable(
+                    "LLM 답이 길이 제한에 걸려 잘렸다(답변 예산이 모자랐다).",
+                    detail=f"max_output_tokens={self.config.max_output_tokens}, 재시도 꺼짐",
+                )
+            logger.warning(
+                "Gemini 답이 잘려 예산을 키워 다시 부른다 [%s]: %d -> %d",
+                self.config.model, self.config.max_output_tokens, bigger,
+            )
+            response = self._call_once(
+                client, prompt, system_instruction, response_schema, bigger
+            )
+            # 예산을 두 배로 줬는데도 잘렸다면 이 답안은 이 설정으로 감당이 안 되는 것이다.
+            # 반쪽짜리 결과를 지어내지 않고 실패로 두고, 사유를 그대로 밝힌다
+            if _is_truncated(response):
+                raise LLMUnavailable(
+                    "LLM 답이 길이 제한에 걸려 잘렸다(예산을 늘려 다시 불러도 마찬가지였다).",
+                    detail=f"max_output_tokens={self.config.max_output_tokens} -> {bigger}",
+                )
+
         # 안전 필터에 걸리거나 답을 못 만들면 빈 응답이 온다. 이것도 실패로 다룬다
         text = (response.text or "").strip()
         if not text:
@@ -215,6 +315,29 @@ class GeminiClient:
             )
 
         return _parse_json_object(text)
+
+
+def _is_truncated(response: Any) -> bool:
+    """응답이 '길이 제한에 걸려 잘린' 것인지 확인한다.
+
+    서버는 답을 왜 멈췄는지 finish_reason 으로 알려 준다. 그 값이 MAX_TOKENS 면
+    할 말이 남았는데 예산이 떨어져서 끊긴 것이다(정상 종료는 STOP).
+
+    가짜 클라이언트로 시험할 때도 통하도록, 값을 정해진 종류로 비교하지 않고
+    이름 글자에 MAX_TOKENS 가 들어 있는지로 본다.
+    응답 모양이 예상과 다르면 '잘리지 않았다'로 보고 넘어간다 —
+    여기서 잘못 판단해 멀쩡한 답을 버리는 일이 없어야 한다.
+    """
+    candidates = getattr(response, "candidates", None) or []
+    for candidate in candidates:
+        reason = getattr(candidate, "finish_reason", None)
+        if reason is None:
+            continue
+        # enum 이면 name, 문자열이면 그 자체를 본다
+        label = str(getattr(reason, "name", reason)).upper()
+        if "MAX_TOKENS" in label:
+            return True
+    return False
 
 
 def _parse_json_object(text: str) -> dict[str, Any]:
