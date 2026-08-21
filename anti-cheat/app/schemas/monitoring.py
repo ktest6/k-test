@@ -77,6 +77,13 @@ class EyeDirectionResponse(BaseModel):
     confidence: float | None
 
 
+class RelativeEyeDirectionResponse(BaseModel):
+    """Calibration 기준 상대 시선 방향 값."""
+
+    yaw: float | None
+    pitch: float | None
+
+
 class HeadPoseResponse(BaseModel):
     """고개 방향 분석 결과."""
 
@@ -86,18 +93,25 @@ class HeadPoseResponse(BaseModel):
 
 
 class GazeStateResponse(BaseModel):
-    """연속 시선 및 고개 이탈 상태."""
+    """다음 프레임 계산에 다시 사용할 연속 시선 상태."""
 
     consecutive_away_count: int = Field(ge=0)
     consecutive_eye_only_count: int = Field(ge=0)
     consecutive_head_only_count: int = Field(ge=0)
     consecutive_eye_and_head_count: int = Field(ge=0)
+    away_started_elapsed_ms: int | None = Field(default=None, ge=0)
     away_duration_ms: int = Field(ge=0)
     last_direction: GazeDirection | None
+    last_capture_sequence: int | None = Field(default=None, ge=1)
+    last_elapsed_ms: int | None = Field(default=None, ge=0)
     persistent_gaze_away: bool
     sequence_continuous: bool
     elapsed_time_valid: bool
     state_continuous: bool
+
+
+class PreviousGazeState(GazeStateResponse):
+    """백엔드가 저장했다가 다음 분석 요청에 전달하는 시선 상태."""
 
 
 class GazeMonitorResponse(BaseModel):
@@ -107,11 +121,24 @@ class GazeMonitorResponse(BaseModel):
     direction: GazeDirection
     eye_direction_reliable: bool
     eye_direction: EyeDirectionResponse
+    calibration_applied: bool
+    relative_eye_direction: RelativeEyeDirectionResponse
     head_pose: HeadPoseResponse
     eye_gaze_away: bool
     head_pose_away: bool
     message: str
     state: GazeStateResponse
+
+
+class GazeCalibrationResponse(BaseModel):
+    """응시자별 시선 Calibration 생성 결과."""
+
+    exam_id: str
+    examinee_id: str
+    calibrated: bool
+    sample_count: int = Field(ge=1)
+    eye_yaw_center: float
+    eye_pitch_center: float
 
 
 class EventSummaryResponse(BaseModel):

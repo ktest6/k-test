@@ -47,7 +47,6 @@ class DocumentIntelligenceAPIError(IdentityVerificationError):
 class InvalidImageError(ProctoringError):
     """입력 이미지가 유효하지 않을 때 발생하는 예외."""
 
-
 class DocumentReadError(IdentityVerificationError):
     """신분증에서 정보를 읽을 수 없을 때 발생하는 예외."""
 
@@ -58,3 +57,7 @@ class UnsupportedDocumentError(DocumentReadError):
 
 class ApplicantVerificationError(IdentityVerificationError):
     """신청 정보 검증 중 발생하는 예외."""
+
+
+class GazeCalibrationError(MonitoringError):
+    """시선 기준점 보정 중 발생하는 예외."""

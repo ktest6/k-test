@@ -44,6 +44,7 @@ class Settings:
     gaze_head_pitch_threshold: float
     gaze_minimum_eye_confidence: float
     gaze_persistent_count_threshold: int
+    gaze_calibration_minimum_sample_count: int
 
 
 def get_required_env(name: str) -> str:
@@ -229,6 +230,10 @@ settings = Settings(
     ),
     gaze_persistent_count_threshold=get_positive_int_env(
         name="GAZE_PERSISTENT_COUNT_THRESHOLD",
+        default="3",
+    ),
+    gaze_calibration_minimum_sample_count=get_positive_int_env(
+        name="GAZE_CALIBRATION_MINIMUM_SAMPLE_COUNT",
         default="3",
     ),
 )
