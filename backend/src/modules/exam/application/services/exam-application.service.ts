@@ -16,13 +16,15 @@ import {
 import { isApplicationOpen } from '../../domain/exam-status.util';
 import { ExamService } from './exam.service';
 
-/** 이 상태의 세션이 있으면 신청 취소를 막는다 — 특히 DISQUALIFIED/BLOCKED는 취소 후
+/** 이 상태의 세션이 있으면 신청 취소를 막는다 — DISQUALIFIED/BLOCKED는 취소 후
  * 재신청으로 실격/차단을 우회하는 걸 막기 위함, INPROGRESS는 응시 중 취소로 인한
- * 세션-신청 불일치를 막기 위함이다. */
+ * 세션-신청 불일치를 막기 위함, SUBMITTED(마감 지나 자동 전환된 경우 포함)는 이미
+ * 끝난 응시 기록이 마이페이지 "내 시험 현황"에서 사라지는 걸 막기 위함이다. */
 const CANCEL_BLOCKED_SESSION_STATUSES = new Set<SessionStatus>([
   SessionStatus.INPROGRESS,
   SessionStatus.BLOCKED,
   SessionStatus.DISQUALIFIED,
+  SessionStatus.SUBMITTED,
 ]);
 
 @Injectable()
@@ -71,7 +73,7 @@ export class ExamApplicationService {
     const session = await this.examSessionRepository.findByUserAndExam(userId, examId);
     if (session && CANCEL_BLOCKED_SESSION_STATUSES.has(session.status)) {
       throw new ConflictDomainException(
-        '이미 시작되었거나 실격·차단된 시험은 신청을 취소할 수 없습니다.',
+        '이미 시작되었거나 종료(제출/실격/차단)된 시험은 신청을 취소할 수 없습니다.',
       );
     }
 
