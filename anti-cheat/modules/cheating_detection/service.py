@@ -10,9 +10,10 @@ service.py
 4. 시선 및 고개 방향 분석
 5. 연속 시선 이탈 상태 갱신
 6. 필요한 경우 기준 얼굴과 현재 얼굴 비교
-7. Rule Engine으로 위험도 및 Decision 결정
-8. Event Engine으로 이벤트 응답 구조 생성
-9. 모니터링 최종 결과 반환
+7. 객체 탐지 및 분석
+8. Rule Engine으로 위험도 및 Decision 결정
+9. Event Engine으로 이벤트 응답 구조 생성
+10. 모니터링 최종 결과 반환
 """
 
 from datetime import datetime
@@ -42,6 +43,11 @@ from modules.cheating_detection.identity_monitor import (
 )
 from modules.cheating_detection.rule_engine import evaluate_rules
 from modules.cheating_detection.event_engine import process_event
+
+from modules.object_detection.detector import detect_objects
+from modules.object_detection.analyzer import (
+    analyze_object_detection,
+)
 
 
 def should_run_identity_check(
@@ -256,10 +262,25 @@ def analyze_monitoring_frame(
                 current_image_bytes=current_image_bytes,
             )
 
+
+        # 시험 중 객체 탐지
+        object_detection_result = detect_objects(
+            image_bytes=current_image_bytes,
+        )
+
+        object_monitor_result = analyze_object_detection(
+            detection_result=object_detection_result,
+            head_pose=gaze_monitor_result.get(
+                "head_pose",
+                {},
+            ),
+        )
+
         monitoring_results = {
             "face_monitor": face_monitor_result,
             "gaze_monitor": gaze_monitor_result,
             "identity_monitor": identity_monitor_result,
+            "object_monitor": object_monitor_result,
         }
 
         rule_result = evaluate_rules(
@@ -298,7 +319,7 @@ def analyze_monitoring_frame(
             "capture_sequence": capture_sequence,
             "face_monitor": face_monitor_response,
             "gaze_monitor": gaze_monitor_result,
-            "object_monitor": None,
+            "object_monitor": object_monitor_result,
             "identity_check_requested": run_identity_check,
             "identity_check_executed": (
                 identity_monitor_result is not None

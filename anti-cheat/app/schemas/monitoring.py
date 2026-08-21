@@ -173,7 +173,7 @@ class MonitoringResponse(BaseModel):
 
     face_monitor: FaceMonitorResponse
     gaze_monitor: GazeMonitorResponse
-    object_monitor: dict[str, Any] | None = None
+    object_monitor: ObjectMonitorResponse
 
     identity_check_requested: bool
     identity_check_executed: bool
@@ -183,3 +183,15 @@ class MonitoringResponse(BaseModel):
     events: list[MonitoringEventResponse] = Field(
         default_factory=list,
     )
+
+class DetectedObjectResponse(BaseModel):
+    object_type: Literal[
+        "PHONE",
+        "EARPHONE",
+    ]
+    label: str
+    confidence: float
+
+
+class ObjectMonitorResponse(BaseModel):
+    detected_objects: list[DetectedObjectResponse]

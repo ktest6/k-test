@@ -45,6 +45,8 @@ class Settings:
     gaze_minimum_eye_confidence: float
     gaze_persistent_count_threshold: int
     gaze_calibration_minimum_sample_count: int
+    phone_confidence_threshold: float
+    earphone_head_yaw_threshold: float
 
 
 def get_required_env(name: str) -> str:
@@ -182,6 +184,30 @@ def get_positive_int_env(name: str, default: str) -> int:
 
     return value
 
+def get_phone_confidence_threshold() -> float:
+    """휴대폰 탐지 신뢰도 임계값을 읽고 검증한다."""
+
+    raw_value = os.getenv(
+        "PHONE_CONFIDENCE_THRESHOLD",
+        "50.0",
+    )
+
+    try:
+        threshold = float(raw_value)
+
+    except ValueError as error:
+        raise RuntimeError(
+            "PHONE_CONFIDENCE_THRESHOLD는 숫자여야 합니다."
+        ) from error
+
+    if not 0.0 <= threshold <= 100.0:
+        raise RuntimeError(
+            "PHONE_CONFIDENCE_THRESHOLD는 "
+            "0 이상 100 이하이어야 합니다."
+        )
+
+    return threshold
+
 
 settings = Settings(
     aws_region=get_required_env("AWS_REGION"),
@@ -235,5 +261,12 @@ settings = Settings(
     gaze_calibration_minimum_sample_count=get_positive_int_env(
         name="GAZE_CALIBRATION_MINIMUM_SAMPLE_COUNT",
         default="3",
+    ),
+    phone_confidence_threshold=get_phone_confidence_threshold(),
+    earphone_head_yaw_threshold=get_float_env(
+        name="EARPHONE_HEAD_YAW_THRESHOLD",
+        default="40.0",
+        minimum=0.0,
+        maximum=180.0,
     ),
 )
