@@ -11,7 +11,6 @@ script 디렉토리의 run 파일들은 로컬 환경에서 이미지 파일을 
 
 ---
 # 1. 구조
-```
 ```text
 anti-cheat/
 │
@@ -134,7 +133,6 @@ anti-cheat/
 └── README.md
 ```
 
-```
 
 ---
 
@@ -196,11 +194,12 @@ anti-cheat/
 
 ## 구성
 프로젝트의 anti-cheat 디렉토리로 이동합니다.
-```
+
+
 cd anti-cheat
 Python 버전 확인
 python3 --version
-```
+
 
 권장 버전: Python 3.11
 
