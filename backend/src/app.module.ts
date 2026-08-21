@@ -25,6 +25,7 @@ import { DocumentModule } from './modules/document/document.module';
 import { ExamQuestionModule } from './modules/exam-question/exam-question.module';
 import { VerificationsModule } from './modules/verifications/verifications.module';
 import { MonitoringModule } from './modules/monitoring/monitoring.module';
+import { TestModule } from './modules/test/test.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { MonitoringModule } from './modules/monitoring/monitoring.module';
     ScoringModule,
     AiModule,
     MonitoringModule,
+    TestModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
