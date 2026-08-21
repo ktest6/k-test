@@ -55,6 +55,7 @@ function buildRepository(overrides: Partial<ExamSessionRepository> = {}) {
     create: jest.fn(),
     findById: jest.fn().mockResolvedValue(null),
     findByUserAndExam: jest.fn().mockResolvedValue(null),
+    findAllInProgress: jest.fn().mockResolvedValue([]),
     updateResumeCount: jest.fn(),
     updateStatus: jest.fn(),
     ...overrides,
@@ -348,6 +349,53 @@ describe('ExamSessionService.start', () => {
     expect(repository.create).toHaveBeenCalledWith({ examId: '1', userId: '1' });
     expect(result).toBe(created);
   });
+
+  it('rejects starting a brand-new session within 1 hour of the exam close time', async () => {
+    const exam = buildExam({ closeAt: new Date(Date.now() + 30 * 60 * 1000) }); // 30분 남음
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
+    const examApplicationService = {
+      hasActiveApplication: jest.fn().mockResolvedValue(true),
+    } as unknown as ExamApplicationService;
+    const repository = buildRepository();
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
+      buildConfig(),
+    );
+
+    await expect(service.start('1', '1')).rejects.toThrow(ConflictDomainException);
+    expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it('allows resuming an existing INPROGRESS session even within 1 hour of the exam close time', async () => {
+    const exam = buildExam({ closeAt: new Date(Date.now() + 30 * 60 * 1000) });
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
+    const examApplicationService = {
+      hasActiveApplication: jest.fn().mockResolvedValue(true),
+    } as unknown as ExamApplicationService;
+    const existing = buildSession({ status: SessionStatus.INPROGRESS, resumeCount: 0 });
+    const resumed = buildSession({ status: SessionStatus.INPROGRESS, resumeCount: 1 });
+    const updateResumeCount = jest.fn().mockResolvedValue(resumed);
+    const repository = buildRepository({
+      findByUserAndExam: jest.fn().mockResolvedValue(existing),
+      updateResumeCount,
+    });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
+      buildConfig(),
+    );
+
+    const result = await service.start('1', '1');
+
+    expect(result).toBe(resumed);
+  });
 });
 
 describe('ExamSessionService.getStatus', () => {
@@ -384,12 +432,17 @@ describe('ExamSessionService.getStatus', () => {
     await expect(service.getStatus('1', '1')).rejects.toThrow(ForbiddenDomainException);
   });
 
-  it('computes EXPIRED when past the exam close time but still stored as INPROGRESS', async () => {
+  it('syncs an INPROGRESS session past the exam close time to SUBMITTED', async () => {
     const session = buildSession({ status: SessionStatus.INPROGRESS });
+    const submitted = buildSession({ status: SessionStatus.SUBMITTED });
     const exam = buildExam({ closeAt: new Date('2020-01-01T00:00:00.000Z') });
     const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
     const examApplicationService = {} as unknown as ExamApplicationService;
-    const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
+    const updateStatus = jest.fn().mockResolvedValue(submitted);
+    const repository = buildRepository({
+      findById: jest.fn().mockResolvedValue(session),
+      updateStatus,
+    });
     const service = new ExamSessionService(
       repository,
       examService,
@@ -401,7 +454,8 @@ describe('ExamSessionService.getStatus', () => {
 
     const result = await service.getStatus('1', '1');
 
-    expect(result.status).toBe(SessionStatus.EXPIRED);
+    expect(updateStatus).toHaveBeenCalledWith('1', SessionStatus.SUBMITTED);
+    expect(result.status).toBe(SessionStatus.SUBMITTED);
   });
 
   it('reports INPROGRESS as-is while still within the exam period', async () => {
@@ -450,7 +504,10 @@ describe('ExamSessionService.getStatus', () => {
     const exam = buildExam({ closeAt: new Date('2020-01-01T00:00:00.000Z') });
     const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
     const examApplicationService = {} as unknown as ExamApplicationService;
-    const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
+    const repository = buildRepository({
+      findById: jest.fn().mockResolvedValue(session),
+      updateStatus: jest.fn().mockResolvedValue(buildSession({ status: SessionStatus.SUBMITTED })),
+    });
     const cleanupVerifiedFaceImage = jest.fn().mockResolvedValue(undefined);
     const service = new ExamSessionService(
       repository,
@@ -556,12 +613,18 @@ describe('ExamSessionService.assertActiveSession', () => {
     await expect(service.assertActiveSession('1', '1')).rejects.toThrow(ConflictDomainException);
   });
 
-  it('rejects when INPROGRESS but past the exam close time', async () => {
+  it('rejects when INPROGRESS but past the exam close time, syncing it to SUBMITTED first', async () => {
     const session = buildSession({ status: SessionStatus.INPROGRESS });
     const exam = buildExam({ closeAt: new Date('2020-01-01T00:00:00.000Z') });
     const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
     const examApplicationService = {} as unknown as ExamApplicationService;
-    const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
+    const updateStatus = jest
+      .fn()
+      .mockResolvedValue(buildSession({ status: SessionStatus.SUBMITTED }));
+    const repository = buildRepository({
+      findById: jest.fn().mockResolvedValue(session),
+      updateStatus,
+    });
     const service = new ExamSessionService(
       repository,
       examService,
@@ -572,6 +635,7 @@ describe('ExamSessionService.assertActiveSession', () => {
     );
 
     await expect(service.assertActiveSession('1', '1')).rejects.toThrow(ConflictDomainException);
+    expect(updateStatus).toHaveBeenCalledWith('1', SessionStatus.SUBMITTED);
   });
 
   it('returns the session when INPROGRESS and still within the exam period', async () => {
@@ -644,7 +708,7 @@ describe('ExamSessionService.listMine', () => {
     expect(result.session).toEqual({ id: session.id, status: SessionStatus.INPROGRESS });
   });
 
-  it('reports EXPIRED for a session stored as INPROGRESS past the exam close time', async () => {
+  it('syncs a session stored as INPROGRESS past the exam close time to SUBMITTED', async () => {
     const exam = buildExam({ closeAt: new Date('2020-01-01T00:00:00.000Z') });
     const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
     const examApplicationService = {
@@ -653,7 +717,13 @@ describe('ExamSessionService.listMine', () => {
         .mockResolvedValue([{ id: '1', examId: '1', userId: '1', appliedAt: new Date() }]),
     } as unknown as ExamApplicationService;
     const session = buildSession({ status: SessionStatus.INPROGRESS });
-    const repository = buildRepository({ findByUserAndExam: jest.fn().mockResolvedValue(session) });
+    const updateStatus = jest
+      .fn()
+      .mockResolvedValue(buildSession({ status: SessionStatus.SUBMITTED }));
+    const repository = buildRepository({
+      findByUserAndExam: jest.fn().mockResolvedValue(session),
+      updateStatus,
+    });
     const service = new ExamSessionService(
       repository,
       examService,
@@ -665,7 +735,8 @@ describe('ExamSessionService.listMine', () => {
 
     const [result] = await service.listMine('1');
 
-    expect(result.session?.status).toBe(SessionStatus.EXPIRED);
+    expect(updateStatus).toHaveBeenCalledWith('1', SessionStatus.SUBMITTED);
+    expect(result.session?.status).toBe(SessionStatus.SUBMITTED);
   });
 });
 
@@ -688,7 +759,8 @@ describe('ExamSessionService.disqualify', () => {
 
   it('rejects disqualifying an already-SUBMITTED session', async () => {
     const session = buildSession({ status: SessionStatus.SUBMITTED });
-    const examService = {} as unknown as ExamService;
+    const exam = buildExam({ closeAt: new Date(Date.now() + 3600_000) });
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
     const examApplicationService = {} as unknown as ExamApplicationService;
     const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
     const service = new ExamSessionService(
@@ -704,11 +776,18 @@ describe('ExamSessionService.disqualify', () => {
     expect(repository.updateStatus).not.toHaveBeenCalled();
   });
 
-  it('rejects disqualifying an already-EXPIRED session', async () => {
-    const session = buildSession({ status: SessionStatus.EXPIRED });
-    const examService = {} as unknown as ExamService;
+  it('rejects disqualifying a session that is INPROGRESS but past the exam close time (synced to SUBMITTED first)', async () => {
+    const session = buildSession({ status: SessionStatus.INPROGRESS });
+    const exam = buildExam({ closeAt: new Date('2020-01-01T00:00:00.000Z') });
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
     const examApplicationService = {} as unknown as ExamApplicationService;
-    const repository = buildRepository({ findById: jest.fn().mockResolvedValue(session) });
+    const updateStatus = jest
+      .fn()
+      .mockResolvedValue(buildSession({ status: SessionStatus.SUBMITTED }));
+    const repository = buildRepository({
+      findById: jest.fn().mockResolvedValue(session),
+      updateStatus,
+    });
     const service = new ExamSessionService(
       repository,
       examService,
@@ -719,6 +798,8 @@ describe('ExamSessionService.disqualify', () => {
     );
 
     await expect(service.disqualify('1')).rejects.toThrow(ConflictDomainException);
+    expect(updateStatus).toHaveBeenCalledWith('1', SessionStatus.SUBMITTED);
+    expect(updateStatus).not.toHaveBeenCalledWith('1', SessionStatus.DISQUALIFIED);
   });
 
   it('returns the session as-is when already DISQUALIFIED (idempotent)', async () => {
@@ -741,10 +822,11 @@ describe('ExamSessionService.disqualify', () => {
     expect(repository.updateStatus).not.toHaveBeenCalled();
   });
 
-  it('disqualifies an INPROGRESS session', async () => {
+  it('disqualifies an INPROGRESS session that is still within the exam period', async () => {
     const session = buildSession({ status: SessionStatus.INPROGRESS });
+    const exam = buildExam({ closeAt: new Date(Date.now() + 3600_000) });
     const disqualified = buildSession({ status: SessionStatus.DISQUALIFIED });
-    const examService = {} as unknown as ExamService;
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
     const examApplicationService = {} as unknown as ExamApplicationService;
     const updateStatus = jest.fn().mockResolvedValue(disqualified);
     const repository = buildRepository({
@@ -768,8 +850,9 @@ describe('ExamSessionService.disqualify', () => {
 
   it('disqualifies a BLOCKED session', async () => {
     const session = buildSession({ status: SessionStatus.BLOCKED });
+    const exam = buildExam({ closeAt: new Date(Date.now() + 3600_000) });
     const disqualified = buildSession({ status: SessionStatus.DISQUALIFIED });
-    const examService = {} as unknown as ExamService;
+    const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
     const examApplicationService = {} as unknown as ExamApplicationService;
     const updateStatus = jest.fn().mockResolvedValue(disqualified);
     const repository = buildRepository({
@@ -789,5 +872,82 @@ describe('ExamSessionService.disqualify', () => {
 
     expect(updateStatus).toHaveBeenCalledWith('1', SessionStatus.DISQUALIFIED);
     expect(result).toBe(disqualified);
+  });
+});
+
+describe('ExamSessionService.syncAllExpiredSessions', () => {
+  it('syncs only INPROGRESS sessions whose exam has already closed', async () => {
+    const expiredExam = buildExam({ closeAt: new Date('2020-01-01T00:00:00.000Z') });
+    const openExam = new Exam(
+      '2',
+      '2026년 2회차',
+      new Date('2026-01-01T00:00:00.000Z'),
+      new Date('2026-12-31T23:59:59.000Z'),
+      new Date('2026-01-01T00:00:00.000Z'),
+      new Date(Date.now() + 3600_000),
+      100,
+      new Date(),
+    );
+    const expiredSession = buildSession({ status: SessionStatus.INPROGRESS }); // examId '1'
+    const stillOpenSession = new ExamSession(
+      '2',
+      '2',
+      '1',
+      SessionStatus.INPROGRESS,
+      0,
+      new Date(),
+      null,
+      null,
+      null,
+      new Date(),
+    );
+    const examService = {
+      list: jest.fn().mockResolvedValue([expiredExam, openExam]),
+    } as unknown as ExamService;
+    const examApplicationService = {} as unknown as ExamApplicationService;
+    const updateStatus = jest
+      .fn()
+      .mockResolvedValue(buildSession({ status: SessionStatus.SUBMITTED }));
+    const repository = buildRepository({
+      findAllInProgress: jest.fn().mockResolvedValue([expiredSession, stillOpenSession]),
+      updateStatus,
+    });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
+      buildConfig(),
+    );
+
+    const syncedCount = await service.syncAllExpiredSessions();
+
+    expect(updateStatus).toHaveBeenCalledTimes(1);
+    expect(updateStatus).toHaveBeenCalledWith('1', SessionStatus.SUBMITTED);
+    expect(syncedCount).toBe(1);
+  });
+
+  it('returns 0 when there are no expired sessions to sync', async () => {
+    const exam = buildExam({ closeAt: new Date(Date.now() + 3600_000) });
+    const session = buildSession({ status: SessionStatus.INPROGRESS });
+    const examService = { list: jest.fn().mockResolvedValue([exam]) } as unknown as ExamService;
+    const examApplicationService = {} as unknown as ExamApplicationService;
+    const repository = buildRepository({
+      findAllInProgress: jest.fn().mockResolvedValue([session]),
+    });
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
+      buildConfig(),
+    );
+
+    const syncedCount = await service.syncAllExpiredSessions();
+
+    expect(repository.updateStatus).not.toHaveBeenCalled();
+    expect(syncedCount).toBe(0);
   });
 });

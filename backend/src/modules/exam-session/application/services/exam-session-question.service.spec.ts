@@ -47,6 +47,7 @@ function buildRepository(overrides: Partial<ExamSessionRepository> = {}) {
     create: jest.fn(),
     findById: jest.fn().mockResolvedValue(null),
     findByUserAndExam: jest.fn(),
+    findAllInProgress: jest.fn().mockResolvedValue([]),
     updateResumeCount: jest.fn(),
     updateStatus: jest.fn(),
     ...overrides,

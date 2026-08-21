@@ -79,6 +79,20 @@ export class SupabaseExamSessionRepository implements ExamSessionRepository {
     return data ? toDomain(data) : null;
   }
 
+  async findAllInProgress(): Promise<ExamSession[]> {
+    const client = this.supabaseService.getAdminClient();
+    const { data, error } = await client
+      .from(TABLE)
+      .select('*')
+      .eq('status', SessionStatus.INPROGRESS)
+      .is('deleted_at', null);
+
+    if (error) {
+      throw new ConflictDomainException(error.message ?? '진행중 세션 조회에 실패했습니다.');
+    }
+    return (data ?? []).map(toDomain);
+  }
+
   async updateResumeCount(id: string, resumeCount: number): Promise<ExamSession> {
     const client = this.supabaseService.getAdminClient();
     const { data, error } = await client
