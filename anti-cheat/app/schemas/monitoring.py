@@ -160,6 +160,23 @@ class MonitoringEventResponse(BaseModel):
     )
 
 
+class DetectedObjectResponse(BaseModel):
+    """시험 중 탐지된 금지 객체."""
+
+    object_type: Literal[
+        "PHONE",
+        "EARPHONE",
+    ]
+    label: str
+    confidence: float
+
+
+class ObjectMonitorResponse(BaseModel):
+    """시험 중 금지 객체 탐지 결과."""
+
+    detected_objects: list[DetectedObjectResponse]
+
+
 class MonitoringResponse(BaseModel):
     """모니터링 API의 최종 응답."""
 
@@ -183,15 +200,3 @@ class MonitoringResponse(BaseModel):
     events: list[MonitoringEventResponse] = Field(
         default_factory=list,
     )
-
-class DetectedObjectResponse(BaseModel):
-    object_type: Literal[
-        "PHONE",
-        "EARPHONE",
-    ]
-    label: str
-    confidence: float
-
-
-class ObjectMonitorResponse(BaseModel):
-    detected_objects: list[DetectedObjectResponse]
