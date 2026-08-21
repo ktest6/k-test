@@ -2,11 +2,40 @@ import {
   ConflictDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import { ExamSession } from '../../../exam-session/domain/entities/exam-session.entity';
+import { SessionStatus } from '../../../exam-session/domain/enums/session-status.enum';
+import { ExamSessionRepository } from '../../../exam-session/domain/exam-session.repository.interface';
 import { Exam } from '../../domain/entities/exam.entity';
 import { ExamApplication } from '../../domain/entities/exam-application.entity';
 import { ExamApplicationRepository } from '../../domain/exam-application.repository.interface';
 import { ExamApplicationService } from './exam-application.service';
 import { ExamService } from './exam.service';
+
+function buildSession(overrides: Partial<{ status: SessionStatus }> = {}): ExamSession {
+  return new ExamSession(
+    '1',
+    '1',
+    '1',
+    overrides.status ?? SessionStatus.INPROGRESS,
+    0,
+    new Date(),
+    null,
+    null,
+    null,
+    new Date(),
+  );
+}
+
+function buildSessionRepository(overrides: Partial<ExamSessionRepository> = {}) {
+  return {
+    create: jest.fn(),
+    findById: jest.fn(),
+    findByUserAndExam: jest.fn().mockResolvedValue(null),
+    updateResumeCount: jest.fn(),
+    updateStatus: jest.fn(),
+    ...overrides,
+  };
+}
 
 function buildExam(
   overrides: Partial<{
@@ -45,7 +74,7 @@ describe('ExamApplicationService.apply', () => {
     const exam = buildExam({ applicationOpenAt: new Date('2099-01-01T00:00:00.000Z') }); // 아직 신청 시작 전
     const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
     const repository = buildRepository();
-    const service = new ExamApplicationService(examService, repository);
+    const service = new ExamApplicationService(examService, repository, buildSessionRepository());
 
     await expect(service.apply('1', '1')).rejects.toThrow(ConflictDomainException);
     expect(repository.create).not.toHaveBeenCalled();
@@ -58,7 +87,7 @@ describe('ExamApplicationService.apply', () => {
     const repository = buildRepository({
       findActiveByExamAndUser: jest.fn().mockResolvedValue(existing),
     });
-    const service = new ExamApplicationService(examService, repository);
+    const service = new ExamApplicationService(examService, repository, buildSessionRepository());
 
     await expect(service.apply('1', '1')).rejects.toThrow(ConflictDomainException);
     expect(repository.create).not.toHaveBeenCalled();
@@ -68,7 +97,7 @@ describe('ExamApplicationService.apply', () => {
     const exam = buildExam({ capacity: 2 });
     const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
     const repository = buildRepository({ countActiveByExam: jest.fn().mockResolvedValue(2) });
-    const service = new ExamApplicationService(examService, repository);
+    const service = new ExamApplicationService(examService, repository, buildSessionRepository());
 
     await expect(service.apply('1', '1')).rejects.toThrow(ConflictDomainException);
     expect(repository.create).not.toHaveBeenCalled();
@@ -82,7 +111,7 @@ describe('ExamApplicationService.apply', () => {
       countActiveByExam: jest.fn().mockResolvedValue(1),
       create: jest.fn().mockResolvedValue(created),
     });
-    const service = new ExamApplicationService(examService, repository);
+    const service = new ExamApplicationService(examService, repository, buildSessionRepository());
 
     const result = await service.apply('1', '1');
 
@@ -95,24 +124,61 @@ describe('ExamApplicationService.cancel', () => {
   it('rejects when there is no active application', async () => {
     const examService = {} as unknown as ExamService;
     const repository = buildRepository();
-    const service = new ExamApplicationService(examService, repository);
+    const service = new ExamApplicationService(examService, repository, buildSessionRepository());
 
     await expect(service.cancel('1', '1')).rejects.toThrow(NotFoundDomainException);
     expect(repository.cancel).not.toHaveBeenCalled();
   });
 
-  it('cancels the caller’s own active application', async () => {
+  it('cancels the caller’s own active application when no session exists yet', async () => {
     const examService = {} as unknown as ExamService;
     const existing = new ExamApplication('5', '1', '1', new Date());
     const repository = buildRepository({
       findActiveByExamAndUser: jest.fn().mockResolvedValue(existing),
     });
-    const service = new ExamApplicationService(examService, repository);
+    const service = new ExamApplicationService(examService, repository, buildSessionRepository());
 
     await service.cancel('1', '1');
 
     expect(repository.cancel).toHaveBeenCalledWith('5');
   });
+
+  it.each([SessionStatus.INPROGRESS, SessionStatus.BLOCKED, SessionStatus.DISQUALIFIED])(
+    'rejects cancellation when the session is %s',
+    async (status) => {
+      const examService = {} as unknown as ExamService;
+      const existing = new ExamApplication('5', '1', '1', new Date());
+      const repository = buildRepository({
+        findActiveByExamAndUser: jest.fn().mockResolvedValue(existing),
+      });
+      const sessionRepository = buildSessionRepository({
+        findByUserAndExam: jest.fn().mockResolvedValue(buildSession({ status })),
+      });
+      const service = new ExamApplicationService(examService, repository, sessionRepository);
+
+      await expect(service.cancel('1', '1')).rejects.toThrow(ConflictDomainException);
+      expect(repository.cancel).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([SessionStatus.SUBMITTED, SessionStatus.EXPIRED])(
+    'allows cancellation when the session is %s',
+    async (status) => {
+      const examService = {} as unknown as ExamService;
+      const existing = new ExamApplication('5', '1', '1', new Date());
+      const repository = buildRepository({
+        findActiveByExamAndUser: jest.fn().mockResolvedValue(existing),
+      });
+      const sessionRepository = buildSessionRepository({
+        findByUserAndExam: jest.fn().mockResolvedValue(buildSession({ status })),
+      });
+      const service = new ExamApplicationService(examService, repository, sessionRepository);
+
+      await service.cancel('1', '1');
+
+      expect(repository.cancel).toHaveBeenCalledWith('5');
+    },
+  );
 });
 
 describe('ExamApplicationService.listMine', () => {
@@ -121,7 +187,7 @@ describe('ExamApplicationService.listMine', () => {
     const applications = [new ExamApplication('5', '1', '9', new Date())];
     const listActiveByUser = jest.fn().mockResolvedValue(applications);
     const repository = buildRepository({ listActiveByUser });
-    const service = new ExamApplicationService(examService, repository);
+    const service = new ExamApplicationService(examService, repository, buildSessionRepository());
 
     const result = await service.listMine('9');
 
