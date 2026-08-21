@@ -1,19 +1,20 @@
 """
 document_reader.py
 
-신분증 이미지에서 신청자 정보를 읽는 전체 흐름을 관리하는 모듈.
+여권 이미지에서 신청자 정보를 읽는 전체 흐름을 관리하는 모듈.
 
-- 입력 신분증 이미지 검증
-- AWS Rekognition DetectText 1회 호출
-- 신분증 종류에 따른 parser 선택
-- 여권 시각 영역과 MRZ 결과 통합
-- 문서별 신청자 정보 추출 결과 반환
+- 입력 여권 이미지 검증
+- Azure prebuilt-idDocument 분석
+- 여권 여부 확인
+- 구조화된 신청자 정보 추출
 """
 
-from typing import Any
+from datetime import date, datetime
+from typing import Any, Mapping
 
-from app.schemas.identity import DocumentType
-from modules.aws_rekognition.text_detection import detect_text
+from modules.azure_document_intelligence.id_document import (
+    analyze_id_document,
+)
 from modules.common.exceptions import (
     DocumentReadError,
     UnsupportedDocumentError,
@@ -21,96 +22,132 @@ from modules.common.exceptions import (
 from modules.common.image_validation import validate_image_bytes
 from modules.identity_verification.field_normalizer import (
     normalize_birth_date,
-    normalize_name,
-)
-from modules.identity_verification.parsers.alien_registration import (
-    parse_alien_registration,
-)
-from modules.identity_verification.parsers.passport_mrz import (
-    parse_passport_mrz,
-)
-from modules.identity_verification.parsers.passport_visual import (
-    parse_passport_visual,
 )
 
 
-_SUPPORTED_DOCUMENT_TYPES = {
-    DocumentType.PASSPORT.value,
-    DocumentType.ALIEN_REGISTRATION.value,
-}
+_PASSPORT_DOCUMENT_TYPE = "idDocument.passport"
 
 
-# 신분증 종류에 맞는 parser를 호출하고 추출 결과를 반환한다.
-def read_identity_document(
-    image_bytes: bytes,
-    document_type: str,
-) -> dict[str, Any]:
-    # API 계약에 정의되지 않은 문서 종류는 OCR 전에 거부한다.
-    if document_type not in _SUPPORTED_DOCUMENT_TYPES:
-        raise UnsupportedDocumentError(
-            f"지원하지 않는 신분증 종류입니다: {document_type}"
+def read_identity_document(image_bytes: bytes) -> dict[str, str]:
+    """Azure 분석 결과에서 여권 신청자 정보를 추출한다."""
+
+    validate_image_bytes(image_bytes, "여권")
+    result = analyze_id_document(image_bytes)
+    documents = _get_value(result, "documents") or []
+
+    if not documents:
+        raise DocumentReadError("여권을 인식할 수 없습니다.")
+
+    document = documents[0]
+    document_type = _get_value(document, "doc_type")
+    if document_type != _PASSPORT_DOCUMENT_TYPE:
+        raise UnsupportedDocumentError("지원하는 문서는 여권뿐입니다.")
+
+    fields = _get_value(document, "fields") or {}
+    extracted_fields = {
+        "first_name": _get_string_field(fields, "FirstName"),
+        "last_name": _get_string_field(fields, "LastName"),
+        "date_of_birth": _get_date_field(fields, "DateOfBirth"),
+        "document_number": _get_string_field(fields, "DocumentNumber"),
+    }
+
+    missing_fields = [
+        label
+        for key, label in (
+            ("first_name", "이름"),
+            ("last_name", "성"),
+            ("date_of_birth", "생년월일"),
+            ("document_number", "여권번호"),
+        )
+        if not extracted_fields[key]
+    ]
+    if missing_fields:
+        raise DocumentReadError(
+            "여권에서 필수 정보를 읽을 수 없습니다: "
+            f"{', '.join(missing_fields)}"
         )
 
-    # 신분증 OCR 전에 입력 이미지 bytes를 검증한다.
-    validate_image_bytes(image_bytes, "신분증")
-
-    # DetectText는 이미지당 한 번만 호출하고 결과를 parser들이 재사용한다.
-    text_detections = detect_text(image_bytes)
-    if not text_detections:
-        raise DocumentReadError("신분증에서 텍스트를 찾을 수 없습니다.")
-
-    # 백엔드에서 전달받은 신분증 종류에 따라 parser를 선택한다.
-    if document_type == DocumentType.PASSPORT.value:
-        return _read_passport(text_detections)
-
-    return parse_alien_registration(text_detections)
+    return {
+        "document_type": _PASSPORT_DOCUMENT_TYPE,
+        **extracted_fields,
+    }
 
 
-# 같은 OCR 결과로 여권 시각 영역과 MRZ parser를 독립적으로 실행한다.
-def _read_passport(
-    text_detections: list[dict[str, Any]],
-) -> dict[str, str]:
-    visual_result: dict[str, str] | None = None
-    mrz_result: dict[str, str] | None = None
+def _get_value(value: Any, name: str) -> Any:
+    # Azure SDK 모델은 snake_case 속성과 camelCase Mapping 키를 함께 제공한다.
+    if hasattr(value, name):
+        return getattr(value, name)
 
-    try:
-        visual_result = parse_passport_visual(text_detections)
-    except DocumentReadError:
-        pass
+    if isinstance(value, Mapping):
+        direct_value = value.get(name)
+        if direct_value is not None:
+            return direct_value
 
-    try:
-        mrz_result = parse_passport_mrz(text_detections)
-    except DocumentReadError:
-        pass
+        camel_case_name = _to_camel_case(name)
+        return value.get(camel_case_name)
 
-    # 두 여권 parser가 성공하면 정규화된 필드 값을 교차검증한다.
-    if visual_result is not None and mrz_result is not None:
-        if not _passport_results_match(visual_result, mrz_result):
-            raise DocumentReadError(
-                "여권 시각 영역과 MRZ의 신청자 정보가 일치하지 않습니다."
-            )
-        return visual_result
-
-    if visual_result is not None:
-        return visual_result
-
-    # 시각 영역이 실패한 경우 MRZ 결과를 fallback으로 사용한다.
-    if mrz_result is not None:
-        return mrz_result
-
-    raise DocumentReadError("여권에서 신청자 정보를 읽을 수 없습니다.")
+    return None
 
 
-# 여권 시각 영역과 MRZ 결과가 일치하는지 확인한다.
-def _passport_results_match(
-    visual_result: dict[str, str],
-    mrz_result: dict[str, str],
-) -> bool:
-    return (
-        normalize_name(visual_result["last_name"])
-        == normalize_name(mrz_result["last_name"])
-        and normalize_name(visual_result["first_name"])
-        == normalize_name(mrz_result["first_name"])
-        and normalize_birth_date(visual_result["birth_date"])
-        == normalize_birth_date(mrz_result["birth_date"])
+def _to_camel_case(value: str) -> str:
+    first_part, *remaining_parts = value.split("_")
+    return first_part + "".join(
+        part.capitalize() for part in remaining_parts
     )
+
+
+def _get_document_field(fields: Any, name: str) -> Any:
+    if isinstance(fields, Mapping):
+        return fields.get(name)
+    return _get_value(fields, name)
+
+
+def _get_string_field(fields: Any, name: str) -> str:
+    field = _get_document_field(fields, name)
+    if field is None:
+        return ""
+
+    value = _get_value(field, "value_string")
+    if not value:
+        value = _get_value(field, "value_country_region")
+    if not value:
+        value = _get_value(field, "content")
+
+    return str(value).strip() if value is not None else ""
+
+
+def _get_date_field(fields: Any, name: str) -> str:
+    field = _get_document_field(fields, name)
+    if field is None:
+        return ""
+
+    structured_value = _get_value(field, "value_date")
+    if isinstance(structured_value, (date, datetime)):
+        return normalize_birth_date(structured_value)
+    if structured_value:
+        try:
+            return normalize_birth_date(str(structured_value))
+        except ValueError:
+            pass
+
+    content = _get_value(field, "content")
+    if not content:
+        return ""
+
+    try:
+        return normalize_birth_date(str(content))
+    except ValueError:
+        return _normalize_azure_date_content(str(content))
+
+
+def _normalize_azure_date_content(value: str) -> str:
+    for date_format in ("%d %b %Y", "%d %B %Y"):
+        try:
+            return datetime.strptime(
+                value.strip(),
+                date_format,
+            ).date().isoformat()
+        except ValueError:
+            continue
+
+    return ""

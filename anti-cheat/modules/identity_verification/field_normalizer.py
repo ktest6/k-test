@@ -5,6 +5,7 @@ field_normalizer.py
 
 - 영문 이름 정규화
 - 생년월일 형식 정규화
+- 여권번호 형식 정규화
 """
 
 import re
@@ -34,6 +35,14 @@ def normalize_birth_date(value: str | date | datetime) -> str:
 
     normalized_date = _normalize_birth_date_string(value)
     return normalized_date.isoformat()
+
+
+def normalize_document_number(value: str) -> str:
+    # 대소문자와 공백·하이픈 차이를 제거해 영문자와 숫자만 남긴다.
+    normalized = value.strip().upper()
+    normalized = re.sub(r"\s+", "", normalized)
+    normalized = normalized.replace("-", "")
+    return re.sub(r"[^A-Z0-9]", "", normalized)
 
 
 def _normalize_birth_date_string(value: str) -> date:
