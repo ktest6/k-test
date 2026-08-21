@@ -3,6 +3,11 @@ import {
   ConflictDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import { SessionStatus } from '../../../exam-session/domain/enums/session-status.enum';
+import {
+  EXAM_SESSION_REPOSITORY,
+  ExamSessionRepository,
+} from '../../../exam-session/domain/exam-session.repository.interface';
 import { ExamApplication } from '../../domain/entities/exam-application.entity';
 import {
   EXAM_APPLICATION_REPOSITORY,
@@ -11,12 +16,23 @@ import {
 import { isApplicationOpen } from '../../domain/exam-status.util';
 import { ExamService } from './exam.service';
 
+/** 이 상태의 세션이 있으면 신청 취소를 막는다 — 특히 DISQUALIFIED/BLOCKED는 취소 후
+ * 재신청으로 실격/차단을 우회하는 걸 막기 위함, INPROGRESS는 응시 중 취소로 인한
+ * 세션-신청 불일치를 막기 위함이다. */
+const CANCEL_BLOCKED_SESSION_STATUSES = new Set<SessionStatus>([
+  SessionStatus.INPROGRESS,
+  SessionStatus.BLOCKED,
+  SessionStatus.DISQUALIFIED,
+]);
+
 @Injectable()
 export class ExamApplicationService {
   constructor(
     private readonly examService: ExamService,
     @Inject(EXAM_APPLICATION_REPOSITORY)
     private readonly examApplicationRepository: ExamApplicationRepository,
+    @Inject(EXAM_SESSION_REPOSITORY)
+    private readonly examSessionRepository: ExamSessionRepository,
   ) {}
 
   async apply(examId: string, userId: string): Promise<ExamApplication> {
@@ -51,6 +67,14 @@ export class ExamApplicationService {
     if (!application) {
       throw new NotFoundDomainException('신청 내역을 찾을 수 없습니다.');
     }
+
+    const session = await this.examSessionRepository.findByUserAndExam(userId, examId);
+    if (session && CANCEL_BLOCKED_SESSION_STATUSES.has(session.status)) {
+      throw new ConflictDomainException(
+        '이미 시작되었거나 실격·차단된 시험은 신청을 취소할 수 없습니다.',
+      );
+    }
+
     await this.examApplicationRepository.cancel(application.id);
   }
 
