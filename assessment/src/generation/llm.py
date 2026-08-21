@@ -26,8 +26,9 @@ DEFAULT_GENERATION_MODEL = os.getenv("GEMINI_MODEL_GENERATION", "gemini-3-flash-
 BASE_OUTPUT_TOKENS = 4096
 OUTPUT_TOKENS_PER_ITEM = 2048
 
-#: 기다려 줄 시간. 채점(60초)보다 길게 잡는다.
-#: 문서 전문을 읽고 문항 여러 개를 쓰는 일이라 채점 한 건보다 오래 걸린다.
+#: 기다려 줄 시간. 실측 25초짜리 작업이라 120초면 넉넉하다.
+#: (채점 쪽 기본값은 300초로 더 길다. 문법 판정 모델이 생각에만 55~68초를 쓰기 때문이며,
+#:  생성은 그만큼 오래 걸린 적이 없어 여기까지 늘리지 않는다)
 GENERATION_TIMEOUT_MS = 120_000
 
 

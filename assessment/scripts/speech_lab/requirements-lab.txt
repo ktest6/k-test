@@ -25,3 +25,42 @@ g2pk>=0.9.4
 # 내 PC(.venv)에서 몇 초면 끝난다. 아래 둘만 있으면 된다.
 xgboost>=2.0              # 손 가중치 대신 사람 점수로 결합 규칙을 배우는 나무 모델
 scikit-learn>=1.4         # 화자 단위 겹 나누기(GroupKFold)와 등급 일치도(QWK)
+
+# ── 세탁 탐지기 증인단 오디션(audition.py) ──────────────────────────────────
+# 받아쓰기 모델 여러 종을 같은 시험지로 겨루게 하는 데만 쓴다. 채점 서버에는 필요 없다.
+# 모델 파일이 10GB 가 넘으므로 받는 자리를 먼저 정하고 깐다:
+#     set HF_HOME=D:\해커톤데이터\hf_cache
+#
+# faster-whisper 는 이미 깔려 있다(eval_ab.py 가 쓴다). 아래는 그 밖의 후보들.
+
+funasr>=1.4               # SenseVoice-Small (직청형 후보) 를 부르는 도구
+torchaudio                # funasr 가 소리를 읽을 때 요구한다
+
+# OWSM v4 CTC (직청형 후보) — **윈도우에서는 그냥 깔리지 않는다.**
+#   까닭: espnet 이 sentencepiece 를 0.2.0 딱 그 판으로 못 박아 두었는데,
+#         그 판에는 파이썬 3.13 · 윈도우용 미리 만들어진 설치본이 없다.
+#         pip 가 소스에서 빌드하려 들고 빌드 도구(cmake)가 없어 실패한다.
+#   우회(8/7 에 이 PC 에서 쓴 방법 — 임시 조치다):
+#         pip install --no-deps espnet espnet_model_zoo
+#         pip install humanfriendly typeguard h5py g2p_en espnet_tts_frontend
+#         (이미 깔린 sentencepiece 0.2.2 로 추론은 정상 동작 확인)
+#   리눅스·파이썬 3.12 라면 그냥 `pip install espnet espnet_model_zoo` 로 끝난다.
+espnet>=202511            # OWSM 추론 (위 우회 참고)
+espnet_model_zoo>=0.1.7   # OWSM 가중치 내려받기
+
+# Qwen3-ASR-1.7B (문맥형 후보) 는 따로 깔 것이 없다.
+# 위에 적힌 transformers 5.x 에 이미 들어 있다(`Qwen3ASRForConditionalGeneration`).
+# 주의: PyPI 의 `qwen-asr` 꾸러미는 transformers 4.57.6 을 못 박으므로 깔지 마라.
+#       깔면 여기 있는 다른 스크립트들이 쓰는 transformers 5.x 가 뒤로 밀린다.
+#
+# Cohere Transcribe (문맥형 후보) 는 라이선스는 Apache-2.0 로 문제없지만
+# 저장소가 '연락처 동의' 관문에 걸려 있어 HuggingFace 로그인 토큰이 있어야 받아진다.
+# 토큰을 넣었다면 `huggingface-cli login` 뒤 audition.py 를 그대로 다시 돌리면 된다.
+
+# ── 세탁 탐지기(launder_transcribe.py · launder_detect.py) ──────────────────
+# 받아쓰기 쪽(launder_transcribe.py)은 위 오디션 목록 그대로면 된다 — 증인 4명이
+# 전부 오디션 후보 중에서 뽑혔고 모델 코드를 audition.py 에서 그대로 가져다 쓴다.
+#
+# 판정 쪽(launder_detect.py)만 하나 더 필요하다. 그래픽카드도 인터넷도 안 쓴다.
+kiwipiepy>=0.20           # 두 형태 중 어느 쪽이 표준 한국어인지 가리는 형태소 분석기
+                          # (채점 자질에도 이미 쓰고 있어 이 PC 에는 깔려 있다)

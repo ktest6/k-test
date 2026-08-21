@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>체크리스트 채점 실험 보고 — 2026-08-09</title>
+<style>
+:root{
+  color-scheme:light;
+  --ground:#f5f7f9; --surface:#ffffff; --surface-2:#eceff4;
+  --ink:#12161d; --ink-2:#4c5665; --muted:#7f8a99;
+  --rule:#dfe4ea; --rule-strong:#c7d0da;
+  --blue:#2a78d6; --orange:#eb6834; --neutral:#8b96a5; --good:#0f7a56;
+  --shadow:0 1px 2px rgba(18,22,29,.05), 0 10px 28px rgba(18,22,29,.05);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#111419; --surface:#191d24; --surface-2:#222831;
+    --ink:#eef1f5; --ink-2:#b4bdc9; --muted:#8792a1;
+    --rule:#2a313b; --rule-strong:#3b4552;
+    --blue:#3987e5; --orange:#d95926; --neutral:#7d8899; --good:#199e70;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#111419; --surface:#191d24; --surface-2:#222831;
+  --ink:#eef1f5; --ink-2:#b4bdc9; --muted:#8792a1;
+  --rule:#2a313b; --rule-strong:#3b4552;
+  --blue:#3987e5; --orange:#d95926; --neutral:#7d8899; --good:#199e70;
+  --shadow:none;
+}
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font-family:"Malgun Gothic","Apple SD Gothic Neo","Segoe UI",system-ui,sans-serif;
+  font-size:16px;line-height:1.75;letter-spacing:-.01em;}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px 40px;}
+.col{max-width:730px;}
+h1,h2,h3{font-family:"Batang","Nanum Myeongjo",Georgia,serif;font-weight:700;
+  text-wrap:balance;letter-spacing:-.02em;line-height:1.32;margin:0;}
+h1{font-size:34px;} h2{font-size:25px;margin:0 0 8px;} h3{font-size:17px;margin:0 0 4px;}
+p{margin:0 0 14px;} a{color:var(--blue);}
+.eyebrow{font-size:11.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 8px;font-family:Consolas,"D2Coding",monospace;}
+header.top{border-bottom:1px solid var(--rule);background:var(--surface);}
+header.top .wrap{padding-top:46px;padding-bottom:34px;}
+.kicker{color:var(--orange);font-weight:700;font-size:13px;letter-spacing:.06em;margin:0 0 12px;}
+.sub{color:var(--ink-2);font-size:18px;margin:14px 0 0;max-width:730px;}
+.meta{display:flex;flex-wrap:wrap;gap:4px 26px;margin-top:22px;padding-top:16px;
+  border-top:1px solid var(--rule);font-family:Consolas,"D2Coding",monospace;
+  font-size:12.5px;color:var(--muted);}
+.meta b{color:var(--ink-2);font-weight:600;}
+section{margin-top:54px;}
+.lead{background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--orange);
+  padding:22px 24px;box-shadow:var(--shadow);margin-top:34px;}
+.lead p:last-child{margin-bottom:0;}
+.lead .big{font-size:19px;line-height:1.65;}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(228px,1fr));gap:14px;margin:20px 0 4px;}
+.card{background:var(--surface);border:1px solid var(--rule);padding:16px 18px;box-shadow:var(--shadow);}
+.card .tag{font-family:Consolas,"D2Coding",monospace;font-size:11.5px;color:var(--muted);letter-spacing:.06em;}
+.card p{font-size:14.5px;color:var(--ink-2);margin:6px 0 0;line-height:1.65;}
+.swatch{display:inline-block;width:9px;height:9px;margin-right:6px;}
+figure{margin:22px 0 6px;background:var(--surface);border:1px solid var(--rule);
+  padding:20px 20px 12px;box-shadow:var(--shadow);overflow-x:auto;}
+figure svg{display:block;width:100%;min-width:620px;height:auto;}
+figcaption{font-size:13.5px;color:var(--muted);margin-top:12px;line-height:1.65;}
+.legend{display:flex;flex-wrap:wrap;gap:18px;margin:0 0 14px;font-size:13px;color:var(--ink-2);}
+.legend span{display:inline-flex;align-items:center;gap:7px;}
+.legend i{width:11px;height:11px;display:inline-block;}
+.scroll{overflow-x:auto;margin:18px 0 6px;border:1px solid var(--rule);
+  background:var(--surface);box-shadow:var(--shadow);}
+table{border-collapse:collapse;width:100%;font-size:14px;}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule);white-space:nowrap;
+  vertical-align:top;}
+thead th{background:var(--surface-2);font-size:12px;letter-spacing:.03em;color:var(--ink-2);
+  font-weight:700;border-bottom:1px solid var(--rule-strong);}
+tbody tr:last-child td{border-bottom:none;}
+.num{text-align:right;font-family:Consolas,"D2Coding",monospace;font-variant-numeric:tabular-nums;}
+.q{white-space:normal;display:inline-block;max-width:420px;color:var(--ink-2);line-height:1.55;}
+.wq{white-space:normal;max-width:520px;line-height:1.55;color:var(--ink-2);}
+.wq b{font-family:Consolas,"D2Coding",monospace;color:var(--ink);margin-right:6px;}
+.dot{display:inline-block;width:8px;height:8px;margin-right:8px;}
+.pill{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;font-weight:700;}
+.pill.yes{background:color-mix(in srgb,var(--good) 15%,transparent);color:var(--good);}
+.pill.no{background:var(--surface-2);color:var(--muted);}
+ul,ol{margin:0 0 14px;padding-left:20px;} li{margin-bottom:8px;}
+.note{font-size:14.5px;color:var(--ink-2);border-left:2px solid var(--rule-strong);
+  padding-left:14px;margin:18px 0;}
+code{font-family:Consolas,"D2Coding",monospace;font-size:13px;background:var(--surface-2);
+  padding:1px 5px;}
+pre{background:var(--surface);border:1px solid var(--rule);padding:14px 16px;overflow-x:auto;
+  font-family:Consolas,"D2Coding",monospace;font-size:12.5px;line-height:1.75;color:var(--ink-2);}
+dl{margin:0;} dt{font-weight:700;margin-top:15px;}
+dd{margin:2px 0 0;color:var(--ink-2);font-size:14.5px;}
+footer{margin-top:56px;padding:20px 0 0;border-top:1px solid var(--rule);
+  color:var(--muted);font-size:13px;}
+@media (max-width:700px){
+  h1{font-size:27px;} h2{font-size:21px;} body{font-size:15px;}
+  .wrap{padding:0 16px 32px;}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <p class="kicker">K-TEST 채점 실험 · ‘내용 및 과제 수행’ 영역</p>
+    <h1>체크리스트로 채점하면 더 잘 맞을까</h1>
+    <p class="sub">AI Hub 외국인 말하기 답안 281건에 채점 방식 네 가지를 똑같이 돌려,
+    사람 채점자 점수와 얼마나 맞는지(QWK)와 같은 답안을 세 번 채점해도 같은 점수가 나오는지(재현성)를 쟀다.</p>
+    <div class="meta">
+      <span><b>날짜</b> 2026-08-09</span>
+      <span><b>표본</b> 답안 281건 · 문항 9종 · 화자 270명</span>
+      <span><b>사람 점수</b> AI Hub 전문 평가자 0~5</span>
+      <span><b>모델</b> gemini-3.1-flash-lite · 온도 0</span>
+      <span><b>LLM 호출</b> 1,383회</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="note" style="margin-top:26px;border-left:2px solid var(--orange);">
+  <b>이 문서는 1·2차 실험이다. 뒤에 3·4차가 있다</b> — 결론을 인용하기 전에 뒤 문서를 함께 보라.
+  <br>3차(실제 답안으로 체크리스트 생성): <code>체크리스트채점_3차실험보고_20260809.html</code>
+  <br>4차(체크리스트 10개 + 확률 판정): <code>체크리스트채점_4차실험보고_20260809.html</code> — 네 차례 사다리 표가 여기 있다
+</div>
+
+<div class="lead">
+  <p class="eyebrow">한 줄 결론</p>
+  <p class="big"><b>이번 시험지에서는 LLM 이 점수를 직접 매기는 쪽이 이겼다.</b>
+  체크리스트로 쪼개 채점하니 사람 점수와의 일치도가 0.79 → 0.51 로 떨어졌고,
+  문항별로 항목 비중을 학습시키자 그 손해를 절반쯤 되찾았다(0.62).
+  다만 <b>진 이유가 ‘체크리스트라서’가 아니라 ‘항목이 문항당 2개뿐이라서’</b>라는 것도 함께 나왔다 —
+  항목 2개가 담을 수 있는 정보의 천장 자체가 0.69 였다.</p>
+  <p class="big" style="margin-top:14px;border-top:1px solid var(--rule);padding-top:14px;"><b>그래서 논문(RLCF) 방식으로 항목을 다시 뽑아 2차 실험을 했다.</b> 항목이 2개 → 6개로 늘자 정보 천장이 <b>0.69 → 0.80</b> 로 올랐고, 그 값을 실제로 받아 간 것은 <b>가중치 학습 하나뿐</b>이었다(0.70 — 1차의 같은 방식 0.62 를 유의하게 이김). 그래도 LLM 직접 채점(0.79)은 못 이겼다.</p>
+</div>
+
+<section class="col">
+  <p class="eyebrow">무엇을 비교했나</p>
+  <h2>바뀌는 것은 오직 ‘점수를 만드는 방법’</h2>
+  <p>비교가 성립하려면 달라지는 것이 하나여야 한다. 그래서 <b>모델·온도·읽는 글자를 전부 똑같이</b> 두고
+  점수를 만드는 방법만 바꿨다. 입력은 음성이 아니라 <b>사람이 직접 적은 전사</b>를 썼다 —
+  받아쓰기 기계를 끼우면 채점 방식의 차이인지 그날 받아쓰기 운인지 구분할 수 없기 때문이다.</p>
+</section>
+
+<div class="cards">
+  <div class="card"><p class="tag"><span class="swatch" style="background:var(--blue)"></span>A0 · 학습 안 씀</p>
+    <h3>LLM 이 바로 점수</h3><p>문항과 답안을 주고 0~5 점을 매기게 한다. 근거 인용도 함께 받는다.</p></div>
+  <div class="card"><p class="tag"><span class="swatch" style="background:var(--blue)"></span>A1 · 예시 사용</p>
+    <h3>LLM 이 바로 점수 (퓨샷)</h3><p>A0 과 같되 같은 문항의 <b>학습 겹</b>에서 뽑은 채점 예시 4~6 개를 함께 보여 준다.</p></div>
+  <div class="card"><p class="tag"><span class="swatch" style="background:var(--orange)"></span>B · 학습 안 씀</p>
+    <h3>체크리스트 충족율</h3><p>문항마다 체크리스트를 미리 만들어 고정하고, 항목마다 O/X 로 판정해 충족율 × 5 를 점수로 삼는다.</p></div>
+  <div class="card"><p class="tag"><span class="swatch" style="background:var(--orange)"></span>C · 가중치 학습</p>
+    <h3>체크리스트 + 문항별 가중치</h3><p>B 의 O/X 를 그대로 재사용해 “어느 항목이 더 중요한가”를 사람 점수에서 배운다. LLM 추가 호출 0 회.</p></div>
+</div>
+
+<div class="note col">B 와 C 는 <b>완전히 같은 O/X 판정</b>을 쓴다. 둘의 차이는 O/X 를 점수로 바꾸는 방법뿐이라,
+“가중치 학습이 무엇을 벌었는가”가 깨끗하게 분리된다.</div>
+
+<section class="col">
+  <p class="eyebrow">공정하게 재기</p>
+  <h2>못 박아 둔 네 가지</h2>
+  <ul>
+    <li><b>같은 시험 겹</b> — A1·C 는 학습 데이터를 쓰고 A0·B 는 안 쓴다. 그래서 네 방식 모두
+      <b>화자(speaker_id) 단위 5겹</b>의 시험 겹 예측만 모아 채점했다.
+      같은 사람이 배우는 쪽과 시험 보는 쪽에 동시에 들어간 경우 0명.</li>
+    <li><b>사람 점수</b> — AI Hub 전문 평가자의 내용 점수 0~5.
+      분포 0점 18건 · 1점 20건 · 2점 62건 · 3점 96건 · 4점 74건 · 5점 11건.</li>
+    <li><b>신뢰구간</b> — 화자를 통째로 다시 뽑는 부트스트랩 1,000 회.
+      <b>구간이 0 을 걸치면 “좋아졌다”고 쓰지 않는다.</b></li>
+    <li><b>제외</b> — 한 방식에서라도 점수를 못 낸 답안은 모든 방식에서 뺀다. 최종 제외 0건.</li>
+  </ul>
+</section>
+
+<section>
+  <p class="eyebrow">결과 ①</p>
+  <h2 class="col">사람 점수와 얼마나 맞았나</h2>
+  <figure>
+    <div class="legend">
+      <span><i style="background:var(--blue)"></i>LLM 이 직접 채점</span>
+      <span><i style="background:var(--orange)"></i>체크리스트로 채점</span>
+      <span><i style="background:var(--neutral);opacity:.7"></i>비교용 잣대(기준선)</span>
+    </div>
+    <svg viewBox="0 0 1000 346" role="img" aria-label="방식별 QWK 막대그래프. A1 LLM 직접 채점(퓨샷) 0.787 · A0 LLM 직접 채점(제로샷) 0.758 · 체크리스트 정보 천장 0.693 · 길이 기준선(글자 수만) 0.636 · C 체크리스트+가중치 학습 0.620 · B 체크리스트 충족율×5 0.510">
+<g stroke="var(--rule-strong)" stroke-opacity=".55">
+<line x1="250.0" y1="28" x2="250.0" y2="286.0"></line>
+<line x1="396.0" y1="28" x2="396.0" y2="286.0"></line>
+<line x1="542.0" y1="28" x2="542.0" y2="286.0"></line>
+<line x1="688.0" y1="28" x2="688.0" y2="286.0"></line>
+<line x1="834.0" y1="28" x2="834.0" y2="286.0"></line>
+<line x1="980.0" y1="28" x2="980.0" y2="286.0"></line>
+</g>
+<g font-family="Consolas, D2Coding, monospace" font-size="12" fill="var(--muted)">
+<text x="250.0" y="306" text-anchor="middle">0.0</text>
+<text x="396.0" y="306" text-anchor="middle">0.2</text>
+<text x="542.0" y="306" text-anchor="middle">0.4</text>
+<text x="688.0" y="306" text-anchor="middle">0.6</text>
+<text x="834.0" y="306" text-anchor="middle">0.8</text>
+<text x="980.0" y="306" text-anchor="middle">1.0</text>
+<text x="615" y="330" text-anchor="middle">QWK — 사람 점수와의 일치도 (1.0 = 완전 일치 · 0 = 우연 수준)</text></g>
+<path d="M250.0 38.5 H820.3 a4.0 4.0 0 0 1 4.0 4.0 V49.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--blue)" fill-opacity="1"><title>A1 LLM 직접 채점(퓨샷): QWK 0.787 (95% 구간 0.735~0.831)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="786.5" y1="46.0" x2="856.9" y2="46.0"></line><line x1="786.5" y1="41.5" x2="786.5" y2="50.5"></line><line x1="856.9" y1="41.5" x2="856.9" y2="50.5"></line></g>
+<text x="234" y="50.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">A1 LLM 직접 채점(퓨샷)</text>
+<text x="868.9" y="50.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.787</text>
+<path d="M250.0 80.5 H799.7 a4.0 4.0 0 0 1 4.0 4.0 V91.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--blue)" fill-opacity="1"><title>A0 LLM 직접 채점(제로샷): QWK 0.758 (95% 구간 0.705~0.805)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="764.8" y1="88.0" x2="837.5" y2="88.0"></line><line x1="764.8" y1="83.5" x2="764.8" y2="92.5"></line><line x1="837.5" y1="83.5" x2="837.5" y2="92.5"></line></g>
+<text x="234" y="92.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">A0 LLM 직접 채점(제로샷)</text>
+<text x="849.5" y="92.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.758</text>
+<path d="M250.0 122.5 H751.8 a4.0 4.0 0 0 1 4.0 4.0 V133.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--neutral)" fill-opacity="0.45" stroke-dasharray="4 3"><title>체크리스트 정보 천장: QWK 0.693 (95% 구간 0.613~0.754)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="697.4" y1="130.0" x2="800.6" y2="130.0"></line><line x1="697.4" y1="125.5" x2="697.4" y2="134.5"></line><line x1="800.6" y1="125.5" x2="800.6" y2="134.5"></line></g>
+<text x="234" y="134.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">체크리스트 정보 천장</text>
+<text x="812.6" y="134.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.693</text>
+<path d="M250.0 164.5 H710.5 a4.0 4.0 0 0 1 4.0 4.0 V175.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--neutral)" fill-opacity="0.7"><title>길이 기준선(글자 수만): QWK 0.636 (95% 구간 0.568~0.697)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="664.5" y1="172.0" x2="759.1" y2="172.0"></line><line x1="664.5" y1="167.5" x2="664.5" y2="176.5"></line><line x1="759.1" y1="167.5" x2="759.1" y2="176.5"></line></g>
+<text x="234" y="176.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">길이 기준선(글자 수만)</text>
+<text x="771.1" y="176.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.636</text>
+<path d="M250.0 206.5 H698.9 a4.0 4.0 0 0 1 4.0 4.0 V217.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--orange)" fill-opacity="1"><title>C 체크리스트+가중치 학습: QWK 0.620 (95% 구간 0.537~0.687)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="642.2" y1="214.0" x2="751.5" y2="214.0"></line><line x1="642.2" y1="209.5" x2="642.2" y2="218.5"></line><line x1="751.5" y1="209.5" x2="751.5" y2="218.5"></line></g>
+<text x="234" y="218.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">C 체크리스트+가중치 학습</text>
+<text x="763.5" y="218.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.620</text>
+<path d="M250.0 248.5 H618.6 a4.0 4.0 0 0 1 4.0 4.0 V259.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--orange)" fill-opacity="1"><title>B 체크리스트 충족율×5: QWK 0.510 (95% 구간 0.430~0.584)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="563.5" y1="256.0" x2="676.3" y2="256.0"></line><line x1="563.5" y1="251.5" x2="563.5" y2="260.5"></line><line x1="676.3" y1="251.5" x2="676.3" y2="260.5"></line></g>
+<text x="234" y="260.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">B 체크리스트 충족율×5</text>
+<text x="688.3" y="260.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.510</text>
+</svg>
+    <figcaption>가로 막대는 QWK, 가운데 가로선은 95% 신뢰구간이다. 구간이 서로 겹치면 순위를 단정할 수 없다.
+    ‘정보 천장’은 정답을 다 보고 가장 유리하게 맞춘 값이라 실제 채점에는 쓸 수 없다 — 체크리스트 항목이 들고 있는 정보의 최대치를 뜻한다.</figcaption>
+  </figure>
+  <div class="scroll"><table><thead><tr><th class="">방식</th><th class="">학습 데이터</th><th class="">답안당 LLM 호출</th><th class="num">QWK</th><th class="num">95% 신뢰구간</th><th class="num">피어슨</th><th class="num">정확 일치</th><th class="num">±1 이내</th><th class="num">평균 예측</th></tr></thead><tbody><tr><td class=""><span class="dot" style="background:var(--blue)"></span>A0 LLM 직접 채점(제로샷)</td><td class="">학습 안 씀</td><td class="">1회</td><td class="num"><b>0.758</b></td><td class="num">[0.705, 0.805]</td><td class="num">0.784</td><td class="num">42.3%</td><td class="num">91.5%</td><td class="num">3.04</td></tr><tr><td class=""><span class="dot" style="background:var(--blue)"></span>A1 LLM 직접 채점(퓨샷 앵커)</td><td class="">학습 씀</td><td class="">1회</td><td class="num"><b>0.787</b></td><td class="num">[0.735, 0.831]</td><td class="num">0.811</td><td class="num">47.0%</td><td class="num">92.2%</td><td class="num">2.98</td></tr><tr><td class=""><span class="dot" style="background:var(--orange)"></span>B 체크리스트 충족율×5</td><td class="">학습 안 씀</td><td class="">1회</td><td class="num"><b>0.510</b></td><td class="num">[0.430, 0.584]</td><td class="num">0.691</td><td class="num">21.0%</td><td class="num">64.4%</td><td class="num">3.88</td></tr><tr><td class=""><span class="dot" style="background:var(--orange)"></span>C 체크리스트+문항별 가중치 학습</td><td class="">학습 씀</td><td class="">0회</td><td class="num"><b>0.620</b></td><td class="num">[0.537, 0.687]</td><td class="num">0.651</td><td class="num">43.1%</td><td class="num">90.7%</td><td class="num">2.68</td></tr></tbody></table></div>
+  <p class="col" style="margin-top:14px;color:var(--ink-2);font-size:14.5px;">
+    ‘정확 일치’는 사람과 점수가 딱 같은 비율, ‘±1 이내’는 한 칸 차이 안에 든 비율이다.
+    B 의 ±1 이내가 64% 로 유독 낮은 것은 낼 수 있는 점수가 사실상 0·3·5 세 칸뿐이기 때문이다.</p>
+</section>
+
+<section>
+  <p class="eyebrow">결과 ②</p>
+  <h2 class="col">그 차이가 우연은 아닌가</h2>
+  <p class="col">부트스트랩으로 화자를 다시 뽑아 1,000 번 재계산한 결과다. 구간이 0 을 걸치면 차이를 주장하지 않는다.</p>
+  <div class="scroll"><table><thead><tr><th class="">비교 (앞 − 뒤)</th><th class="num">QWK 차이</th><th class="num">95% 신뢰구간</th><th class="">판정</th></tr></thead><tbody><tr><td class="">A0 LLM 제로샷 − A1 LLM 퓨샷</td><td class="num">-0.028</td><td class="num">[-0.059, 0.003]</td><td class=""><span class="pill no">0을 걸친다 → 차이를 주장할 수 없다</span></td></tr><tr><td class="">A0 LLM 제로샷 − B 체크리스트 충족율</td><td class="num">+0.249</td><td class="num">[0.193, 0.316]</td><td class=""><span class="pill yes">앞쪽이 유의하게 높다</span></td></tr><tr><td class="">A0 LLM 제로샷 − C 체크리스트+가중치</td><td class="num">+0.141</td><td class="num">[0.065, 0.220]</td><td class=""><span class="pill yes">앞쪽이 유의하게 높다</span></td></tr><tr><td class="">A1 LLM 퓨샷 − B 체크리스트 충족율</td><td class="num">+0.278</td><td class="num">[0.218, 0.342]</td><td class=""><span class="pill yes">앞쪽이 유의하게 높다</span></td></tr><tr><td class="">A1 LLM 퓨샷 − C 체크리스트+가중치</td><td class="num">+0.169</td><td class="num">[0.102, 0.244]</td><td class=""><span class="pill yes">앞쪽이 유의하게 높다</span></td></tr><tr><td class="">B 체크리스트 충족율 − C 체크리스트+가중치</td><td class="num">-0.109</td><td class="num">[-0.171, -0.041]</td><td class=""><span class="pill yes">뒤쪽이 유의하게 높다</span></td></tr><tr><td class="">바닥선(학습겹 평균) − 길이 기준선(글자 수만)</td><td class="num">-0.635</td><td class="num">[-0.697, -0.568]</td><td class=""><span class="pill yes">뒤쪽이 유의하게 높다</span></td></tr><tr><td class="">바닥선(학습겹 평균) − 체크리스트 상한(정답 보고 사상)</td><td class="num">-0.690</td><td class="num">[-0.754, -0.613]</td><td class=""><span class="pill yes">뒤쪽이 유의하게 높다</span></td></tr><tr><td class="">길이 기준선(글자 수만) − B 체크리스트 충족율×5</td><td class="num">+0.127</td><td class="num">[0.039, 0.219]</td><td class=""><span class="pill yes">앞쪽이 유의하게 높다</span></td></tr><tr><td class="">길이 기준선(글자 수만) − C 체크리스트+가중치 학습</td><td class="num">+0.019</td><td class="num">[-0.078, 0.114]</td><td class=""><span class="pill no">0을 걸친다 → 차이를 주장할 수 없다</span></td></tr><tr><td class="">길이 기준선(글자 수만) − 체크리스트 상한(정답 보고 사상)</td><td class="num">-0.056</td><td class="num">[-0.145, 0.032]</td><td class=""><span class="pill no">0을 걸친다 → 차이를 주장할 수 없다</span></td></tr><tr><td class="">길이 기준선(글자 수만) − A1 LLM 직접 채점(퓨샷)</td><td class="num">-0.151</td><td class="num">[-0.219, -0.086]</td><td class=""><span class="pill yes">뒤쪽이 유의하게 높다</span></td></tr><tr><td class="">B 체크리스트 충족율×5 − 체크리스트 상한(정답 보고 사상)</td><td class="num">-0.183</td><td class="num">[-0.230, -0.132]</td><td class=""><span class="pill yes">뒤쪽이 유의하게 높다</span></td></tr><tr><td class="">C 체크리스트+가중치 학습 − 체크리스트 상한(정답 보고 사상)</td><td class="num">-0.075</td><td class="num">[-0.123, -0.025]</td><td class=""><span class="pill yes">뒤쪽이 유의하게 높다</span></td></tr><tr><td class="">체크리스트 상한(정답 보고 사상) − A1 LLM 직접 채점(퓨샷)</td><td class="num">-0.095</td><td class="num">[-0.164, -0.036]</td><td class=""><span class="pill yes">뒤쪽이 유의하게 높다</span></td></tr></tbody></table></div>
+  <ul class="col" style="margin-top:16px;">
+    <li><b>LLM 직접 채점이 체크리스트 두 방식보다 유의하게 높다.</b> 차이 +0.28(vs B) · +0.17(vs C).</li>
+    <li><b>가중치 학습(C)은 충족율(B)보다 유의하게 높다.</b> 팀원 제안 ③이 제안 ②를 이겼다 — 같은 O/X 를 쓰고도 QWK 가 0.510 → 0.620 로 올랐다.</li>
+    <li><b>퓨샷(A1)이 제로샷(A0)보다 낫다고는 말할 수 없다.</b> 차이 -0.028, 구간이 0 을 걸친다.
+      예시를 붙이는 값은 이 데이터에서 확인되지 않았다.</li>
+  </ul>
+</section>
+
+<section>
+  <p class="eyebrow">결과 ③</p>
+  <h2 class="col">같은 답안을 세 번 채점하면</h2>
+  <p class="col">고정한 60건을 같은 설정으로 3 회 채점했다.</p>
+  <div class="scroll"><table><thead><tr><th class="">방식</th><th class="num">3회 다 성공</th><th class="num">3회 점수 완전일치</th><th class="num">평균 진폭</th><th class="num">최대 진폭</th></tr></thead><tbody><tr><td class="">A0 LLM 직접 채점(제로샷)</td><td class="num">60건</td><td class="num">100.0%</td><td class="num">0.000</td><td class="num">0</td></tr><tr><td class="">A1 LLM 직접 채점(퓨샷 앵커)</td><td class="num">60건</td><td class="num">100.0%</td><td class="num">0.000</td><td class="num">0</td></tr><tr><td class="">B 체크리스트 충족율×5</td><td class="num">60건</td><td class="num">100.0%</td><td class="num">0.000</td><td class="num">0</td></tr><tr><td class="">C 체크리스트+문항별 가중치 학습</td><td class="num">60건</td><td class="num">100.0%</td><td class="num">0.000</td><td class="num">0</td></tr></tbody></table></div>
+  <div class="note col"><b>네 방식 모두 3 회가 소수점까지 같았다(진폭 0).</b>
+  체크리스트 항목 O/X 도 120칸 중 한 칸도 뒤집히지 않았다.
+  그래서 <b>이번 조건에서 재현성으로는 우열을 가릴 수 없다</b> — “쪼개면 덜 흔들린다”는 가설은 증명도 반증도 되지 않았다(흔들림 자체가 없었다).
+  예전에 판정이 흔들렸던 것은 <b>생각을 하는 다른 모델</b>(gemini-3-flash-preview)로 문법 오류를 잡을 때였다.
+  이번에 쓴 gemini-3.1-flash-lite 는 짧은 판정에서 결정적으로 동작했다.</div>
+  <p class="col">체크리스트 <b>생성</b>도 3 문항 × 3 회를 재 봤는데 3/3 문항이 문구까지 같았다.
+  다만 본 실험은 <b>미리 만들어 고정한 체크리스트 한 벌</b>을 쓰므로, 생성이 흔들리더라도 채점 점수에는 영향이 없다
+  (‘시험 전 생성 · 승인 후 고정’ 원칙과 같은 구조다).</p>
+</section>
+
+<section>
+  <p class="eyebrow">해석</p>
+  <h2 class="col">왜 체크리스트가 졌나 — 기준선 세 개로 읽기</h2>
+  <p class="col">QWK 0.51 이 나쁜 값인지 아닌지는 혼자서는 알 수 없다. 그래서 같은 표본·같은 겹으로 잣대 세 개를 세웠다.</p>
+  <ul class="col">
+    <li><b>바닥선 0.00</b> — 답안을 아예 읽지 않고 평균 점수만 답하기.</li>
+    <li><b>길이 기준선 0.64</b> — 답안의 <b>글자 수 하나만</b> 보고 맞히기.
+      충족율(B)은 이 잣대에 <b>졌다</b>(+0.127).
+      가중치를 배운 C 도 길이와 <b>비긴다</b>(구간이 0 을 걸침).</li>
+    <li><b>정보 천장 0.69</b> — 충족 개수(0·1·2)를 정답을 다 보고 가장 유리하게 점수로 바꾼 값.
+      C 는 이 천장에서 0.075 밖에 떨어져 있지 않다.</li>
+  </ul>
+  <div class="note col"><b>즉 병목은 결합 방식이 아니라 체크리스트 항목 자체다.</b>
+  결합을 아무리 잘해도 항목이 2 개인 한 0.69 를 넘을 수 없는데,
+  LLM 직접 채점은 이미 0.79 다. 8/6 계단 5 실험에서 “병목은 결합층이 아니라 자질”이라고 나온 것과 같은 모양이다.</div>
+
+  <h3 class="col" style="margin-top:28px;">항목이 2 개가 된 것은 프롬프트 잘못이 아니다</h3>
+  <p class="col">팀원 프롬프트는 “억지로 개수를 채우지 말라”고 지시하고 있고, AI Hub 문항이 실제로
+  “<span style="color:var(--ink-2)">보통 어디에서 쇼핑하세요? 왜 그곳에서 쇼핑하세요?</span>”처럼 요구가 두 개다.
+  프롬프트는 지시대로 동작했고, <b>시험지가 얕았다.</b> 우리 K-TEST 직무 문항은 요구가 3~5 개라 천장이 달라질 수 있다.</p>
+
+  <h3 class="col" style="margin-top:28px;">가중치 학습이 실제로 배운 것</h3>
+  <p class="col">C 가 문항마다 배운 항목 비중이다. ‘무엇을 말했나’보다 <b>‘왜’를 설명했는지</b>에 큰 값을 준 문항이 여럿이다.</p>
+  <div class="scroll"><table><thead><tr><th class="">문항</th><th class="">배운 항목 비중 (충족하면 점수가 몇 점 오르는가 · 5겹 평균)</th></tr></thead><tbody><tr><td class=""><span class="q">보통 어디에서 쇼핑하세요? 왜 그곳에서 쇼핑하세요?</span></td><td class=""><div class="wq"><b>+2.42</b> 해당 장소에서 쇼핑하는 이유를 설명했는가?</div><div class="wq"><b>+0.86</b> 주로 쇼핑하는 장소를 구체적으로 언급했는가?</div></td></tr><tr><td class=""><span class="q">고향이 어디에요? 고향이 한국하고 무엇이 다른지 설명해 주세요. (비교/대조)</span></td><td class=""><div class="wq"><b>+1.79</b> 자신의 고향이 어디인지 언급했는가?</div><div class="wq"><b>+1.61</b> 고향과 한국의 차이점을 구체적으로 설명했는가?</div></td></tr><tr><td class=""><span class="q">오늘 무엇을 입었어요? 옷차림을 자세하게 묘사해 주세요.</span></td><td class=""><div class="wq"><b>+0.88</b> 오늘 입은 옷의 종류나 색상 등 최소한의 정보를 언급했는가?</div><div class="wq"><b>+0.76</b> 옷차림의 특징이나 세부 사항을 구체적으로 묘사했는가?</div></td></tr><tr><td class=""><span class="q">집 근처에 무엇이 있어요? 집 근처의 모습을 자세하게 묘사해 주세요. (건물. 가게, 길, 자연, 시설 등)</span></td><td class=""><div class="wq"><b>+1.52</b> 집 근처에 있는 장소나 시설을 하나 이상 언급했는가?</div><div class="wq"><b>+1.16</b> 집 근처의 모습을 구체적인 특징이나 상태를 포함하여 묘사했는가?</div></td></tr><tr><td class=""><span class="q">여러분 방 안에 무엇이 있어요? 방 안의 모습을 자세하게 묘사해 주세요.</span></td><td class=""><div class="wq"><b>+0.13</b> 방 안의 모습을 구체적으로 묘사했는가?</div><div class="wq"><b>+0.05</b> 방 안에 있는 사물이나 가구에 대해 언급했는가?</div></td></tr><tr><td class=""><span class="q">다음 생일에 무슨 선물을 받고 싶으세요? 왜 그 선물을 받고 싶으세요?</span></td><td class=""><div class="wq"><b>+2.48</b> 해당 선물을 받고 싶은 이유를 설명했는가?</div><div class="wq"><b>+0.32</b> 받고 싶은 선물의 종류를 구체적으로 언급했는가?</div></td></tr><tr><td class=""><span class="q">건강을 중요하게 생각하는 사람을 알고 있어요? 그 사람이 어떻게 건강을 지키는지 설명해 주세요. (예시)</span></td><td class=""><div class="wq"><b>+2.13</b> 그 인물이 건강을 지키기 위해 실천하는 구체적인 방법을 설명했는가?</div><div class="wq"><b>+1.28</b> 건강을 중요하게 생각하는 특정 인물을 언급했는가?</div></td></tr><tr><td class=""><span class="q">집을 구할 때 가장 중요하게 생각하는 게 뭐예요? 왜 그것을 가장 중요하게 생각하세요?</span></td><td class=""><div class="wq"><b>+1.18</b> 선택한 요소가 중요한 이유를 구체적으로 설명했는가?</div><div class="wq"><b>+0.73</b> 집을 구할 때 가장 중요하게 생각하는 요소를 하나 이상 언급했는가?</div></td></tr><tr><td class=""><span class="q">잘 모르는 분야의 책을 읽고 싶을 때, 좋은 책을 고를 수 있는 방법을 가르쳐 주세요. (방법)</span></td><td class=""><div class="wq"><b>+2.10</b> 잘 모르는 분야의 책을 고르는 구체적인 방법을 제시했는가?</div><div class="wq"><b>+0.53</b> 제시한 방법이 잘 모르는 분야의 책을 고르는 상황에 적절한 근거를 포함하고 있는가?</div></td></tr></tbody></table></div>
+</section>
+
+<section>
+  <p class="eyebrow">문항별</p>
+  <h2 class="col">문항마다 승패가 다르다</h2>
+  <div class="scroll"><table><thead><tr><th class="">문항 지시문</th><th class="num">답안 수</th><th class="num">체크리스트 항목</th><th class="num">A0</th><th class="num">A1</th><th class="num">B</th><th class="num">C</th></tr></thead><tbody><tr><td class=""><span class="q">보통 어디에서 쇼핑하세요? 왜 그곳에서 쇼핑하세요?</span></td><td class="num">40건</td><td class="num">2개</td><td class="num">0.595</td><td class="num">0.692</td><td class="num">0.371</td><td class="num">0.540</td></tr><tr><td class=""><span class="q">고향이 어디에요? 고향이 한국하고 무엇이 다른지 설명해 주세요. (비교/대조)</span></td><td class="num">29건</td><td class="num">2개</td><td class="num">0.815</td><td class="num">0.834</td><td class="num">0.586</td><td class="num">0.763</td></tr><tr><td class=""><span class="q">오늘 무엇을 입었어요? 옷차림을 자세하게 묘사해 주세요.</span></td><td class="num">39건</td><td class="num">2개</td><td class="num">0.799</td><td class="num">0.757</td><td class="num">0.478</td><td class="num">0.309</td></tr><tr><td class=""><span class="q">집 근처에 무엇이 있어요? 집 근처의 모습을 자세하게 묘사해 주세요. (건물. 가게, 길, 자연, 시설 등)</span></td><td class="num">30건</td><td class="num">2개</td><td class="num">0.746</td><td class="num">0.758</td><td class="num">0.427</td><td class="num">0.379</td></tr><tr><td class=""><span class="q">여러분 방 안에 무엇이 있어요? 방 안의 모습을 자세하게 묘사해 주세요.</span></td><td class="num">27건</td><td class="num">2개</td><td class="num">0.423</td><td class="num">0.527</td><td class="num">0.164</td><td class="num">0.000</td></tr><tr><td class=""><span class="q">다음 생일에 무슨 선물을 받고 싶으세요? 왜 그 선물을 받고 싶으세요?</span></td><td class="num">29건</td><td class="num">2개</td><td class="num">0.775</td><td class="num">0.808</td><td class="num">0.595</td><td class="num">0.785</td></tr><tr><td class=""><span class="q">건강을 중요하게 생각하는 사람을 알고 있어요? 그 사람이 어떻게 건강을 지키는지 설명해 주세요. (예시)</span></td><td class="num">28건</td><td class="num">2개</td><td class="num">0.852</td><td class="num">0.911</td><td class="num">0.646</td><td class="num">0.723</td></tr><tr><td class=""><span class="q">집을 구할 때 가장 중요하게 생각하는 게 뭐예요? 왜 그것을 가장 중요하게 생각하세요?</span></td><td class="num">31건</td><td class="num">2개</td><td class="num">0.609</td><td class="num">0.573</td><td class="num">0.270</td><td class="num">0.424</td></tr><tr><td class=""><span class="q">잘 모르는 분야의 책을 읽고 싶을 때, 좋은 책을 고를 수 있는 방법을 가르쳐 주세요. (방법)</span></td><td class="num">28건</td><td class="num">2개</td><td class="num">0.756</td><td class="num">0.792</td><td class="num">0.573</td><td class="num">0.500</td></tr></tbody></table></div>
+  <p class="col" style="margin-top:14px;color:var(--ink-2);font-size:14.5px;">
+  ‘방 안에 무엇이 있어요?’ 문항은 네 방식이 모두 낮다(사람 점수 자체가 한쪽에 몰려 있어 가를 것이 적다).
+  반대로 ‘건강을 지키는 방법’처럼 요구가 뚜렷한 문항은 체크리스트도 0.6~0.7 대로 올라온다.
+  문항당 27~40 건뿐이라 이 표는 참고용이다.</p>
+</section>
+
+<section class="col">
+  <p class="eyebrow">덤으로 나온 것</p>
+  <h2>근거 없이 점수를 주는 비율</h2>
+  <p>A0·A1 은 LLM 이 점수를 정하므로, 인용이 원문에 없어도 점수가 나간다.
+  실측 결과 인용이 원문과 맞은 비율은 A0 98.6% · A1 99.3% 였다.
+  즉 <b>100 건 중 1 건 안팎은 근거 없이 점수를 준다.</b>
+  B 는 규약상 인용이 원문에 없으면 그 항목을 미충족으로 내리므로(폐기 10건) 그런 점수가 원리적으로 나오지 않는다.
+  점수 정확도만 보면 A 계열이 이기지만, <b>“왜 이 점수인가”를 답할 수 있는 쪽은 체크리스트</b>다.</p>
+</section>
+
+
+<hr>
+
+<section class="col">
+  <p class="eyebrow">후속 실험 (같은 날)</p>
+  <h2>논문 방식으로 항목을 늘려 봤다</h2>
+  <p>1차 실험의 진단은 “항목이 2 개뿐이라 천장이 낮다”였다. 그래서 논문
+  <b>RLCF</b>(<i>Checklists Are Better Than Reward Models</i>, Apple·CMU, 2025)의 체크리스트 생성법을 그대로 이식했다.
+  논문의 핵심은 <b>지시문만 보고 항목을 뽑지 말라</b>는 것이다 —
+  ① 품질이 서로 다른 후보 답안을 먼저 만들고 ② <b>그것들이 실패하는 방식</b>을 전부 적어 항목으로 삼으며
+  ③ 항목마다 <b>중요도 0~100</b> 을 붙인다. 논문 실측으로 이 방식이 원자성 68→90, 포괄성 74→82 로 앞선다.</p>
+  <p>우리 조건에 맞춘 것 두 가지. 후보 답안은 <b>실제 응시자 답안을 절대 쓰지 않고</b> 지시문만 보고 지어냈다(시험지 오염 방지).
+  그리고 논문이 붙이는 <b>보편 항목 2 개</b>(직접 답했는가 · 상황에 맞는 말투인가)를 우리 말하기 시험 말로 옮겨 붙였다.</p>
+  <p>결과: 항목이 문항당 2 개 → <b>과제 항목 4개 + 보편 항목 2개 = 6개</b>로 늘었다(9 문항 전부 같음).
+  상한을 10 개로 열어 뒀는데도 4 개에서 멈춘 것은, 이 문항들이 실제로 요구하는 것이 그만큼이기 때문이다.</p>
+</section>
+
+<p class="col" style="margin-top:22px;"><b>실제로 나온 체크리스트</b> — “보통 어디에서 쇼핑하세요? 왜 그곳에서 쇼핑하세요?” (앞의 숫자가 LLM 이 매긴 중요도 0~100)</p><ol class="col" style="font-size:14.5px;color:var(--ink-2);"><li><b>100</b> · 주로 쇼핑하는 장소를 구체적으로 언급했는가?</li><li><b>100</b> · 해당 장소에서 쇼핑하는 이유를 설명했는가?</li><li><b>70</b> · 질문 내용과 직접적인 관련이 없는 불필요한 정보를 배제했는가?</li><li><b>50</b> · 이유에 대해 구체적인 근거를 들어 답변을 확장했는가?</li><li><b>50</b> · 요청받은 것에 직접 답했고, 주제를 벗어난 내용으로 답안을 채우지 않았는가? <span class="pill no">보편</span></li><li><b>50</b> · 상황과 듣는 사람에 맞는 말투·격식으로 말했는가? <span class="pill no">보편</span></li></ol>
+
+<section>
+  <h2 class="col" style="margin-top:34px;">1차·2차를 한 그림에</h2>
+  <figure>
+    <div class="legend">
+      <span><i style="background:var(--blue)"></i>LLM 이 직접 채점</span>
+      <span><i style="background:var(--orange)"></i>체크리스트로 채점</span>
+      <span><i style="background:var(--neutral);opacity:.7"></i>기준선·천장</span>
+    </div>
+    <svg viewBox="0 0 1000 598" role="img" aria-label="방식별 QWK 막대그래프. v2 항목의 정보 천장 0.797 · A1 LLM 직접 채점(퓨샷) 0.787 · A0 LLM 직접 채점(제로샷) 0.758 · F v2 체크리스트+가중치 학습 0.698 · v1 항목의 정보 천장 0.689 · 길이 기준선(글자 수만) 0.636 · C v1 체크리스트+가중치 학습 0.620 · H v2 0~100 점수+가중치 학습 0.596 · D v2 충족율×5 0.543 · G v2 0~100 중요도 가중(논문) 0.536 · E v2 중요도 가중 충족율(논문) 0.530 · B v1 충족율×5 0.510">
+<g stroke="var(--rule-strong)" stroke-opacity=".55">
+<line x1="250.0" y1="28" x2="250.0" y2="538.0"></line>
+<line x1="396.0" y1="28" x2="396.0" y2="538.0"></line>
+<line x1="542.0" y1="28" x2="542.0" y2="538.0"></line>
+<line x1="688.0" y1="28" x2="688.0" y2="538.0"></line>
+<line x1="834.0" y1="28" x2="834.0" y2="538.0"></line>
+<line x1="980.0" y1="28" x2="980.0" y2="538.0"></line>
+</g>
+<g font-family="Consolas, D2Coding, monospace" font-size="12" fill="var(--muted)">
+<text x="250.0" y="558" text-anchor="middle">0.0</text>
+<text x="396.0" y="558" text-anchor="middle">0.2</text>
+<text x="542.0" y="558" text-anchor="middle">0.4</text>
+<text x="688.0" y="558" text-anchor="middle">0.6</text>
+<text x="834.0" y="558" text-anchor="middle">0.8</text>
+<text x="980.0" y="558" text-anchor="middle">1.0</text>
+<text x="615" y="582" text-anchor="middle">QWK — 사람 점수와의 일치도 (1.0 = 완전 일치 · 0 = 우연 수준)</text></g>
+<path d="M250.0 38.5 H827.6 a4.0 4.0 0 0 1 4.0 4.0 V49.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--neutral)" fill-opacity="0.45" stroke-dasharray="4 3"><title>v2 항목의 정보 천장: QWK 0.797 (95% 구간 0.733~0.842)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="785.3" y1="46.0" x2="864.8" y2="46.0"></line><line x1="785.3" y1="41.5" x2="785.3" y2="50.5"></line><line x1="864.8" y1="41.5" x2="864.8" y2="50.5"></line></g>
+<text x="234" y="50.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">v2 항목의 정보 천장</text>
+<text x="876.8" y="50.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.797</text>
+<path d="M250.0 80.5 H820.3 a4.0 4.0 0 0 1 4.0 4.0 V91.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--blue)" fill-opacity="1"><title>A1 LLM 직접 채점(퓨샷): QWK 0.787 (95% 구간 0.735~0.831)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="786.5" y1="88.0" x2="856.9" y2="88.0"></line><line x1="786.5" y1="83.5" x2="786.5" y2="92.5"></line><line x1="856.9" y1="83.5" x2="856.9" y2="92.5"></line></g>
+<text x="234" y="92.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">A1 LLM 직접 채점(퓨샷)</text>
+<text x="868.9" y="92.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.787</text>
+<path d="M250.0 122.5 H799.7 a4.0 4.0 0 0 1 4.0 4.0 V133.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--blue)" fill-opacity="0.75"><title>A0 LLM 직접 채점(제로샷): QWK 0.758 (95% 구간 0.705~0.805)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="764.8" y1="130.0" x2="837.5" y2="130.0"></line><line x1="764.8" y1="125.5" x2="764.8" y2="134.5"></line><line x1="837.5" y1="125.5" x2="837.5" y2="134.5"></line></g>
+<text x="234" y="134.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">A0 LLM 직접 채점(제로샷)</text>
+<text x="849.5" y="134.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.758</text>
+<path d="M250.0 164.5 H755.7 a4.0 4.0 0 0 1 4.0 4.0 V175.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--orange)" fill-opacity="1"><title>F v2 체크리스트+가중치 학습: QWK 0.698 (95% 구간 0.622~0.757)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="704.2" y1="172.0" x2="802.7" y2="172.0"></line><line x1="704.2" y1="167.5" x2="704.2" y2="176.5"></line><line x1="802.7" y1="167.5" x2="802.7" y2="176.5"></line></g>
+<text x="234" y="176.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">F v2 체크리스트+가중치 학습</text>
+<text x="814.7" y="176.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.698</text>
+<path d="M250.0 206.5 H748.9 a4.0 4.0 0 0 1 4.0 4.0 V217.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--neutral)" fill-opacity="0.3" stroke-dasharray="4 3"><title>v1 항목의 정보 천장: QWK 0.689 (95% 구간 0.611~0.749)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="696.1" y1="214.0" x2="796.9" y2="214.0"></line><line x1="696.1" y1="209.5" x2="696.1" y2="218.5"></line><line x1="796.9" y1="209.5" x2="796.9" y2="218.5"></line></g>
+<text x="234" y="218.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">v1 항목의 정보 천장</text>
+<text x="808.9" y="218.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.689</text>
+<path d="M250.0 248.5 H710.5 a4.0 4.0 0 0 1 4.0 4.0 V259.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--neutral)" fill-opacity="0.7"><title>길이 기준선(글자 수만): QWK 0.636 (95% 구간 0.568~0.697)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="664.5" y1="256.0" x2="759.1" y2="256.0"></line><line x1="664.5" y1="251.5" x2="664.5" y2="260.5"></line><line x1="759.1" y1="251.5" x2="759.1" y2="260.5"></line></g>
+<text x="234" y="260.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">길이 기준선(글자 수만)</text>
+<text x="771.1" y="260.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.636</text>
+<path d="M250.0 290.5 H698.9 a4.0 4.0 0 0 1 4.0 4.0 V301.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--orange)" fill-opacity="0.55"><title>C v1 체크리스트+가중치 학습: QWK 0.620 (95% 구간 0.537~0.687)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="642.2" y1="298.0" x2="751.5" y2="298.0"></line><line x1="642.2" y1="293.5" x2="642.2" y2="302.5"></line><line x1="751.5" y1="293.5" x2="751.5" y2="302.5"></line></g>
+<text x="234" y="302.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">C v1 체크리스트+가중치 학습</text>
+<text x="763.5" y="302.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.620</text>
+<path d="M250.0 332.5 H681.4 a4.0 4.0 0 0 1 4.0 4.0 V343.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--orange)" fill-opacity="0.85"><title>H v2 0~100 점수+가중치 학습: QWK 0.596 (95% 구간 0.511~0.672)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="623.1" y1="340.0" x2="740.6" y2="340.0"></line><line x1="623.1" y1="335.5" x2="623.1" y2="344.5"></line><line x1="740.6" y1="335.5" x2="740.6" y2="344.5"></line></g>
+<text x="234" y="344.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">H v2 0~100 점수+가중치 학습</text>
+<text x="752.6" y="344.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.596</text>
+<path d="M250.0 374.5 H642.4 a4.0 4.0 0 0 1 4.0 4.0 V385.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--orange)" fill-opacity="0.55"><title>D v2 충족율×5: QWK 0.543 (95% 구간 0.461~0.610)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="586.6" y1="382.0" x2="695.5" y2="382.0"></line><line x1="586.6" y1="377.5" x2="586.6" y2="386.5"></line><line x1="695.5" y1="377.5" x2="695.5" y2="386.5"></line></g>
+<text x="234" y="386.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">D v2 충족율×5</text>
+<text x="707.5" y="386.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.543</text>
+<path d="M250.0 416.5 H637.4 a4.0 4.0 0 0 1 4.0 4.0 V427.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--orange)" fill-opacity="0.55"><title>G v2 0~100 중요도 가중(논문): QWK 0.536 (95% 구간 0.447~0.614)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="576.4" y1="424.0" x2="697.9" y2="424.0"></line><line x1="576.4" y1="419.5" x2="576.4" y2="428.5"></line><line x1="697.9" y1="419.5" x2="697.9" y2="428.5"></line></g>
+<text x="234" y="428.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">G v2 0~100 중요도 가중(논문)</text>
+<text x="709.9" y="428.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.536</text>
+<path d="M250.0 458.5 H633.2 a4.0 4.0 0 0 1 4.0 4.0 V469.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--orange)" fill-opacity="0.55"><title>E v2 중요도 가중 충족율(논문): QWK 0.530 (95% 구간 0.450~0.600)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="578.7" y1="466.0" x2="688.0" y2="466.0"></line><line x1="578.7" y1="461.5" x2="578.7" y2="470.5"></line><line x1="688.0" y1="461.5" x2="688.0" y2="470.5"></line></g>
+<text x="234" y="470.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">E v2 중요도 가중 충족율(논문)</text>
+<text x="700.0" y="470.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.530</text>
+<path d="M250.0 500.5 H618.6 a4.0 4.0 0 0 1 4.0 4.0 V511.5 a4.0 4.0 0 0 1 -4.0 4.0 H250.0 Z" fill="var(--orange)" fill-opacity="0.4"><title>B v1 충족율×5: QWK 0.510 (95% 구간 0.430~0.584)</title></path>
+<g stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"><line x1="563.5" y1="508.0" x2="676.3" y2="508.0"></line><line x1="563.5" y1="503.5" x2="563.5" y2="512.5"></line><line x1="676.3" y1="503.5" x2="676.3" y2="512.5"></line></g>
+<text x="234" y="512.5" text-anchor="end" font-family="Malgun Gothic, Apple SD Gothic Neo, Segoe UI, sans-serif" font-size="13.5" fill="var(--ink)">B v1 충족율×5</text>
+<text x="688.3" y="512.5" font-family="Consolas, D2Coding, monospace" font-size="13" font-variant-numeric="tabular-nums" fill="var(--ink-2)">0.510</text>
+</svg>
+    <figcaption>같은 답안 281건 · 같은 겹 · 같은 모델. 점선 막대는 실제로 쓸 수 없는 천장(정답을 보고 맞춘 값)이다.</figcaption>
+  </figure>
+  <div class="scroll"><table><thead><tr><th class="">방식</th><th class="">성격</th><th class="num">QWK</th><th class="num">95% 신뢰구간</th><th class="num">정확 일치</th><th class="num">±1 이내</th></tr></thead><tbody><tr><td class="">D v2 충족율×5</td><td class="">학습 안 씀</td><td class="num"><b>0.543</b></td><td class="num">[0.461, 0.610]</td><td class="num">21.7%</td><td class="num">70.8%</td></tr><tr><td class="">E v2 중요도 가중 충족율×5 (논문)</td><td class="">학습 안 씀 · 논문 방식</td><td class="num"><b>0.530</b></td><td class="num">[0.450, 0.600]</td><td class="num">21.0%</td><td class="num">69.0%</td></tr><tr><td class="">F v2 이진+문항별 가중치 학습</td><td class="">학습 씀</td><td class="num"><b>0.698</b></td><td class="num">[0.622, 0.757]</td><td class="num">48.8%</td><td class="num">92.2%</td></tr><tr><td class="">G v2 항목 0~100 중요도 가중평균×5 (논문)</td><td class="">학습 안 씀 · 논문 방식</td><td class="num"><b>0.536</b></td><td class="num">[0.447, 0.614]</td><td class="num">24.9%</td><td class="num">69.4%</td></tr><tr><td class="">H v2 0~100 벡터+가중치 학습</td><td class="">학습 씀</td><td class="num"><b>0.596</b></td><td class="num">[0.511, 0.672]</td><td class="num">44.5%</td><td class="num">90.0%</td></tr><tr><td class="">D′ v2 충족율×5 (보편항목 제외)</td><td class="">보편 항목 제외</td><td class="num"><b>0.523</b></td><td class="num">[0.438, 0.594]</td><td class="num">18.5%</td><td class="num">65.1%</td></tr><tr><td class="">E′ v2 중요도 가중 (보편항목 제외)</td><td class="">보편 항목 제외</td><td class="num"><b>0.522</b></td><td class="num">[0.436, 0.594]</td><td class="num">19.2%</td><td class="num">66.2%</td></tr><tr><td class="">F′ v2 가중치 학습 (보편항목 제외)</td><td class="">보편 항목 제외</td><td class="num"><b>0.687</b></td><td class="num">[0.618, 0.743]</td><td class="num">44.5%</td><td class="num">93.2%</td></tr></tbody></table></div>
+</section>
+
+<section>
+  <p class="eyebrow">결과 ①</p>
+  <h2 class="col">천장은 실제로 올라갔다 — 단, 조건이 붙는다</h2>
+  <div class="scroll"><table><thead><tr><th class="">천장을 재는 방법</th><th class="num">v1 (항목 2개)</th><th class="num">v2 (항목 6개)</th><th class="num">차이</th><th class="num">95% 신뢰구간</th><th class="">판정</th></tr></thead><tbody><tr><td class="">충족 개수만 쓰기 (중앙값 사상)</td><td class="num">0.693</td><td class="num">0.740</td><td class="num">+0.046</td><td class="num">[-0.018, 0.108]</td><td class=""><span class="pill no">주장 불가</span></td></tr><tr><td class="">충족 개수만 쓰기 (QWK 최대 사상)</td><td class="num">0.711</td><td class="num">0.761</td><td class="num">+0.050</td><td class="num">[-0.001, 0.109]</td><td class=""><span class="pill no">주장 불가</span></td></tr><tr><td class="">항목 하나하나 다 쓰기 (선형 적합)</td><td class="num">0.689</td><td class="num">0.797</td><td class="num">+0.109</td><td class="num">[0.059, 0.165]</td><td class=""><span class="pill yes">올랐다</span></td></tr></tbody></table></div>
+  <div class="note col"><b>“몇 개 맞았나”만 세면 천장이 안 올라가고, “어느 항목을 맞았나”를 쓰면 올라간다.</b>
+  늘어난 항목의 값어치가 개수가 아니라 <b>어떤 항목인지</b>에 들어 있다는 뜻이다.
+  그래서 개수만 쓰는 D·E 는 제자리였고, 항목별 비중을 배우는 F 만 올랐다.</div>
+</section>
+
+<section>
+  <p class="eyebrow">결과 ②</p>
+  <h2 class="col">그 천장을 받아 간 것은 가중치 학습 하나뿐</h2>
+  <div class="scroll"><table><thead><tr><th class="">비교 (앞 − 뒤)</th><th class="num">QWK 차이</th><th class="num">95% 신뢰구간</th><th class="">판정</th></tr></thead><tbody><tr><td class="">F v2 학습 − C v1 학습</td><td class="num">+0.079</td><td class="num">[0.022, 0.139]</td><td class=""><span class="pill yes">앞쪽이 유의하게 높다</span></td></tr><tr><td class="">F v2 학습 − D v2 충족율</td><td class="num">+0.156</td><td class="num">[0.100, 0.210]</td><td class=""><span class="pill yes">앞쪽이 유의하게 높다</span></td></tr><tr><td class="">F v2 학습 − 길이 기준선</td><td class="num">+0.061</td><td class="num">[-0.030, 0.149]</td><td class=""><span class="pill no">0을 걸친다 → 주장 불가</span></td></tr><tr><td class="">F v2 학습 − A0 LLM 제로샷</td><td class="num">-0.061</td><td class="num">[-0.125, -0.002]</td><td class=""><span class="pill yes">뒤쪽이 유의하게 높다</span></td></tr><tr><td class="">F v2 학습 − A1 LLM 퓨샷</td><td class="num">-0.090</td><td class="num">[-0.155, -0.032]</td><td class=""><span class="pill yes">뒤쪽이 유의하게 높다</span></td></tr><tr><td class="">E 중요도 가중 − D 단순 충족율</td><td class="num">-0.013</td><td class="num">[-0.033, 0.006]</td><td class=""><span class="pill no">0을 걸친다 → 주장 불가</span></td></tr><tr><td class="">G 0~100 − E 이진 중요도 가중</td><td class="num">+0.005</td><td class="num">[-0.052, 0.060]</td><td class=""><span class="pill no">0을 걸친다 → 주장 불가</span></td></tr><tr><td class="">F 이진+학습 − H 0~100+학습</td><td class="num">+0.101</td><td class="num">[0.042, 0.160]</td><td class=""><span class="pill yes">앞쪽이 유의하게 높다</span></td></tr><tr><td class="">보편 항목 넣기 − 빼기 (D)</td><td class="num">+0.020</td><td class="num">[-0.008, 0.049]</td><td class=""><span class="pill no">0을 걸친다 → 주장 불가</span></td></tr><tr><td class="">보편 항목 넣기 − 빼기 (F)</td><td class="num">+0.011</td><td class="num">[-0.021, 0.045]</td><td class=""><span class="pill no">0을 걸친다 → 주장 불가</span></td></tr></tbody></table></div>
+  <ul class="col" style="margin-top:16px;">
+    <li><b>F(v2 항목 + 문항별 학습) 0.698 — 1차의 같은 방식 C(0.620)를 유의하게 이겼다.</b> 항목을 늘린 값이 여기서 나왔다.</li>
+    <li><b>그래도 LLM 직접 채점에는 진다.</b> A1(0.787)·A0(0.758) 모두에 유의하게 뒤진다.</li>
+    <li><b>“글자 수만 세기”(0.636)를 이겼다고는 말할 수 없다.</b> 차이는 있지만 구간이 0 을 걸친다.</li>
+    <li><b>논문의 자랑거리 두 개는 우리 조건에서 작동하지 않았다</b> — 중요도 가중(E−D)도, 0~100 유연 채점(G−E)도 차이를 주장할 수 없다.</li>
+    <li><b>보편 항목 2 개</b>는 넣으나 빼나 차이를 주장할 수 없다(점 추정은 넣는 쪽이 근소하게 높음).</li>
+  </ul>
+</section>
+
+<section class="col">
+  <p class="eyebrow">왜 논문 장치가 안 먹었나</p>
+  <h2>0~100 채점이 사실은 세 칸이었다</h2>
+  <p>항목 점수 1,686칸을 열어 보니 <b>99% 가 0 · 50 · 100</b> 세 값이었다.
+  논문은 항목마다 <b>25 번 뽑아 평균</b>을 내서 부드러운 점수를 만드는데, 우리는 재현성 규칙 때문에 <b>온도 0 · 1 회 호출</b>이라
+  평균 낼 것이 없다. 0~100 이 이진보다 나을 이유가 사라진 것이고, 그 잡음 섞인 값으로 학습한 H(0.596)가
+  이진으로 학습한 F(0.698)에 유의하게 진 것이 그 대가다.</p>
+  <p>중요도 가중이 안 먹은 이유도 같은 결이다 — 과제 항목 4 개 중 2 개가 중요도 100 으로 몰려서
+  가중치의 실질 차이가 작았다. <b>중요도를 LLM 이 짐작해 주는 것보다, 데이터에서 배우는 쪽이 확실히 낫다</b>는 것이 이번 대조의 결론이다.</p>
+  <p><b>부수 발견 — 부정형 항목은 우리 인용 규약과 부딪힌다.</b> “~을 배제했는가”, “~을 늘어놓지 않았는가” 같은 항목은
+  <b>없는 것을 원문에서 인용할 수 없어</b> 무더기로 폐기됐다(이진 40건 · 점수 79건).
+  다음 생성 프롬프트에서는 <b>부정형 항목을 금지</b>해야 한다.</p>
+  <p><b>재현성은 이번에도 우열을 못 가렸다.</b> 이진·0~100 두 패스 모두 3 회가 소수점까지 같았고
+  항목 칸 변동은 이진 0/360, 점수 0/360 이다.
+  “칸이 많아지면 더 흔들릴 것”이라는 예상이 빗나갔다 — 흔들린 것이 아니라 애초에 세 칸만 쓰고 있었다.</p>
+</section>
+
+<section class="col">
+  <p class="eyebrow">정직하게</p>
+  <h2>논문과 우리 조건의 차이</h2>
+  <p>아래 차이가 있으므로, 이 결과는 <b>“논문 방식이 틀렸다”가 아니라 “우리 조건에서는 이렇게 나왔다”</b>로 읽어야 한다.</p>
+  <ul><li>논문의 flexible scoring 은 항목마다 25회 샘플링해 평균을 쓴다. 우리는 온도 0 · 1회 호출이라 '한 번 뽑은 값'이며, 25회 평균이 주는 부드러운 점수의 이점은 여기서 재현되지 않는다.</li><li>논문의 체크리스트 생성 모델은 Qwen2.5-72B 급이고, 우리는 판정과 같은 gemini-3.1-flash-lite 다(생성과 판정에 같은 모델을 쓰는 것도 논문과 다르다).</li><li>논문은 영어 지시-따르기 과제이고, 우리는 한국어 말하기 시험 문항 9종이다. 우리 문항은 요구 사항이 대체로 둘(정보 + 이유·묘사)이라 애초에 항목이 적게 나온다.</li><li>논문은 후보 응답으로 실제 모델 출력을 쓴다. 우리는 시험지 오염을 막으려고 실제 응시자 답안을 절대 쓰지 않고 지시문만 보고 지어낸 가상 답안 4개를 쓴다.</li><li>논문의 보편 항목 2개는 중요도 합 100 이고 그 배분은 생성 모델이 정한다. 우리는 문항마다 값이 달라지지 않도록 50/50 으로 고정했다.</li><li>논문의 목적은 강화학습 보상 신호이고, 우리 목적은 사람 채점과의 등급 일치(QWK)다. 같은 체크리스트라도 재는 자가 다르다.</li></ul>
+</section>
+
+
+<section class="col">
+  <p class="eyebrow">그래서 다음</p>
+  <h2>제안 다섯 가지</h2>
+  <ol>
+    <li><b>부정형 항목을 금지하고 한 번 더.</b> 폐기된 항목이 이진 40 건·점수 79 건이다. 이것만 고쳐도 F 가 더 오를 여지가 있다
+      (지금은 폐기가 곧 미충족이라 없는 점수를 깎고 있다).</li>
+    <li><b>같은 실험을 우리 문항으로.</b> 이번 결론의 한계는 시험지에 있다. AI Hub 문항은 요구가 둘뿐이라 항목이 4 개에서 멈췄다.
+      요구가 3~5 개인 직무 문항이면 천장이 더 올라갈 수 있다 — 천장이 오르면 F 도 따라 오른다는 것을 이번에 확인했다.</li>
+    <li><b>둘 중 하나가 아니라 둘 다 넣기.</b> LLM 직접 점수와 체크리스트 항목 O/X 를 <b>함께</b> 자질로 넣어 결합 모델(계단 5)을 학습시킨다.
+      지금 최고(A1 0.787)와 v2 천장(0.797)이 비슷한 높이라, 남은 이득은 두 신호를 합칠 때 나온다.</li>
+    <li><b>체크리스트를 점수용이 아니라 근거·피드백용으로.</b> “무엇이 빠졌는지”를 응시자에게 돌려주는 값은 LLM 점수에는 없다.
+      점수는 A 계열, 설명은 체크리스트로 나누는 구성이 가능하다.</li>
+    <li><b>모델을 바꿔 순위가 유지되는지 확인.</b> 지금은 판정 모델이 한 종류뿐이라, 이 순위가 모델 특성인지 방식 특성인지 가릴 수 없다.
+      논문의 25 회 샘플 평균을 흉내 내려면 온도를 올려야 하는데, 그러면 재현성을 잃는다 — 그 맞바꿈도 함께 재야 한다.</li>
+  </ol>
+</section>
+
+<section class="col">
+  <p class="eyebrow">정직하게</p>
+  <h2>이 결과로 말할 수 없는 것</h2>
+  <ul><li>문항당 답안이 27~40건뿐이다. C 는 문항마다 항목 2.0개짜리 가중치를 이 표본으로 배운다 — 표본이 작아 배운 비중 자체가 흔들릴 수 있다.</li><li>겹 하나에 문항당 5~8건만 들어가므로 QWK 가 표본 구성에 민감하다. 그래서 점 추정치보다 신뢰구간을 먼저 봐야 한다.</li><li>AI Hub 데이터는 우리 시험(직무 한국어)과 과제 성격이 다르다. 여기서 이긴 방식이 우리 문항에서도 이긴다는 보장은 없다.</li><li>AI Hub 의 실제 채점 기준표는 공개돼 있지 않아 A0·A1 의 기준 설명은 우리가 썼다. 세 방식이 같은 조건이라 비교는 성립하지만, 절대 점수의 높낮이는 기준 문구에 좌우된다.</li><li>사람 점수 자체의 채점자 간 일치도(인간-인간 QWK)를 이 데이터로는 잴 수 없다(답안마다 평가자가 한 명이다). 그래서 '사람 수준에 도달했다'는 말은 할 수 없다.</li><li>판정 모델은 gemini-3.1-flash-lite 하나뿐이다. 다른 모델에서도 같은 순위가 나올지는 안 쟀다.</li></ul>
+</section>
+
+<section class="col">
+  <p class="eyebrow">용어</p>
+  <h2>쉬운 말 사전</h2>
+  <dl>
+    <dt>QWK (이차 가중 카파)</dt>
+    <dd>사람 채점자와 기계의 점수가 얼마나 겹치는지 재는 자. 1.0 이면 완전 일치, 0 이면 아무렇게나 찍은 것과 같다.
+      한 칸 차이보다 세 칸 차이를 훨씬 크게 벌한다.</dd>
+    <dt>시험 겹 (out-of-fold)</dt>
+    <dd>배울 때 쓴 답안으로 시험을 보면 점수가 부풀려진다. 그래서 답안을 다섯 묶음으로 갈라, 네 묶음으로 배우고 남은 한 묶음에서만 점수를 낸다.
+      사람 단위로 갈라서 같은 화자가 양쪽에 동시에 들어가지 않게 했다.</dd>
+    <dt>95% 신뢰구간 · 부트스트랩</dt>
+    <dd>표본을 다시 뽑아 계산을 1,000 번 반복해, 이 숫자가 표본이 조금 달랐어도 버틸지를 본다.
+      두 방식의 차이 구간이 0 을 포함하면 “차이가 있다”고 말하지 않는다.</dd>
+    <dt>퓨샷 (few-shot)</dt>
+    <dd>채점 예시 몇 개를 함께 보여 주고 매기게 하는 방식. 예시는 반드시 배우는 쪽 묶음에서만 뽑는다.</dd>
+    <dt>문항별 가중치 학습</dt>
+    <dd>같은 체크리스트라도 문항마다 중요한 항목이 다르다. “이 문항에서는 이유 설명이 장소 언급보다 세 배 중요하다” 같은 비중을
+      사람 점수에서 배우는 것. RocketEval 이 쓴 방식이다.</dd>
+    <dt>정보 천장</dt>
+    <dd>정답을 다 보고 가장 유리하게 맞췄을 때의 점수. 실제로는 쓸 수 없지만, “이 재료로는 여기까지가 최대”를 알려 준다.</dd>
+  </dl>
+</section>
+
+<section class="col">
+  <p class="eyebrow">다시 돌리려면</p>
+  <h2>재현 방법</h2>
+  <pre>cd assessment/scripts/checklist_lab
+python gen_checklists.py            # 문항별 체크리스트 생성(1회, 고정본)
+python run_experiment.py            # A0·A1·B 판정 (중간에 끊겨도 이어서 함)
+python run_experiment.py --repro --pass-tag rep1   # 재현성 1·2·3 회차
+python analyze.py                   # QWK·신뢰구간·재현성
+python extra_baselines.py           # 바닥선·길이 기준선·정보 천장
+python make_report.py               # 이 보고서</pre>
+  <p style="font-size:14.5px;color:var(--ink-2);">모든 수치의 원본은 <code>assessment/outputs/checklist_lab/results_summary.json</code> 에 있다.
+  채점 서버 코드(<code>assessment/src/</code>)는 이 실험에서 한 줄도 바뀌지 않았다(테스트 292 개 통과).</p>
+</section>
+
+<footer class="wrap" style="padding-left:0;padding-right:0;">
+  K-TEST 문제·채점 모델 파트 · 실험 실행 2026-08-09 15:08:03 · 판정 모델 gemini-3.1-flash-lite ·
+  이 문서는 <code>make_report.py</code> 가 결과 JSON 에서 자동 생성했다.
+</footer>
+
+</div>
+</body>
+</html>
