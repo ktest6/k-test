@@ -9,6 +9,7 @@ exceptions.py
 - 이어폰 탐지 예외
 - 시선 상태 관리 예외
 - AWS Rekognition 예외
+- Azure Document Intelligence 예외
 - 이미지 검증 예외
 - 신청 정보 검증 예외
 - 신분증 OCR 예외
@@ -39,9 +40,12 @@ class RekognitionAPIError(ProctoringError):
     """AWS Rekognition API 호출 중 발생하는 예외."""
 
 
+class DocumentIntelligenceAPIError(IdentityVerificationError):
+    """Azure Document Intelligence API 호출 중 발생하는 예외."""
+
+
 class InvalidImageError(ProctoringError):
     """입력 이미지가 유효하지 않을 때 발생하는 예외."""
-
 
 class DocumentReadError(IdentityVerificationError):
     """신분증에서 정보를 읽을 수 없을 때 발생하는 예외."""
@@ -53,3 +57,7 @@ class UnsupportedDocumentError(DocumentReadError):
 
 class ApplicantVerificationError(IdentityVerificationError):
     """신청 정보 검증 중 발생하는 예외."""
+
+
+class GazeCalibrationError(MonitoringError):
+    """시선 기준점 보정 중 발생하는 예외."""

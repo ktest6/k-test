@@ -20,7 +20,7 @@ from app.api.monitoring import router as monitoring_router
 app = FastAPI(
     title="Online Exam Proctoring API",
     description=(
-        "AWS Rekognition 기반 온라인 시험 "
+        "Azure Document Intelligence 및 AWS Rekognition 기반 온라인 시험 "
         "본인 인증 및 부정행위 탐지 API"
     ),
     version="0.1.0",

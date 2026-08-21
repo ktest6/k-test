@@ -10,9 +10,10 @@ service.py
 4. 시선 및 고개 방향 분석
 5. 연속 시선 이탈 상태 갱신
 6. 필요한 경우 기준 얼굴과 현재 얼굴 비교
-7. Rule Engine으로 위험도 및 Decision 결정
-8. Event Engine으로 이벤트 응답 구조 생성
-9. 모니터링 최종 결과 반환
+7. 객체 탐지 및 분석
+8. Rule Engine으로 위험도 및 Decision 결정
+9. Event Engine으로 이벤트 응답 구조 생성
+10. 모니터링 최종 결과 반환
 """
 
 from datetime import datetime
@@ -20,13 +21,16 @@ from typing import Any
 
 from app.core.config import settings
 
-from modules.common.exceptions import MonitoringError
+from modules.common.exceptions import MonitoringError, ProctoringError
 from modules.common.image_validation import validate_image_bytes
 
 from modules.cheating_detection.face_detection import detect_faces
 from modules.cheating_detection.face_monitor import (
     EVENT_FACE_NORMAL,
     analyze_face_monitor,
+)
+from modules.cheating_detection.gaze_calibration import (
+    create_gaze_calibration,
 )
 from modules.cheating_detection.gaze_monitor import (
     analyze_gaze_monitor,
@@ -39,6 +43,11 @@ from modules.cheating_detection.identity_monitor import (
 )
 from modules.cheating_detection.rule_engine import evaluate_rules
 from modules.cheating_detection.event_engine import process_event
+
+from modules.object_detection.detector import detect_objects
+from modules.object_detection.analyzer import (
+    analyze_object_detection,
+)
 
 
 def should_run_identity_check(
@@ -83,6 +92,38 @@ def run_identity_monitoring(
     return identity_monitor_result
 
 
+def create_gaze_calibration_from_images(
+    exam_id: str,
+    examinee_id: str,
+    calibration_image_bytes_list: list[bytes],
+) -> dict[str, Any]:
+    """Calibration 이미지로 시선 중앙 기준값을 계산한다."""
+
+    face_monitor_results: list[dict[str, Any]] = []
+
+    for image_bytes in calibration_image_bytes_list:
+        validate_image_bytes(
+            image_bytes=image_bytes,
+            image_name="시선 Calibration 이미지",
+        )
+        detect_faces_response = detect_faces(
+            image_bytes=image_bytes,
+        )
+        face_monitor_results.append(
+            analyze_face_monitor(detect_faces_response)
+        )
+
+    return create_gaze_calibration(
+        exam_id=exam_id,
+        examinee_id=examinee_id,
+        face_monitor_results=face_monitor_results,
+        minimum_eye_confidence=settings.gaze_minimum_eye_confidence,
+        minimum_sample_count=(
+            settings.gaze_calibration_minimum_sample_count
+        ),
+    )
+
+
 def analyze_monitoring_frame(
     exam_id: str,
     examinee_id: str,
@@ -93,6 +134,9 @@ def analyze_monitoring_frame(
     current_image_bytes: bytes,
     reference_image_bytes: bytes | None = None,
     run_identity_check: bool = False,
+    eye_yaw_center: float | None = None,
+    eye_pitch_center: float | None = None,
+    previous_gaze_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     시험 중 전달받은 프레임 한 장을 분석한다.
@@ -126,6 +170,15 @@ def analyze_monitoring_frame(
         run_identity_check:
             이번 요청에서 중간 동일인 검사를 실행할지 여부.
 
+        eye_yaw_center:
+            백엔드가 저장한 응시자의 화면 중앙 Eye Yaw 기준값.
+
+        eye_pitch_center:
+            백엔드가 저장한 응시자의 화면 중앙 Eye Pitch 기준값.
+
+        previous_gaze_state:
+            백엔드가 직전 응답에서 저장한 시선 상태.
+
     Returns:
         얼굴, 시선, 동일인 분석 결과와
         이벤트 요약 및 이벤트 목록을 포함한 딕셔너리.
@@ -151,6 +204,14 @@ def analyze_monitoring_frame(
             detect_faces_response,
         )
 
+        gaze_calibration = None
+
+        if eye_yaw_center is not None and eye_pitch_center is not None:
+            gaze_calibration = {
+                "eye_yaw_center": eye_yaw_center,
+                "eye_pitch_center": eye_pitch_center,
+            }
+
         gaze_monitor_result = analyze_gaze_monitor(
             face_monitor_result=face_monitor_result,
             eye_yaw_threshold=(
@@ -168,17 +229,17 @@ def analyze_monitoring_frame(
             minimum_eye_confidence=(
                 settings.gaze_minimum_eye_confidence
             ),
+            gaze_calibration=gaze_calibration,
         )
 
         gaze_state_result = update_gaze_state(
-            exam_id=exam_id,
-            examinee_id=examinee_id,
             gaze_monitor_result=gaze_monitor_result,
             elapsed_ms=elapsed_ms,
             capture_sequence=capture_sequence,
             persistent_count_threshold=(
                 settings.gaze_persistent_count_threshold
             ),
+            previous_state=previous_gaze_state,
         )
 
         gaze_monitor_result["state"] = gaze_state_result
@@ -201,10 +262,25 @@ def analyze_monitoring_frame(
                 current_image_bytes=current_image_bytes,
             )
 
+
+        # 시험 중 객체 탐지
+        object_detection_result = detect_objects(
+            image_bytes=current_image_bytes,
+        )
+
+        object_monitor_result = analyze_object_detection(
+            detection_result=object_detection_result,
+            head_pose=gaze_monitor_result.get(
+                "head_pose",
+                {},
+            ),
+        )
+
         monitoring_results = {
             "face_monitor": face_monitor_result,
             "gaze_monitor": gaze_monitor_result,
             "identity_monitor": identity_monitor_result,
+            "object_monitor": object_monitor_result,
         }
 
         rule_result = evaluate_rules(
@@ -243,7 +319,7 @@ def analyze_monitoring_frame(
             "capture_sequence": capture_sequence,
             "face_monitor": face_monitor_response,
             "gaze_monitor": gaze_monitor_result,
-            "object_monitor": None,
+            "object_monitor": object_monitor_result,
             "identity_check_requested": run_identity_check,
             "identity_check_executed": (
                 identity_monitor_result is not None
@@ -265,7 +341,7 @@ def analyze_monitoring_frame(
             ),
         }
 
-    except MonitoringError:
+    except ProctoringError:
         raise
 
     except Exception as error:

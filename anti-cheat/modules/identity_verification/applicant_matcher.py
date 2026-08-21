@@ -5,6 +5,7 @@ applicant_matcher.py
 
 - 성과 이름 정규화 후 비교
 - 생년월일 정규화 후 비교
+- 여권번호 정규화 후 비교
 - 필드별 일치 여부 생성
 - 신청 정보 전체 일치 여부 계산
 """
@@ -13,11 +14,17 @@ from typing import Any
 
 from modules.identity_verification.field_normalizer import (
     normalize_birth_date,
+    normalize_document_number,
     normalize_name,
 )
 
 
-_REQUIRED_FIELDS = {"last_name", "first_name", "birth_date"}
+_REQUIRED_FIELDS = {
+    "last_name",
+    "first_name",
+    "birth_date",
+    "document_number",
+}
 
 
 # 신청 정보와 신분증 추출 정보를 필드별로 비교한다.
@@ -40,7 +47,7 @@ def match_applicant_info(
             f"{sorted(missing_document_fields)}"
         )
 
-    # 이름과 생년월일을 정규화한 뒤 필드별로 비교한다.
+    # 이름, 생년월일, 여권번호를 정규화한 뒤 필드별로 비교한다.
     field_matches = {
         "last_name": normalize_name(applicant_info["last_name"])
         == normalize_name(document_fields["last_name"]),
@@ -48,6 +55,10 @@ def match_applicant_info(
         == normalize_name(document_fields["first_name"]),
         "birth_date": normalize_birth_date(applicant_info["birth_date"])
         == normalize_birth_date(document_fields["birth_date"]),
+        "document_number": normalize_document_number(
+            applicant_info["document_number"]
+        )
+        == normalize_document_number(document_fields["document_number"]),
     }
 
     # 모든 필드가 일치한 경우 신청 정보 검증에 성공한다.

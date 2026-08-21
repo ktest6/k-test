@@ -23,21 +23,20 @@ from zoneinfo import ZoneInfo
 
 
 # 프로젝트 루트 경로
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[1] # anti-cheat 폴더
 
 # 프로젝트 모듈 import를 위한 경로 추가
 sys.path.append(str(PROJECT_ROOT))
 
 
-from modules.cheating_detection.gaze_state import clear_gaze_state
 from modules.cheating_detection.service import analyze_monitoring_frame
 from modules.common.exceptions import ProctoringError
 
 
 # 테스트 환경 설정
-EXAM_ID = "exam_002"
-EXAMINEE_ID = "examinee_002"
-REQUEST_ID = "request_monitoring_002"
+EXAM_ID = "exam_003"
+EXAMINEE_ID = "examinee_003"
+REQUEST_ID = "request_monitoring_object_003"
 
 # 프레임 간 시험 경과 시간(ms)
 FRAME_INTERVAL_MS = 5000
@@ -45,19 +44,26 @@ FRAME_INTERVAL_MS = 5000
 TEST_IMAGE_DIRECTORY = "cheat_vid_5_img"
 
 # 현재 프레임 테스트 이미지 폴더
-CURRENT_IMAGE_DIRECTORY = (
-    PROJECT_ROOT / "data" / "gaze" / TEST_IMAGE_DIRECTORY
+# CURRENT_IMAGE_DIRECTORY = (
+#     PROJECT_ROOT / "data" / "gaze" / TEST_IMAGE_DIRECTORY
+# )
+CURRENT_IMAGE_DIRECTORY = Path(
+    "/Users/apple/dio_folder/python/dataset/phone_test_vid_5_img"
 )
 
 REFERENCE_IMAGE = "target_true.jpg"
 
-# 동일인 검사 실행 여부
-RUN_IDENTITY_CHECK = False
-
+# 백엔드가 저장했다가 모니터링 요청에 전달할 Calibration 값.
+EYE_YAW_CENTER = None
+EYE_PITCH_CENTER = None
 # 본인 인증 시 저장한 기준 이미지
 REFERENCE_IMAGE_PATH = (
     PROJECT_ROOT / "data" / "compare" / REFERENCE_IMAGE
 )
+
+# 동일인 검사 실행 여부
+RUN_IDENTITY_CHECK = False
+
 
 # 시험 로그 저장 폴더
 EXAM_LOG_DIR = (
@@ -207,17 +213,12 @@ def main() -> None:
                 image_name="기준 얼굴 이미지",
             )
 
-        # 이전 실행의 메모리 상태가 남지 않도록 초기화
-        clear_gaze_state(
-            exam_id=EXAM_ID,
-            examinee_id=EXAMINEE_ID,
-        )
-
         started_at = datetime.now(
             TIMEZONE,
         )
 
         monitoring_results = []
+        previous_gaze_state = None
 
         for capture_sequence, image_path in enumerate(
             image_paths,
@@ -254,7 +255,14 @@ def main() -> None:
                 current_image_bytes=current_image_bytes,
                 reference_image_bytes=reference_image_bytes,
                 run_identity_check=RUN_IDENTITY_CHECK,
+                eye_yaw_center=EYE_YAW_CENTER,
+                eye_pitch_center=EYE_PITCH_CENTER,
+                previous_gaze_state=previous_gaze_state,
             )
+
+            previous_gaze_state = monitoring_result[
+                "gaze_monitor"
+            ]["state"]
 
             monitoring_results.append(
                 {
