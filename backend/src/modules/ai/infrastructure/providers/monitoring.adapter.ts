@@ -30,6 +30,7 @@ interface RawDetectedEvent {
 interface RawAnalyzeResponse {
   event_summary: RawEventSummary;
   events: RawDetectedEvent[];
+  gaze_monitor?: { state: Record<string, unknown> };
   [key: string]: unknown;
 }
 
@@ -71,6 +72,9 @@ export class MonitoringAdapter implements MonitoringProviderPort {
       form.append('eye_yaw_center', String(input.eyeYawCenter));
       form.append('eye_pitch_center', String(input.eyePitchCenter));
     }
+    if (input.previousGazeState) {
+      form.append('previous_gaze_state', JSON.stringify(input.previousGazeState));
+    }
 
     const response = await firstValueFrom(
       this.httpService.post<RawAnalyzeResponse>(
@@ -95,6 +99,7 @@ export class MonitoringAdapter implements MonitoringProviderPort {
         createClip: raw.event_summary.create_clip,
       },
       events,
+      gazeState: raw.gaze_monitor?.state ?? null,
       raw: raw as unknown as Record<string, unknown>,
     };
   }
