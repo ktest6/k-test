@@ -90,8 +90,42 @@ describe('MonitoringAdapter.analyze', () => {
         createClip: false,
       },
       events: [{ eventType: 'FACE_OUT_OF_FRAME', details: { face_count: 0 } }],
+      gazeState: null,
       raw: RAW_RESPONSE,
     });
+  });
+
+  it('includes previous_gaze_state when provided and omits it otherwise', async () => {
+    const post = jest.fn().mockReturnValue(of({ data: RAW_RESPONSE }));
+    const httpService = { post } as unknown as HttpService;
+    const adapter = new MonitoringAdapter(httpService, buildConfig());
+    const previousGazeState = { consecutive_away_count: 2, last_direction: 'LEFT' };
+
+    await adapter.analyze(buildInput({ previousGazeState }));
+
+    const [, body] = post.mock.calls[0] as [string, FormData];
+    const raw = body.getBuffer().toString('utf-8');
+    expect(raw).toContain('name="previous_gaze_state"');
+    expect(raw).toContain(JSON.stringify(previousGazeState));
+
+    const post2 = jest.fn().mockReturnValue(of({ data: RAW_RESPONSE }));
+    const adapter2 = new MonitoringAdapter({ post: post2 } as unknown as HttpService, buildConfig());
+    await adapter2.analyze(buildInput());
+    const [, body2] = post2.mock.calls[0] as [string, FormData];
+    expect(body2.getBuffer().toString('utf-8')).not.toContain('name="previous_gaze_state"');
+  });
+
+  it('parses gaze_monitor.state from the response into gazeState', async () => {
+    const nextState = { consecutive_away_count: 3, last_direction: 'RIGHT' };
+    const post = jest
+      .fn()
+      .mockReturnValue(of({ data: { ...RAW_RESPONSE, gaze_monitor: { state: nextState } } }));
+    const httpService = { post } as unknown as HttpService;
+    const adapter = new MonitoringAdapter(httpService, buildConfig());
+
+    const result = await adapter.analyze(buildInput());
+
+    expect(result.gazeState).toEqual(nextState);
   });
 
   it('includes reference_image field when provided', async () => {

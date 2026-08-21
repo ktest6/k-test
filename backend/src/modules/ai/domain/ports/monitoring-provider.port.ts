@@ -21,6 +21,8 @@ export interface AnalyzeFrameInput {
   /** 사전 캘리브레이션 결과가 있을 때만 값 있음 — 둘 다 있어야 시선 판정에 반영된다. */
   eyeYawCenter?: number;
   eyePitchCenter?: number;
+  /** 직전 analyze 호출에서 돌려받은 연속 시선 상태 — 첫 프레임이거나 저장된 상태가 없으면 생략. */
+  previousGazeState?: Record<string, unknown>;
 }
 
 export type MonitoringSeverity = 'NORMAL' | 'LOW' | 'MEDIUM' | 'HIGH';
@@ -42,6 +44,8 @@ export interface MonitoringDetectedEvent {
 export interface AnalyzeFrameResult {
   eventSummary: MonitoringEventSummary;
   events: MonitoringDetectedEvent[];
+  /** FastAPI가 계산한 다음 연속 시선 상태 — 세션에 저장해뒀다가 다음 analyze 요청의 previousGazeState로 그대로 돌려줘야 한다. */
+  gazeState: Record<string, unknown> | null;
   /** 응답 원문 그대로 — 감사/디버깅용으로 meta에 저장한다. */
   raw: Record<string, unknown>;
 }

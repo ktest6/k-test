@@ -133,6 +133,7 @@ export class MonitoringService {
       session.examId,
       userId,
     );
+    const previousGazeState = await this.getGazeState(examSessionId);
 
     let result: {
       eventSummary: AnalyzeFrameResult;
@@ -151,7 +152,9 @@ export class MonitoringService {
         referenceImage,
         eyeYawCenter: calibration?.eyeYawCenter,
         eyePitchCenter: calibration?.eyePitchCenter,
+        previousGazeState,
       });
+      await this.saveGazeState(examSessionId, analyzed.gazeState);
       result = {
         eventSummary: {
           severity: analyzed.eventSummary.severity,
@@ -315,6 +318,37 @@ export class MonitoringService {
       return null;
     }
     return path;
+  }
+
+  /**
+   * FastAPI는 연속 시선 상태를 메모리에 들고 있지 않으므로(무상태), 세션별
+   * 최신 상태를 우리가 tb_exam_session.gaze_state에 저장했다가 다음 analyze
+   * 요청에 previous_gaze_state로 그대로 돌려준다.
+   */
+  private async getGazeState(examSessionId: string): Promise<Record<string, unknown> | undefined> {
+    const client = this.supabaseService.getAdminClient();
+    const { data } = await client
+      .from('tb_exam_session')
+      .select('gaze_state')
+      .eq('exam_session_id', Number(examSessionId))
+      .maybeSingle<{ gaze_state: Record<string, unknown> | null }>();
+
+    return data?.gaze_state ?? undefined;
+  }
+
+  private async saveGazeState(
+    examSessionId: string,
+    gazeState: Record<string, unknown> | null,
+  ): Promise<void> {
+    const client = this.supabaseService.getAdminClient();
+    const { error } = await client
+      .from('tb_exam_session')
+      .update({ gaze_state: gazeState })
+      .eq('exam_session_id', Number(examSessionId));
+
+    if (error) {
+      this.logger.warn(`시선 상태 저장 실패 (examSessionId=${examSessionId}): ${error.message}`);
+    }
   }
 
   private async downloadReferenceImage(path: string): Promise<MonitoringImageInput | undefined> {

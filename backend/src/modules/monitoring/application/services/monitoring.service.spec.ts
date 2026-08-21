@@ -41,6 +41,31 @@ function buildFrame() {
   return { buffer: Buffer.from('frame'), filename: 'frame.jpg', contentType: 'image/jpeg' };
 }
 
+/** tb_exam_session.gaze_state 조회/저장 체인까지 포함한 admin client 목 — analyze()가 매번 두 호출을 다 하므로 기본값으로 항상 필요하다. */
+function buildAdminClient(
+  overrides: {
+    upload?: jest.Mock;
+    download?: jest.Mock;
+    gazeState?: Record<string, unknown> | null;
+    updateGazeState?: jest.Mock;
+  } = {},
+) {
+  const upload = overrides.upload ?? jest.fn().mockResolvedValue({ data: { path: 'snapshot.jpg' }, error: null });
+  const download = overrides.download ?? jest.fn();
+  const maybeSingle = jest
+    .fn()
+    .mockResolvedValue({ data: { gaze_state: overrides.gazeState ?? null } });
+  const selectEq = jest.fn().mockReturnValue({ maybeSingle });
+  const select = jest.fn().mockReturnValue({ eq: selectEq });
+  const updateEq = overrides.updateGazeState ?? jest.fn().mockResolvedValue({ error: null });
+  const update = jest.fn().mockReturnValue({ eq: updateEq });
+
+  return {
+    storage: { from: () => ({ upload, download }) },
+    from: jest.fn().mockReturnValue({ select, update }),
+  };
+}
+
 function buildAnalyzedResult(overrides: Partial<AnalyzeFrameResult> = {}): AnalyzeFrameResult {
   return {
     eventSummary: {
@@ -51,6 +76,7 @@ function buildAnalyzedResult(overrides: Partial<AnalyzeFrameResult> = {}): Analy
       createClip: false,
     },
     events: [],
+    gazeState: null,
     raw: {},
     ...overrides,
   };
@@ -80,9 +106,8 @@ function buildService(overrides: {
     getLatestCalibration: jest.fn().mockResolvedValue(null),
     ...overrides.gazeCalibrationService,
   } as unknown as GazeCalibrationService;
-  const upload = jest.fn().mockResolvedValue({ data: { path: 'snapshot.jpg' }, error: null });
   const supabaseService = {
-    getAdminClient: jest.fn().mockReturnValue({ storage: { from: () => ({ upload }) } }),
+    getAdminClient: jest.fn().mockReturnValue(buildAdminClient()),
     ...overrides.supabaseService,
   } as unknown as SupabaseService;
   const storageUploadUrlService = {
@@ -226,7 +251,7 @@ describe('MonitoringService.analyze', () => {
       }),
     );
     const upload = jest.fn().mockResolvedValue({ data: null, error: { message: 'boom' } });
-    const getAdminClient = jest.fn().mockReturnValue({ storage: { from: () => ({ upload }) } });
+    const getAdminClient = jest.fn().mockReturnValue(buildAdminClient({ upload }));
     const service = buildService({
       monitoringProvider: { analyze },
       proctoringEventRepository: { create },
@@ -276,7 +301,7 @@ describe('MonitoringService.analyze', () => {
       data: { arrayBuffer: () => Promise.resolve(Buffer.from('ref')), type: 'image/jpeg' },
       error: null,
     });
-    const getAdminClient = jest.fn().mockReturnValue({ storage: { from: () => ({ download }) } });
+    const getAdminClient = jest.fn().mockReturnValue(buildAdminClient({ download }));
     const analyze = jest
       .fn<Promise<AnalyzeFrameResult>, [AnalyzeFrameInput]>()
       .mockResolvedValue(buildAnalyzedResult());
@@ -367,6 +392,82 @@ describe('MonitoringService.analyze', () => {
     expect(analyze).toHaveBeenCalledWith(
       expect.objectContaining({ eyeYawCenter: undefined, eyePitchCenter: undefined }),
     );
+  });
+
+  it('passes the previously saved gaze state to the provider', async () => {
+    const savedState = { consecutive_away_count: 2, last_direction: 'LEFT' };
+    const analyze = jest.fn().mockResolvedValue(buildAnalyzedResult());
+    const getAdminClient = jest.fn().mockReturnValue(buildAdminClient({ gazeState: savedState }));
+    const service = buildService({
+      monitoringProvider: { analyze },
+      supabaseService: { getAdminClient },
+    });
+
+    await service.analyze(
+      '100',
+      '9',
+      { capturedAt: '2026-08-04T00:00:00+09:00', elapsedMs: 1000, captureSequence: 1 },
+      buildFrame(),
+    );
+
+    expect(analyze).toHaveBeenCalledWith(
+      expect.objectContaining({ previousGazeState: savedState }),
+    );
+  });
+
+  it('omits previousGazeState when none is saved yet', async () => {
+    const analyze = jest.fn().mockResolvedValue(buildAnalyzedResult());
+    const service = buildService({ monitoringProvider: { analyze } });
+
+    await service.analyze(
+      '100',
+      '9',
+      { capturedAt: '2026-08-04T00:00:00+09:00', elapsedMs: 1000, captureSequence: 1 },
+      buildFrame(),
+    );
+
+    expect(analyze).toHaveBeenCalledWith(
+      expect.objectContaining({ previousGazeState: undefined }),
+    );
+  });
+
+  it('saves the gaze state returned by the provider for the next call', async () => {
+    const nextState = { consecutive_away_count: 3, last_direction: 'RIGHT' };
+    const analyze = jest.fn().mockResolvedValue(buildAnalyzedResult({ gazeState: nextState }));
+    const updateGazeState = jest.fn().mockResolvedValue({ error: null });
+    const getAdminClient = jest.fn().mockReturnValue(buildAdminClient({ updateGazeState }));
+    const service = buildService({
+      monitoringProvider: { analyze },
+      supabaseService: { getAdminClient },
+    });
+
+    await service.analyze(
+      '100',
+      '9',
+      { capturedAt: '2026-08-04T00:00:00+09:00', elapsedMs: 1000, captureSequence: 1 },
+      buildFrame(),
+    );
+
+    expect(updateGazeState).toHaveBeenCalled();
+  });
+
+  it('does not touch the saved gaze state when the provider call fails', async () => {
+    const analyze = jest.fn().mockRejectedValue(new Error('monitoring unreachable'));
+    const updateGazeState = jest.fn();
+    const getAdminClient = jest.fn().mockReturnValue(buildAdminClient({ updateGazeState }));
+    const service = buildService({
+      monitoringProvider: { analyze },
+      supabaseService: { getAdminClient },
+    });
+
+    await service.analyze(
+      '100',
+      '9',
+      { capturedAt: '2026-08-04T00:00:00+09:00', elapsedMs: 1000, captureSequence: 1 },
+      buildFrame(),
+    );
+
+    expect(updateGazeState).not.toHaveBeenCalled();
   });
 });
 
