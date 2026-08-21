@@ -1,0 +1,12 @@
+services:
+  anti-cheat:
+    build:
+      context: .
+    image: k-test-anti-cheat:local
+    env_file:
+      - .env
+    environment:
+      - PORT=8080
+    ports:
+      - '${ANTI_CHEAT_PORT:-8080}:8080'
+    restart: unless-stopped
