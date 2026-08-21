@@ -144,42 +144,43 @@ describe('ExamApplicationService.cancel', () => {
     expect(repository.cancel).toHaveBeenCalledWith('5');
   });
 
-  it.each([SessionStatus.INPROGRESS, SessionStatus.BLOCKED, SessionStatus.DISQUALIFIED])(
-    'rejects cancellation when the session is %s',
-    async (status) => {
-      const examService = {} as unknown as ExamService;
-      const existing = new ExamApplication('5', '1', '1', new Date());
-      const repository = buildRepository({
-        findActiveByExamAndUser: jest.fn().mockResolvedValue(existing),
-      });
-      const sessionRepository = buildSessionRepository({
-        findByUserAndExam: jest.fn().mockResolvedValue(buildSession({ status })),
-      });
-      const service = new ExamApplicationService(examService, repository, sessionRepository);
+  it.each([
+    SessionStatus.INPROGRESS,
+    SessionStatus.BLOCKED,
+    SessionStatus.DISQUALIFIED,
+    SessionStatus.SUBMITTED,
+  ])('rejects cancellation when the session is %s', async (status) => {
+    const examService = {} as unknown as ExamService;
+    const existing = new ExamApplication('5', '1', '1', new Date());
+    const repository = buildRepository({
+      findActiveByExamAndUser: jest.fn().mockResolvedValue(existing),
+    });
+    const sessionRepository = buildSessionRepository({
+      findByUserAndExam: jest.fn().mockResolvedValue(buildSession({ status })),
+    });
+    const service = new ExamApplicationService(examService, repository, sessionRepository);
 
-      await expect(service.cancel('1', '1')).rejects.toThrow(ConflictDomainException);
-      expect(repository.cancel).not.toHaveBeenCalled();
-    },
-  );
+    await expect(service.cancel('1', '1')).rejects.toThrow(ConflictDomainException);
+    expect(repository.cancel).not.toHaveBeenCalled();
+  });
 
-  it.each([SessionStatus.SUBMITTED, SessionStatus.EXPIRED])(
-    'allows cancellation when the session is %s',
-    async (status) => {
-      const examService = {} as unknown as ExamService;
-      const existing = new ExamApplication('5', '1', '1', new Date());
-      const repository = buildRepository({
-        findActiveByExamAndUser: jest.fn().mockResolvedValue(existing),
-      });
-      const sessionRepository = buildSessionRepository({
-        findByUserAndExam: jest.fn().mockResolvedValue(buildSession({ status })),
-      });
-      const service = new ExamApplicationService(examService, repository, sessionRepository);
+  it('allows cancellation when the session is EXPIRED', async () => {
+    const examService = {} as unknown as ExamService;
+    const existing = new ExamApplication('5', '1', '1', new Date());
+    const repository = buildRepository({
+      findActiveByExamAndUser: jest.fn().mockResolvedValue(existing),
+    });
+    const sessionRepository = buildSessionRepository({
+      findByUserAndExam: jest
+        .fn()
+        .mockResolvedValue(buildSession({ status: SessionStatus.EXPIRED })),
+    });
+    const service = new ExamApplicationService(examService, repository, sessionRepository);
 
-      await service.cancel('1', '1');
+    await service.cancel('1', '1');
 
-      expect(repository.cancel).toHaveBeenCalledWith('5');
-    },
-  );
+    expect(repository.cancel).toHaveBeenCalledWith('5');
+  });
 });
 
 describe('ExamApplicationService.listMine', () => {
