@@ -42,7 +42,12 @@ describe('ExamController.list', () => {
 
     const [result] = await controller.list(buildUser(Role.ADMIN));
 
-    expect(result).toMatchObject({ id: '1', capacity: 100, applicantCount: 7 });
+    expect(result).toMatchObject({
+      id: '1',
+      capacity: 100,
+      applicantCount: 7,
+      isCapacityFull: false,
+    });
   });
 
   it('omits capacity and applicantCount for regular users', async () => {
@@ -54,7 +59,18 @@ describe('ExamController.list', () => {
 
     expect(result).not.toHaveProperty('capacity');
     expect(result).not.toHaveProperty('applicantCount');
-    expect(result).toMatchObject({ id: '1', roundName: '2026년 1회차' });
+    expect(result).toMatchObject({ id: '1', roundName: '2026년 1회차', isCapacityFull: false });
+  });
+
+  it('marks isCapacityFull true for regular users once applicant count reaches capacity', async () => {
+    const list = jest.fn().mockResolvedValue([buildExam()]);
+    const { service } = buildApplicationService(100);
+    const controller = new ExamController({ list } as unknown as ExamService, service);
+
+    const [result] = await controller.list(buildUser(Role.USER));
+
+    expect(result).not.toHaveProperty('capacity');
+    expect(result).toMatchObject({ isCapacityFull: true });
   });
 });
 
@@ -67,7 +83,12 @@ describe('ExamController.findById', () => {
     const result = await controller.findById('1', buildUser(Role.ADMIN));
 
     expect(findById).toHaveBeenCalledWith('1');
-    expect(result).toMatchObject({ id: '1', capacity: 100, applicantCount: 3 });
+    expect(result).toMatchObject({
+      id: '1',
+      capacity: 100,
+      applicantCount: 3,
+      isCapacityFull: false,
+    });
   });
 
   it('omits capacity and applicantCount for regular users', async () => {

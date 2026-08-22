@@ -24,6 +24,9 @@ export class ExamAdminResponseDto {
   @ApiProperty({ enum: ExamStatus, description: 'open_at/close_at 기준으로 매번 계산됨' })
   status: ExamStatus;
 
+  @ApiProperty({ description: '정원이 찼는지 여부(신청 인원 >= capacity)' })
+  isCapacityFull: boolean;
+
   @ApiProperty({ description: '정원 — 관리자만 조회 가능' })
   capacity: number;
 

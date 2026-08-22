@@ -41,6 +41,7 @@ export class AdminExamController {
       openAt: exam.openAt,
       closeAt: exam.closeAt,
       status: computeExamStatus(exam.openAt, exam.closeAt),
+      isCapacityFull: applicantCount >= exam.capacity,
       capacity: exam.capacity,
       applicantCount,
     };

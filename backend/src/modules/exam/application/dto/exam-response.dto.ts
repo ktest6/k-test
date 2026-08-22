@@ -23,4 +23,11 @@ export class ExamResponseDto {
 
   @ApiProperty({ enum: ExamStatus, description: 'open_at/close_at 기준으로 매번 계산됨' })
   status: ExamStatus;
+
+  @ApiProperty({
+    description:
+      '정원이 찼는지 여부(신청 인원 >= capacity). 실제 정원/신청 인원 숫자는 관리자만 볼 수 있어 ' +
+      '이 필드로만 노출한다.',
+  })
+  isCapacityFull: boolean;
 }
