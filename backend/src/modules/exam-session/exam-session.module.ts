@@ -8,6 +8,7 @@ import { ScoringModule } from '../scoring/scoring.module';
 import { VerificationsModule } from '../verifications/verifications.module';
 import { EXAM_SESSION_REPOSITORY } from './domain/exam-session.repository.interface';
 import { SKIPPED_QUESTION_REPOSITORY } from './domain/skipped-question.repository.interface';
+import { ExamSessionExpiryScheduler } from './application/schedulers/exam-session-expiry.scheduler';
 import { ExamSessionReportRetryScheduler } from './application/schedulers/exam-session-report-retry.scheduler';
 import { ExamSessionAnswerService } from './application/services/exam-session-answer.service';
 import { ExamSessionQuestionService } from './application/services/exam-session-question.service';
@@ -36,6 +37,7 @@ import { MypageController } from './presentation/mypage.controller';
     ExamSessionAnswerService,
     ExamSessionReportService,
     ExamSessionReportRetryScheduler,
+    ExamSessionExpiryScheduler,
     { provide: EXAM_SESSION_REPOSITORY, useClass: SupabaseExamSessionRepository },
     { provide: SKIPPED_QUESTION_REPOSITORY, useClass: SupabaseSkippedQuestionRepository },
   ],
