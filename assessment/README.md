@@ -100,7 +100,7 @@ X-API-Key: (전달받은 키)
 | 필드 | 설명 |
 |---|---|
 | `meta.stt_transcript` | **받아쓴 글 전문. 반드시 저장해 주세요** — 이 글이 채점 대상이었습니다 |
-| `meta.stt_provider` | `gemini` (Azure 도입 시 `azure` 로 바뀝니다. 응답 형식은 그대로) |
+| `meta.stt_provider` | `lora` · `azure` · `gemini` 중 서버가 실제로 받아쓰기에 쓴 것 (`GET /health` 로도 확인, 응답 형식은 다 같습니다). **발음(delivery)은 이 값과 별개입니다** — `lora`·`gemini` 로 받아써도 Azure 열쇠가 있으면 발음은 Azure 가 따로 잽니다 |
 | `meta.stt_model` | 받아쓰기에 쓴 모델 이름 |
 | `meta.audio_duration_ms` | 음성 길이 |
 
@@ -181,7 +181,7 @@ X-API-Key: (전달받은 키)
       "area": "delivery", "label": "발화 전달력",
       "score": null, "max_score": 100.0, "weight": 0.0, "status": "not_evaluated",
       "contributions": [], "evidence": [],
-      "note": "Azure 발음평가 미도입으로 이번 범위에서 채점하지 않는다(종합 점수에서 제외)."
+      "note": "발음 평가 결과가 없어 채점하지 않았다(종합 점수에서 제외)."
     }
   ],
   "mode_results": [
@@ -214,7 +214,11 @@ X-API-Key: (전달받은 키)
 
 스케일: 점수는 전부 **0~100**(`score`, `overall_score`, `mode_results[].score`, `contributions[].raw_value`), `normalized`는 0~1, `weight`는 재정규화된 비중(영역 안에서 합 1), `percentile`은 0~100(임시 환산표). 등급은 A~E(`meta.grade_cutoffs`에 커트라인 동봉).
 
-`delivery` 영역은 `status: "not_evaluated"`, `score: null`, `weight: 0.0`으로 옵니다 — 0점이 아니라 "채점 안 함"이니 화면에서는 **0으로 그리지 말고** "미채점" 표기(또는 숨김)로 다뤄 주세요. `status` 값으로 분기하면 발음 채점이 붙는 날 화면 코드를 안 고쳐도 됩니다.
+`delivery`(발화 전달력) 영역은 **음성 답안이고 서버에 Azure 발음평가 열쇠가 있을 때 채점됩니다.** 받아쓰기를 누가 했는지(`lora`·`azure`·`gemini`)와는 무관합니다 — 발음은 음성 원본을 Azure 가 따로 들어서 잽니다. 채점될 때는 `status: "scored"`, `weight: 0.2`(임시값)로 오고, 어느 낱말을 몇 점으로 발음했는지가 `evidence` 에 낱말 인용으로 들어옵니다.
+
+그 밖의 경우(쓰기 답안, 글로 보낸 말하기 답안, Azure 열쇠 없음, 발음 평가 실패)에는 지금까지처럼 `status: "not_evaluated"`, `score: null`, `weight: 0.0` 으로 옵니다 — 0점이 아니라 "채점 안 함"이니 화면에서는 **0으로 그리지 말고** "미채점" 표기(또는 숨김)로 다뤄 주세요. `status` 값으로 분기하면 어느 쪽이 와도 화면 코드를 안 고쳐도 됩니다.
+
+발음 점수가 빠질 때 나머지 두 영역의 비중은 예전 그대로입니다(내용 0.45 : 언어 0.55). 발음이 붙으면 셋이 0.36 : 0.44 : 0.20 이 됩니다.
 
 ---
 
@@ -317,18 +321,29 @@ POST /generate-items      <- 우리 몫
 | 말하기 문항 생성 | 미구현 (`mode: speaking` 은 400) |
 | 최종 등급 (`/finalize`) | 연동 가능 |
 | 말하기 채점 (`mode: speaking`) | 연동 가능. 텍스트(STT 전사본)와 **음성 파일(`audio.url`) 둘 다** 동작 |
-| 말하기 음성 받아쓰기 | 연동 가능. **단 Gemini 로 하는 임시 구현입니다** (아래) |
-| 발화 전달력 (`delivery`) | 미채점. Azure Pronunciation Assessment 도입 전이라 비중 0 |
+| 말하기 음성 받아쓰기 | 연동 가능. `lora`(우리 Whisper 어댑터·임시) / `azure` / `gemini` 중 선택 |
+| 발화 전달력 (`delivery`) | **연동 가능.** Azure 발음평가로 채점합니다 (비중 0.20, 임시값). 받아쓰기를 누가 하든 별개로 동작 |
 
-> **받아쓰기는 임시 구현입니다.** Azure 계정이 없어 Gemini 로 대신하고 있습니다.
-> Azure 로 바꿔도 **API 형식은 바뀌지 않습니다** — `meta.stt_provider` 값만 `azure` 가 됩니다.
+> **받아쓰기와 발음 채점을 두 기계로 갈랐습니다.** (2026-08-22)
+> 글자는 받아쓰기 제공자가, 발음(`delivery`)은 음성 원본을 **Azure 가 따로** 잽니다.
+> 어느 것으로 받아쓸지는 서버의 `KTEST_STT_PROVIDER` 환경변수로 정합니다(`lora` / `azure` / `gemini`).
+> 안 정해 두면 Azure 열쇠가 있을 때 `azure`, 없으면 `gemini` 입니다. `lora` 는 추론 서버 주소(`LORA_STT_URL`)가 함께 있어야 고릅니다.
+> 발음(`delivery`)은 이 선택과 무관하게 **Azure 열쇠만 있으면** 채점됩니다(`lora`·`gemini` 로 받아써도).
+> **API 형식은 어느 쪽이든 같습니다.**
+> ⚠ `lora` 어댑터(v2)는 아직 골든셋 검증 전이라 임시입니다. RunPod 추론 서버(`scripts/speech_lab/lora_stt_server.py`) 배포 후 스모크가 필요합니다.
 >
+> Azure 경로에서 지금 못 하는 것:
+> - **wav 만 처리합니다.** mp3·m4a·webm·ogg 는 풀어 줄 도구가 서버에 없어 503 으로 실패합니다.
+> - **한국어 억양 점수(Prosody)는 오지 않습니다**(실측). 억양은 채점에 쓰지 않습니다.
+> - 발음 비중 0.20 과 점수 환산 기준은 **임시값**입니다. 라벨 데이터가 모이면 다시 잡습니다.
+>
+> Gemini 로 받아쓰던 때의 실측 한계 (`KTEST_STT_PROVIDER=gemini` 로 되돌리면 그대로 적용됩니다):
 > 실측으로 확인된 한계 (11.8초 음성, 2026-08-02):
 > - 글자 일치율 95.8%, 같은 음성 2회 받아쓰기 결과 **완전 일치**(재현성 OK), 1회 2.6~3.7초
 > - **소리로 구별되지 않는 표기 오류는 표준형으로 고쳐져 감점되지 않습니다** (`안 돼습니다` → `안 됐습니다`, `삼번` → `3번`).
 >   프롬프트로 막으려 했으나 실패했고, 원리상 Azure 도 마찬가지일 가능성이 큽니다.
 >   즉 **말하기의 문법 점수는 실제 실력보다 높게 나올 수 있습니다.**
-> - 발음 점수(정확도·유창성)는 Gemini 가 주지 않으므로 `delivery` 는 여전히 미채점입니다.
+> - 발음 점수는 Gemini 가 주지 않으므로 그 경로에서는 `delivery` 가 미채점입니다.
 
 ---
 
@@ -378,9 +393,10 @@ assessment/
 │   │   ├── prompt.py      생성 프롬프트 전문 + 응답 형식표
 │   │   ├── validate.py    검증 관문 5개 (LLM 을 부르지 않는다)
 │   │   └── generate.py    전체 조립 + 폐기 보고
-│   ├── speech/          음성 -> 글자 (받아쓰기만 하고 점수는 내지 않는다)
-│   │   ├── port.py        꽂는 자리(계약). Azure 로 바꿔도 여기는 안 바뀐다
-│   │   ├── gemini_stt.py  지금 꽂혀 있는 임시 구현 + 실측 한계 기록
+│   ├── speech/          음성 -> 글자 + 발음 점수 (채점 자체는 하지 않는다)
+│   │   ├── port.py        꽂는 자리(계약). 구현을 바꿔도 여기는 안 바뀐다
+│   │   ├── azure_stt.py   지금 꽂혀 있는 구현. 받아쓰기 + 발음 평가를 한 번에 한다
+│   │   ├── gemini_stt.py  예전 임시 구현(글자만) + 실측 한계 기록
 │   │   ├── audio.py       내려받기 + 크기·형식·주소 관문
 │   │   ├── loudness.py    무음 관문. 소리 크기를 파일에서 직접 잰다(LLM 무관)
 │   │   ├── prompt.py      "들린 대로 적어라" 지시문

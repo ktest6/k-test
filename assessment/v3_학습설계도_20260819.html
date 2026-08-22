@@ -1,0 +1,176 @@
+<title>v3 학습 설계도</title>
+<style>
+  :root {
+    --bg: #F6F7F4; --surface: #FFFFFF; --ink: #22282E; --ink-soft: #5B646D; --line: #DDE1DA;
+    --accent: #3452B4; --accent-soft: #E7EBF9;
+    --hq: #1B7A4A; --hq-bg: #E3F2E9;        /* 고품질(사람 검증) */
+    --test: #A6453C; --test-bg: #F6E7E4;    /* 시험지 — 학습 금지 */
+    --opt: #9A6A12; --opt-bg: #F7EEDC;      /* 선택·조건부 */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181C; --surface: #1D2126; --ink: #E6E9EC; --ink-soft: #9AA3AC; --line: #333A41;
+      --accent: #94A9EE; --accent-soft: #263050;
+      --hq: #6FC996; --hq-bg: #1E3328; --test: #E0857B; --test-bg: #3A2321; --opt: #DDB05E; --opt-bg: #372C17;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181C; --surface: #1D2126; --ink: #E6E9EC; --ink-soft: #9AA3AC; --line: #333A41;
+    --accent: #94A9EE; --accent-soft: #263050;
+    --hq: #6FC996; --hq-bg: #1E3328; --test: #E0857B; --test-bg: #3A2321; --opt: #DDB05E; --opt-bg: #372C17;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", system-ui, sans-serif; line-height: 1.65; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 44px 24px 72px; }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin: 0 0 8px; }
+  h1 { font-size: clamp(26px, 4vw, 36px); margin: 0 0 10px; letter-spacing: -0.01em; font-weight: 800; text-wrap: balance; }
+  .lede { max-width: 640px; color: var(--ink-soft); margin: 0 0 22px; font-size: 15px; }
+  .lede strong { color: var(--ink); }
+  figure { margin: 0 0 10px; padding: 18px 14px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow-x: auto; }
+  figure svg { display: block; min-width: 880px; max-width: 100%; height: auto; margin: 0 auto; }
+  figcaption { font-size: 13px; color: var(--ink-soft); padding: 10px 6px 6px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 34px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 3px 10px; }
+  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .pill.hq { color: var(--hq); background: var(--hq-bg); }
+  .pill.test { color: var(--test); background: var(--test-bg); }
+  .pill.opt { color: var(--opt); background: var(--opt-bg); }
+  .pill.acc { color: var(--accent); background: var(--accent-soft); }
+  h2 { font-size: 20px; margin: 0 0 6px; }
+  .sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 16px; max-width: 700px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12.5px; letter-spacing: .04em; color: var(--ink-soft); font-weight: 700; background: var(--bg); }
+  tr:last-child td { border-bottom: 0; }
+  td.k { font-weight: 700; white-space: nowrap; }
+  td.n { font-family: ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tbl-wrap { overflow-x: auto; margin-bottom: 34px; }
+  .note { padding: 14px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 13.5px; color: var(--ink-soft); }
+  .note b { color: var(--ink); }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; background: var(--accent-soft); color: var(--ink); border-radius: 5px; padding: 1px 6px; }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">K-TEST · 오류 보존 받아쓰기 · LoRA v3</p>
+  <h1>v3 학습 설계도</h1>
+  <p class="lede">밑바탕은 그대로 <strong>Whisper-small</strong>, 배우는 부분은 옆에 덧댄 <strong>LoRA 판</strong>뿐입니다.
+    학습은 한 번에 붓지 않고 <strong>3단으로 쌓고</strong>, 팀원 교정본은 2단(마무리)과 3단(선호 학습)의 재료로 들어갑니다.
+    시험지로 정한 몫은 어느 단에도 들어가지 않습니다.</p>
+
+  <figure>
+    <svg viewBox="0 0 960 560" role="img" aria-label="v3 학습 설계도: 데이터 다섯 묶음이 3단 학습과 평가로 흘러가는 그림. 교정본 2,500건은 시험지 1,500과 학습용 1,000으로 갈라지고, 학습용은 2단 고품질 마무리와 3단 선호 학습에 쓰인다.">
+      <defs>
+        <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+        <marker id="aAcc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker>
+        <marker id="aHq" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hq)"/></marker>
+        <marker id="aTest" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--test)"/></marker>
+      </defs>
+      <g fill="none" stroke="currentColor" stroke-width="1.3" color="var(--ink)">
+
+        <!-- 상단: 팀원 교정본 2,500 → 분리 -->
+        <rect x="560" y="18" width="230" height="50" rx="9" stroke="var(--hq)" stroke-width="2"/>
+        <g stroke="none" fill="currentColor" font-size="12.5" text-anchor="middle">
+          <text x="675" y="39" fill="var(--hq)" font-weight="700">팀원 교정본 2,500건 (8/25 회수)</text>
+          <text x="675" y="57" font-size="11" fill="var(--ink-soft)">결과를 보기 전에 파일 이름으로 미리 가른다</text>
+        </g>
+        <!-- 분리 화살표 -->
+        <path d="M 630 68 L 630 92" stroke="var(--hq)" stroke-width="1.8" marker-end="url(#aHq)"/>
+        <path d="M 740 68 L 800 92" stroke="var(--test)" stroke-width="1.8" marker-end="url(#aTest)"/>
+
+        <!-- 데이터 줄 (y=96..150) -->
+        <rect x="20"  y="96" width="200" height="56" rx="9"/>
+        <rect x="250" y="96" width="150" height="56" rx="9" stroke="var(--opt)" stroke-dasharray="5 4"/>
+        <rect x="530" y="96" width="200" height="56" rx="9" stroke="var(--hq)" stroke-width="2"/>
+        <rect x="760" y="96" width="180" height="56" rx="9" stroke="var(--test)" stroke-width="2"/>
+        <g stroke="none" fill="currentColor" font-size="12.5" text-anchor="middle">
+          <text x="120" y="117">정제 학습쌍 9,035</text>
+          <text x="120" y="135" font-size="11" fill="var(--ink-soft)">+ 증인 합의로 되살린 재라벨분</text>
+          <text x="325" y="117" fill="var(--opt)">합성 (TTS)</text>
+          <text x="325" y="135" font-size="11" fill="var(--ink-soft)">게이트 통과 시만, ≤30%</text>
+          <text x="630" y="117" fill="var(--hq)" font-weight="700">학습용 1,000</text>
+          <text x="630" y="135" font-size="11" fill="var(--ink-soft)">사람 귀로 검증한 정답지</text>
+          <text x="850" y="117" fill="var(--test)" font-weight="700">시험지 1,500 + 골든 499</text>
+          <text x="850" y="135" font-size="11" fill="var(--ink-soft)">개발 750 / 실전 750 · 학습 금지</text>
+        </g>
+
+        <!-- 선호쌍 (학습용에서 파생) -->
+        <rect x="530" y="178" width="200" height="50" rx="9" stroke="var(--hq)" stroke-dasharray="5 4"/>
+        <g stroke="none" fill="currentColor" font-size="12" text-anchor="middle">
+          <text x="630" y="198" fill="var(--hq)">선호쌍: 원본(세탁) vs 교정본</text>
+          <text x="630" y="215" font-size="11" fill="var(--ink-soft)">고친 건에서만 자동으로 생김 (~330쌍)</text>
+        </g>
+        <path d="M 630 152 L 630 174" stroke="var(--hq)" stroke-width="1.5" marker-end="url(#aHq)"/>
+
+        <!-- 모델 줄 (y=300..370) -->
+        <rect x="20"  y="300" width="150" height="70" rx="9"/>
+        <rect x="220" y="300" width="170" height="70" rx="9" stroke="var(--accent)" stroke-width="2"/>
+        <rect x="440" y="300" width="170" height="70" rx="9" stroke="var(--hq)" stroke-width="2"/>
+        <rect x="660" y="300" width="150" height="70" rx="9" stroke="var(--opt)" stroke-dasharray="5 4"/>
+        <rect x="850" y="300" width="90" height="70" rx="9" stroke="var(--test)" stroke-width="2"/>
+        <g stroke="none" fill="currentColor" font-size="12.5" text-anchor="middle">
+          <text x="95" y="324">Whisper-small</text><text x="95" y="341" font-size="11" fill="var(--ink-soft)">원래 숫자는 얼림</text><text x="95" y="357" font-size="11" fill="var(--ink-soft)">+ LoRA 판(전 선형층)</text>
+          <text x="305" y="322" fill="var(--accent)" font-weight="700">1단 · 대량 학습</text><text x="305" y="340" font-size="11" fill="var(--ink-soft)">verbatim/cleaned 꼬리표</text><text x="305" y="356" font-size="11" fill="var(--ink-soft)">오류 토큰 가중 · 2~3 에폭</text>
+          <text x="525" y="322" fill="var(--hq)" font-weight="700">2단 · 고품질 마무리</text><text x="525" y="340" font-size="11" fill="var(--ink-soft)">학습용 1,000만 · 1 에폭</text><text x="525" y="356" font-size="11" fill="var(--ink-soft)">낮은 학습률로 살짝 교정</text>
+          <text x="735" y="322" fill="var(--opt)" font-weight="700">3단 · 선호 학습 (선택)</text><text x="735" y="340" font-size="11" fill="var(--ink-soft)">세탁본 = 지는 답</text><text x="735" y="356" font-size="11" fill="var(--ink-soft)">DPO 1 에폭</text>
+          <text x="895" y="328" fill="var(--test)" font-weight="700">평가</text><text x="895" y="345" font-size="11" fill="var(--ink-soft)">base·v1·v2·v3</text><text x="895" y="360" font-size="11" fill="var(--ink-soft)">같은 시험지</text>
+        </g>
+        <line x1="170" y1="335" x2="216" y2="335" marker-end="url(#a)"/>
+        <line x1="390" y1="335" x2="436" y2="335" marker-end="url(#a)"/>
+        <line x1="610" y1="335" x2="656" y2="335" marker-end="url(#a)"/>
+        <line x1="810" y1="335" x2="846" y2="335" marker-end="url(#a)"/>
+        <text x="193" y="327" stroke="none" fill="var(--ink-soft)" font-size="10.5" text-anchor="middle">v2 자리</text>
+        <text x="633" y="327" stroke="none" fill="var(--ink-soft)" font-size="10.5" text-anchor="middle">= v3 후보</text>
+
+        <!-- 데이터 → 단계 화살표 -->
+        <path d="M 120 152 C 120 230, 280 230, 300 296" stroke="var(--accent)" stroke-width="1.8" marker-end="url(#aAcc)"/>
+        <path d="M 325 152 C 325 220, 312 240, 308 296" stroke="var(--opt)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#aAcc)"/>
+        <path d="M 580 152 C 560 220, 530 250, 525 296" stroke="var(--hq)" stroke-width="1.8" marker-end="url(#aHq)"/>
+        <path d="M 680 228 C 700 260, 725 280, 732 296" stroke="var(--hq)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#aHq)"/>
+        <path d="M 860 152 C 870 220, 890 250, 893 296" stroke="var(--test)" stroke-width="1.8" marker-end="url(#aTest)"/>
+
+        <!-- 추론 -->
+        <rect x="220" y="430" width="590" height="46" rx="9" stroke="var(--line)"/>
+        <g stroke="none" fill="currentColor" font-size="12" text-anchor="middle">
+          <text x="515" y="449">시험 때(추론): LoRA 판을 붙인 Whisper-small에 <tspan font-weight="700" fill="var(--accent)">&lt;verbatim&gt;</tspan> 꼬리표를 강제 → "들린 대로" 모드로만 받아쓴다</text>
+          <text x="515" y="466" font-size="11" fill="var(--ink-soft)">2단까지 끝난 모델이 v3 기본형, 3단이 골든셋에서 더 좋으면 3단 모델로 교체</text>
+        </g>
+        <path d="M 525 370 L 525 426" stroke="var(--ink-soft)" stroke-width="1.3" marker-end="url(#a)"/>
+
+        <!-- 3단 실패 시 우회 -->
+        <path d="M 735 370 C 735 400, 600 405, 540 410" stroke="var(--opt)" stroke-width="1.2" stroke-dasharray="3 4"/>
+        <text x="690" y="400" stroke="none" fill="var(--opt)" font-size="10.5">불안정하면 2단 결과로 제출</text>
+
+        <!-- 하단 메모 -->
+        <text x="20" y="520" stroke="none" fill="var(--ink-soft)" font-size="11.5">규칙: ① 시험지(빨강)는 어느 단에도 넣지 않는다 ② 매 단마다 골든셋으로 오류보존율·오탐율·CER을 재고, 신뢰구간이 base와 갈라질 때만 다음 단으로 간다 ③ 합성은 가짜 음성이라 평가에는 절대 쓰지 않는다</text>
+      </g>
+    </svg>
+    <figcaption>데이터(위)가 학습 3단(가운데)으로 흘러가는 그림. 초록 = 사람이 귀로 검증한 고품질, 빨강 = 시험지(학습 금지), 노랑 점선 = 조건부·선택.</figcaption>
+  </figure>
+  <div class="legend">
+    <span class="pill acc">1단 대량 학습 — 양으로 배움</span>
+    <span class="pill hq">2단 고품질 마무리 — 사람 검증 라벨로 교정</span>
+    <span class="pill opt">3단 선호 학습 — 세탁본을 지는 답으로</span>
+    <span class="pill test">시험지 — 학습 금지</span>
+  </div>
+
+  <h2>단계별로 무엇이 들어가고 무엇이 바뀌나</h2>
+  <p class="sub">"소량 고품질 셋"은 2단의 유일한 재료입니다. 1단에서 양으로 배운 모델을, 사람이 귀로 확인한 1,000건으로 <strong>마지막에 살짝 바로잡는</strong> 역할이에요 — 근거: 부정확 대량으로 먼저, 정확 소량으로 마무리(WSP)가 한 번에 섞는 것보다 낫다는 실측.</p>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>단</th><th>들어가는 데이터</th><th>가르치는 방식</th><th>에폭·학습률</th><th>끝나면 재는 것</th></tr></thead>
+    <tbody>
+      <tr><td class="k">0 · 밑바탕</td><td>—</td><td>Whisper-small 얼림 + LoRA 판(q·k·v·o·fc1·fc2, r=8~16, α/r 낮춤 ablation)</td><td class="n">—</td><td>base 점수(기준선)</td></tr>
+      <tr><td class="k">1 · 대량</td><td>정제 9,035 + 증인 합의 재라벨 복구분 (+ 합성 ≤30%, 게이트 시)</td><td><code>&lt;verbatim&gt;</code>/<code>&lt;cleaned&gt;</code> 꼬리표 · 오류 토큰 손실 2~3배 · 세탁 의심 0.3~0.5배 · 낭독:자유발화 균형</td><td class="n">2~3 에폭 · 1e-4대</td><td>오류보존율이 base와 CI 분리되는가</td></tr>
+      <tr><td class="k">2 · 고품질 마무리</td><td><b>교정본 학습용 1,000</b> (전부 <code>&lt;verbatim&gt;</code>)</td><td>같은 손실, 데이터만 교체. 사람이 확인한 정답지라 가중·꼬리표 의심 없이 그대로</td><td class="n">1 에폭 · 1단의 1/3~1/5</td><td>2단 후 보존율↑ & 오탐율 안 오르는가 → <b>v3</b></td></tr>
+      <tr><td class="k">3 · 선호 (선택)</td><td>선호쌍: 학습용 1,000 중 고쳐진 건(원본 vs 교정) + Gemini 세탁본 대량</td><td>DPO(β≈0.1) — 2단 모델을 기준(frozen)으로 두고 LoRA만 갱신</td><td class="n">1 에폭</td><td>2단 대비 보존율↑, CER 악화가 CI 안이면 채택</td></tr>
+      <tr><td class="k">평가</td><td><b>시험지 1,500 + 골든 499</b> (개발/실전 분리)</td><td>base·v1·v2·v3 같은 파일·같은 부트스트랩 2,000회</td><td class="n">—</td><td>오류보존율 · 오탐율 · CER(중앙값 병행)</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <b>자주 헷갈리는 것.</b> "소량 고품질 셋을 따로 두면 데이터를 낭비하는 것 아닌가?" — 반대입니다. 같은 1,000건을 1단에 섞으면 9,035건 속에서 희석되지만, 2단에 따로 두면 <b>모델이 마지막으로 본 것</b>이 되어 영향이 가장 큽니다. 그래서 시험지와 겹치지만 않으면 교정본은 2단에 두는 것이 가장 값어치가 높습니다.
+    상세 근거와 출처는 저장소 <code>DESIGN_lora_data.md</code>(C 갈래)와 <code>참고문헌_LoRA데이터.md</code>에 있습니다.
+  </div>
+</div>

@@ -26,3 +26,12 @@ python-dotenv==1.2.2
 # 검증·테스트용
 pytest==9.1.1
 httpx==0.28.1
+
+# 말하기 발음 채점(Azure 발음평가) + 받아쓰기.
+# 이것이 있어야 발화 전달력(delivery) 영역이 채점된다.
+# 없어도 서버는 뜬다 — 그때는 Gemini 로 받아쓰고 그 영역이 비어 있다.
+azure-cognitiveservices-speech==1.51.2
+
+# 음성을 Azure 가 받아 주는 규격(16kHz 모노)으로 맞출 때만 쓴다.
+# 48kHz 로 녹음된 wav 를 그대로 보내면 Azure 가 연결을 끊는 것을 실측했다.
+numpy==2.4.6
