@@ -4,6 +4,7 @@ import { Exam } from '../../exam/domain/entities/exam.entity';
 import { ExamStatus } from '../../exam/domain/enums/exam-status.enum';
 import { SessionStatus } from '../domain/enums/session-status.enum';
 import { ExamSessionService } from '../application/services/exam-session.service';
+import { MypageReportService } from '../application/services/mypage-report.service';
 import { MypageController } from './mypage.controller';
 
 function buildUser(): AuthenticatedUser {
@@ -24,14 +25,22 @@ function buildExam(): Exam {
 }
 
 function buildController(
-  overrides: Partial<{ listMine: jest.Mock; listAvailable: jest.Mock }> = {},
+  overrides: Partial<{
+    listMine: jest.Mock;
+    listAvailable: jest.Mock;
+    getReport: jest.Mock;
+  }> = {},
 ) {
   const examSessionService = {
     listMine: jest.fn(),
     listAvailable: jest.fn(),
     ...overrides,
   } as unknown as ExamSessionService;
-  return new MypageController(examSessionService);
+  const mypageReportService = {
+    getReport: jest.fn(),
+    ...overrides,
+  } as unknown as MypageReportService;
+  return new MypageController(examSessionService, mypageReportService);
 }
 
 describe('MypageController.listMine', () => {
@@ -149,5 +158,18 @@ describe('MypageController.listAvailable', () => {
         sessionStatus: SessionStatus.INPROGRESS,
       },
     ]);
+  });
+});
+
+describe('MypageController.getReport', () => {
+  it('delegates to MypageReportService.getReport', async () => {
+    const report = { examResultId: 'r1', examSessionId: '100', candidateName: 'Yena Back' };
+    const getReport = jest.fn().mockResolvedValue(report);
+    const controller = buildController({ getReport });
+
+    const result = await controller.getReport('r1', buildUser());
+
+    expect(getReport).toHaveBeenCalledWith('r1', '1');
+    expect(result).toBe(report);
   });
 });
