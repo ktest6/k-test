@@ -10,7 +10,8 @@ import { ExamApplicationService } from '../../../exam/application/services/exam-
 import { ExamService } from '../../../exam/application/services/exam.service';
 import { Exam } from '../../../exam/domain/entities/exam.entity';
 import { ExamStatus } from '../../../exam/domain/enums/exam-status.enum';
-import { computeExamStatus } from '../../../exam/domain/exam-status.util';
+import { computeExamStatus, isApplicationOpen } from '../../../exam/domain/exam-status.util';
+import { ExamResultService } from '../../../scoring/application/services/exam-result.service';
 import { EarphoneDetectionService } from '../../../verifications/application/services/earphone-detection.service';
 import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
 import { ExamSession } from '../../domain/entities/exam-session.entity';
@@ -32,16 +33,30 @@ export interface ExamSessionStatusResult {
 }
 
 /**
- * 마이페이지 "내 시험 현황" 한 줄. 세션을 시작한 적 있으면 그 세션의 id/상태.
+ * 마이페이지 "내 시험 현황" 한 줄. 세션을 시작한 적 있으면 그 세션의 id/상태/제출일시.
  * 시작한 적 없고 마감 1시간 전(START_BUFFER_BEFORE_CLOSE_MS) 시작 데드라인도
  * 지났으면 id는 null, status는 EXPIRED — 신청만 하고 응시 기회를 놓친 경우다.
- * 그 외(아직 시작 데드라인 전)엔 session 자체가 null.
+ * 그 외(아직 시작 데드라인 전)엔 session 자체가 null. examResultId/finalGrade는
+ * 최종 리포트(/finalize)가 아직 안 나왔으면(채점 중이거나 세션이 없으면) 둘 다 null이다.
  */
 export interface MyExamStatus {
   exam: Exam;
   examStatus: ExamStatus;
   appliedAt: Date;
-  session: { id: string | null; status: SessionStatus } | null;
+  session: { id: string | null; status: SessionStatus; submittedAt: Date | null } | null;
+  examResultId: string | null;
+  finalGrade: string | null;
+}
+
+/**
+ * "오늘 응시 가능한 시험" 한 줄 — 신청해서 아직 안 끝난(응시전/진행중) 시험 +
+ * 아직 신청 안 했지만 신청 기간이 열려 있고 정원도 안 찬 시험. isApplied로 프런트가
+ * "이어서 풀기"/"신청하기" 버튼을 구분한다.
+ */
+export interface AvailableExam {
+  exam: Exam;
+  isApplied: boolean;
+  session: { id: string; status: SessionStatus } | null;
 }
 
 @Injectable()
@@ -52,6 +67,7 @@ export class ExamSessionService {
     private readonly examApplicationService: ExamApplicationService,
     private readonly idCardVerificationService: IdCardVerificationService,
     private readonly earphoneDetectionService: EarphoneDetectionService,
+    private readonly examResultService: ExamResultService,
     @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>,
   ) {}
 
@@ -145,23 +161,82 @@ export class ExamSessionService {
           this.examSessionRepository.findByUserAndExam(userId, application.examId),
         ]);
 
-        let sessionSummary: { id: string | null; status: SessionStatus } | null;
+        let sessionSummary: {
+          id: string | null;
+          status: SessionStatus;
+          submittedAt: Date | null;
+        } | null;
         if (session) {
-          sessionSummary = { id: session.id, status: session.status };
+          sessionSummary = {
+            id: session.id,
+            status: session.status,
+            submittedAt: session.submittedAt,
+          };
         } else if (exam.closeAt.getTime() - Date.now() < START_BUFFER_BEFORE_CLOSE_MS) {
-          sessionSummary = { id: null, status: SessionStatus.EXPIRED };
+          sessionSummary = { id: null, status: SessionStatus.EXPIRED, submittedAt: null };
         } else {
           sessionSummary = null;
         }
+
+        const examResult = session
+          ? await this.examResultService.findByExamSessionId(session.id)
+          : null;
 
         return {
           exam,
           examStatus: computeExamStatus(exam.openAt, exam.closeAt),
           appliedAt: application.appliedAt,
           session: sessionSummary,
+          examResultId: examResult?.id ?? null,
+          finalGrade: examResult?.finalGrade ?? null,
         };
       }),
     );
+  }
+
+  /**
+   * "오늘 응시 가능한 시험" — 신청해서 아직 안 끝난(세션 없음 또는 INPROGRESS) 시험과,
+   * 아직 신청 안 했지만 지금 신청할 수 있는(신청 기간 내 + 정원 여유) 시험을 합쳐서 준다.
+   * 이미 SUBMITTED/EXPIRED/DISQUALIFIED/BLOCKED인, 응시자 입장에서 더 할 게 없는 신청
+   * 건은 제외한다.
+   */
+  async listAvailable(userId: string): Promise<AvailableExam[]> {
+    const [applications, allExams] = await Promise.all([
+      this.examApplicationService.listMine(userId),
+      this.examService.list(),
+    ]);
+
+    const applicationByExamId = new Map(
+      applications.map((application) => [application.examId, application]),
+    );
+
+    const results = await Promise.all(
+      allExams.map(async (exam): Promise<AvailableExam | null> => {
+        const application = applicationByExamId.get(exam.id);
+        if (application) {
+          const session = await this.examSessionRepository.findByUserAndExam(userId, exam.id);
+          if (session && session.status !== SessionStatus.INPROGRESS) {
+            return null;
+          }
+          return {
+            exam,
+            isApplied: true,
+            session: session ? { id: session.id, status: session.status } : null,
+          };
+        }
+
+        if (!isApplicationOpen(exam.applicationOpenAt, exam.applicationCloseAt)) {
+          return null;
+        }
+        const activeCount = await this.examApplicationService.countActive(exam.id);
+        if (activeCount >= exam.capacity) {
+          return null;
+        }
+        return { exam, isApplied: false, session: null };
+      }),
+    );
+
+    return results.filter((result): result is AvailableExam => result !== null);
   }
 
   /** 답안 저장처럼 "지금 실제로 응시 중"이어야만 허용되는 동작들의 공통 게이트. */

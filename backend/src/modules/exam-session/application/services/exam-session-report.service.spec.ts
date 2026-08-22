@@ -264,6 +264,30 @@ describe('ExamSessionReportService.checkAndFinalize', () => {
     expect(mocks.markSubmitted).toHaveBeenCalledWith('100');
   });
 
+  it('records finalGrade F when assessment cannot confirm a grade due to insufficient coverage', async () => {
+    const answer1 = buildAnswer('a1', '1');
+    const score1 = new Score('s1', 'a1', { submission_id: 'a1', overall_score: 40 }, new Date());
+    const { service, mocks } = buildService({
+      listAssignedQuestions: jest.fn().mockResolvedValue([buildQuestion('1'), buildQuestion('2')]),
+      listAnsweredQuestionIds: jest.fn().mockResolvedValue(['1']),
+      listBySession: jest.fn().mockResolvedValue([answer1]),
+      listSkippedQuestionIds: jest.fn().mockResolvedValue(['2']),
+      findByAnswerId: jest.fn().mockResolvedValue(score1),
+      finalize: jest.fn().mockResolvedValue({
+        status: 'insufficient',
+        overall_grade: null,
+        percentile: null,
+      }),
+    });
+
+    await service.checkAndFinalize('100', '9');
+
+    expect(mocks.recordExamResult).toHaveBeenCalledWith(
+      expect.objectContaining({ finalGrade: 'F' }),
+      '9',
+    );
+  });
+
   it('scores any answered question that is missing a score before finalizing', async () => {
     const answer1 = buildAnswer('a1', '1');
     const question1 = buildQuestion('1');
