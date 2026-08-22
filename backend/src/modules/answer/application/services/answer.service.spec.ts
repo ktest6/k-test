@@ -16,6 +16,7 @@ function buildRepository(overrides: Partial<AnswerRepository> = {}) {
     save: jest.fn().mockResolvedValue(buildAnswer()),
     findBySessionAndQuestion: jest.fn().mockResolvedValue(null),
     listAnsweredQuestionIds: jest.fn().mockResolvedValue([]),
+    listBySession: jest.fn().mockResolvedValue([]),
     ...overrides,
   };
 }

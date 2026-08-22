@@ -17,4 +17,6 @@ export interface AnswerRepository {
   findBySessionAndQuestion(examSessionId: string, questionId: string): Promise<Answer | null>;
   /** 이 세션에서 이미 답안이 저장된 문항 id 목록 — 재접속 시 다음 문항을 찾는 데 쓴다. */
   listAnsweredQuestionIds(examSessionId: string): Promise<string[]>;
+  /** 이 세션에 저장된 답안 전체 — 최종 리포트 제출 시 채점 누락분을 찾는 데 쓴다. */
+  listBySession(examSessionId: string): Promise<Answer[]>;
 }

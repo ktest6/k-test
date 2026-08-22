@@ -1,8 +1,9 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   ConflictDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import { describeError } from '../../../../common/utils/describe-error.util';
 import {
   SignedUploadUrl,
   StorageUploadUrlService,
@@ -16,6 +17,7 @@ import {
   SkippedQuestionRepository,
 } from '../../domain/skipped-question.repository.interface';
 import { ExamSessionQuestionService } from './exam-session-question.service';
+import { ExamSessionReportService } from './exam-session-report.service';
 import { ExamSessionService } from './exam-session.service';
 
 const ANSWER_AUDIO_BUCKET = 'answer-audio';
@@ -42,6 +44,8 @@ export interface AnswerWithScoreResult {
 
 @Injectable()
 export class ExamSessionAnswerService {
+  private readonly logger = new Logger(ExamSessionAnswerService.name);
+
   constructor(
     private readonly examSessionService: ExamSessionService,
     private readonly examSessionQuestionService: ExamSessionQuestionService,
@@ -50,6 +54,7 @@ export class ExamSessionAnswerService {
     private readonly storageUploadUrlService: StorageUploadUrlService,
     @Inject(SKIPPED_QUESTION_REPOSITORY)
     private readonly skippedQuestionRepository: SkippedQuestionRepository,
+    private readonly examSessionReportService: ExamSessionReportService,
   ) {}
 
   async save(
@@ -76,6 +81,8 @@ export class ExamSessionAnswerService {
     // "답했는데 건너뛴 것으로도 잡히는" 이중 상태를 막는다.
     await this.skippedQuestionRepository.deleteBySessionAndQuestion(examSessionId, questionId);
 
+    await this.checkAndFinalizeQuietly(examSessionId, userId);
+
     return this.withScore(answer);
   }
 
@@ -98,6 +105,8 @@ export class ExamSessionAnswerService {
     }
 
     await this.skippedQuestionRepository.create(examSessionId, questionId);
+
+    await this.checkAndFinalizeQuietly(examSessionId, userId);
   }
 
   async get(
@@ -137,5 +146,19 @@ export class ExamSessionAnswerService {
   private async withScore(answer: Answer): Promise<AnswerWithScoreResult> {
     const score = await this.scoringService.findByAnswerId(answer.id);
     return { answer, graded: score !== null, score: score?.rawResponse ?? null };
+  }
+
+  /**
+   * 이미 끝난 답안 저장/스킵 처리를 되돌릴 이유가 없으므로, 최종 리포트 제출
+   * 실패(assessment 장애 등)는 이 호출의 응답에 영향을 주지 않고 로그만 남긴다.
+   */
+  private async checkAndFinalizeQuietly(examSessionId: string, userId: string): Promise<void> {
+    try {
+      await this.examSessionReportService.checkAndFinalize(examSessionId, userId);
+    } catch (err) {
+      this.logger.error(
+        `최종 리포트 제출 실패 (examSessionId=${examSessionId}): ${describeError(err)}`,
+      );
+    }
   }
 }
