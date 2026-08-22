@@ -602,7 +602,9 @@ describe('ExamSessionService.assertActiveSession', () => {
 
 describe('ExamSessionService.listMine', () => {
   it('keeps session null when nothing started yet and the 1-hour start deadline has not passed', async () => {
-    const exam = buildExam({ closeAt: new Date(Date.now() + 3600_000) });
+    // 정확히 1시간 후로 잡으면 fixture 생성과 실제 비교 시점 사이의 몇 ms 차이로
+    // 경계값을 넘나들며 flaky해질 수 있어, 여유를 두어 확실히 데드라인 전으로 만든다.
+    const exam = buildExam({ closeAt: new Date(Date.now() + 3600_000 + 60_000) });
     const examService = { findById: jest.fn().mockResolvedValue(exam) } as unknown as ExamService;
     const examApplicationService = {
       listMine: jest
