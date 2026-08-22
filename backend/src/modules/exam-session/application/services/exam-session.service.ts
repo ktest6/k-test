@@ -199,10 +199,13 @@ export class ExamSessionService {
    * 아직 신청 안 했지만 지금 신청할 수 있는(신청 기간 내 + 정원 여유) 시험을 합쳐서 준다.
    * 이미 SUBMITTED/EXPIRED/DISQUALIFIED/BLOCKED인, 응시자 입장에서 더 할 게 없는 신청
    * 건은 제외한다.
+   *
+   * userId가 null이면(비로그인) "신청 가능한 시험"만 준다 — 누구 신청 내역인지 알 수
+   * 없으니 isApplied는 항상 false, session은 항상 null이다.
    */
-  async listAvailable(userId: string): Promise<AvailableExam[]> {
+  async listAvailable(userId: string | null): Promise<AvailableExam[]> {
     const [applications, allExams] = await Promise.all([
-      this.examApplicationService.listMine(userId),
+      userId ? this.examApplicationService.listMine(userId) : Promise.resolve([]),
       this.examService.list(),
     ]);
 
@@ -212,8 +215,8 @@ export class ExamSessionService {
 
     const results = await Promise.all(
       allExams.map(async (exam): Promise<AvailableExam | null> => {
-        const application = applicationByExamId.get(exam.id);
-        if (application) {
+        const application = userId ? applicationByExamId.get(exam.id) : undefined;
+        if (application && userId) {
           const session = await this.examSessionRepository.findByUserAndExam(userId, exam.id);
           if (session && session.status !== SessionStatus.INPROGRESS) {
             return null;

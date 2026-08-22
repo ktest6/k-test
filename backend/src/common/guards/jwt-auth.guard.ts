@@ -9,6 +9,7 @@ import { ConfigType } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { appConfig } from '../../config/configuration';
+import { IS_OPTIONAL_AUTH_KEY } from '../decorators/optional-auth.decorator';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { Role } from '../enums/role.enum';
 import { AuthenticatedRequest } from '../interfaces/authenticated-request.interface';
@@ -42,9 +43,17 @@ export class JwtAuthGuard implements CanActivate {
       return true;
     }
 
+    const isOptionalAuth = this.reflector.getAllAndOverride<boolean>(IS_OPTIONAL_AUTH_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const token = this.extractToken(request);
     if (!token) {
+      if (isOptionalAuth) {
+        return true;
+      }
       throw new UnauthorizedException('인증 토큰이 없습니다.');
     }
 
@@ -54,9 +63,15 @@ export class JwtAuthGuard implements CanActivate {
         secret: this.config.jwt.accessSecret,
       });
     } catch {
+      if (isOptionalAuth) {
+        return true;
+      }
       throw new UnauthorizedException('유효하지 않거나 만료된 토큰입니다.');
     }
     if (payload.type === 'refresh') {
+      if (isOptionalAuth) {
+        return true;
+      }
       throw new UnauthorizedException('리프레시 토큰으로는 인증할 수 없습니다.');
     }
 

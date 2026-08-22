@@ -954,6 +954,34 @@ describe('ExamSessionService.listAvailable', () => {
 
     expect(result).toEqual([]);
   });
+
+  it('returns only open-for-application exams and skips the applications lookup when userId is null', async () => {
+    const exam = buildExam();
+    const examService = {
+      findById: jest.fn().mockResolvedValue(exam),
+      list: jest.fn().mockResolvedValue([exam]),
+    } as unknown as ExamService;
+    const listMine = jest.fn();
+    const examApplicationService = {
+      listMine,
+      countActive: jest.fn().mockResolvedValue(0),
+    } as unknown as ExamApplicationService;
+    const repository = buildRepository();
+    const service = new ExamSessionService(
+      repository,
+      examService,
+      examApplicationService,
+      buildIdCardVerificationService(),
+      buildEarphoneDetectionService(),
+      buildExamResultService(),
+      buildConfig(),
+    );
+
+    const result = await service.listAvailable(null);
+
+    expect(listMine).not.toHaveBeenCalled();
+    expect(result).toEqual([{ exam, isApplied: false, session: null }]);
+  });
 });
 
 describe('ExamSessionService.disqualify', () => {
