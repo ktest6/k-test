@@ -28,6 +28,14 @@ export class AvailableExamResponseDto {
   })
   isApplied: boolean;
 
+  @ApiProperty({
+    description:
+      '정원이 찼는지 여부. 정원이 차도 목록에서 빠지지 않고 이 필드로만 표시된다 — ' +
+      'true면 [신청하기] 버튼을 비활성화하고 "마감" 배지를 보여주면 된다. isApplied가 ' +
+      'true인 항목(이미 신청함)은 항상 false다.',
+  })
+  isCapacityFull: boolean;
+
   @ApiPropertyOptional({
     type: String,
     nullable: true,

@@ -135,11 +135,14 @@ function buildExam(): Exam {
 describe('ExamSessionController.listAvailable', () => {
   it('passes the caller id to ExamSessionService.listAvailable when logged in', async () => {
     const exam = buildExam();
-    const listAvailable = jest
-      .fn()
-      .mockResolvedValue([
-        { exam, isApplied: true, session: { id: '11', status: SessionStatus.INPROGRESS } },
-      ]);
+    const listAvailable = jest.fn().mockResolvedValue([
+      {
+        exam,
+        isApplied: true,
+        isCapacityFull: false,
+        session: { id: '11', status: SessionStatus.INPROGRESS },
+      },
+    ]);
     const controller = buildController({ listAvailable });
 
     const result = await controller.listAvailable(buildUser());
@@ -154,6 +157,7 @@ describe('ExamSessionController.listAvailable', () => {
         applicationOpenAt: exam.applicationOpenAt,
         applicationCloseAt: exam.applicationCloseAt,
         isApplied: true,
+        isCapacityFull: false,
         examSessionId: '11',
         sessionStatus: SessionStatus.INPROGRESS,
       },
@@ -162,7 +166,9 @@ describe('ExamSessionController.listAvailable', () => {
 
   it('passes null when there is no logged-in user', async () => {
     const exam = buildExam();
-    const listAvailable = jest.fn().mockResolvedValue([{ exam, isApplied: false, session: null }]);
+    const listAvailable = jest
+      .fn()
+      .mockResolvedValue([{ exam, isApplied: false, isCapacityFull: false, session: null }]);
     const controller = buildController({ listAvailable });
 
     const result = await controller.listAvailable(undefined);
@@ -177,9 +183,24 @@ describe('ExamSessionController.listAvailable', () => {
         applicationOpenAt: exam.applicationOpenAt,
         applicationCloseAt: exam.applicationCloseAt,
         isApplied: false,
+        isCapacityFull: false,
         examSessionId: null,
         sessionStatus: null,
       },
+    ]);
+  });
+
+  it('marks isCapacityFull true for an unapplied exam that has reached capacity', async () => {
+    const exam = buildExam();
+    const listAvailable = jest
+      .fn()
+      .mockResolvedValue([{ exam, isApplied: false, isCapacityFull: true, session: null }]);
+    const controller = buildController({ listAvailable });
+
+    const result = await controller.listAvailable(undefined);
+
+    expect(result).toEqual([
+      expect.objectContaining({ isApplied: false, isCapacityFull: true, examSessionId: null }),
     ]);
   });
 });
