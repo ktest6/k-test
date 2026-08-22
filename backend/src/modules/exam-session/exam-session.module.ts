@@ -5,7 +5,6 @@ import { ExamQuestionModule } from '../exam-question/exam-question.module';
 import { ScoringModule } from '../scoring/scoring.module';
 import { VerificationsModule } from '../verifications/verifications.module';
 import { EXAM_SESSION_REPOSITORY } from './domain/exam-session.repository.interface';
-import { ExamSessionExpiryScheduler } from './application/schedulers/exam-session-expiry.scheduler';
 import { ExamSessionAnswerService } from './application/services/exam-session-answer.service';
 import { ExamSessionQuestionService } from './application/services/exam-session-question.service';
 import { ExamSessionService } from './application/services/exam-session.service';
@@ -21,7 +20,6 @@ import { MypageController } from './presentation/mypage.controller';
     ExamSessionService,
     ExamSessionQuestionService,
     ExamSessionAnswerService,
-    ExamSessionExpiryScheduler,
     { provide: EXAM_SESSION_REPOSITORY, useClass: SupabaseExamSessionRepository },
   ],
   exports: [ExamSessionService, ExamSessionQuestionService, ExamSessionAnswerService],

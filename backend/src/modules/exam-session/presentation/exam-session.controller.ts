@@ -64,7 +64,6 @@ export class ExamSessionController {
     summary: '세션 상태 조회',
     description:
       '진행중/제출됨/차단 상태를 반환한다. INPROGRESS가 아니면 더 이상 진행할 수 없다는 뜻이다 — ' +
-      '마감시각이 지나도록 INPROGRESS였던 세션은 조회 시점에 SUBMITTED로 전환된다. ' +
       '문항별 진행 상황(다음에 풀 문항)은 문항 목록 조회의 answered 필드로 프런트가 직접 계산한다.',
   })
   @ApiStandardResponse(ExamSessionStatusResponseDto, { message: '세션 상태 조회 성공' })
