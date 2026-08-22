@@ -567,19 +567,21 @@ def test_API_health_가_받아쓰기_상태를_알려_준다():
     여기서는 '어느 것이든 상태 표시가 앞뒤가 맞는가'를 확인한다.
     (2026-08-22 Azure 합류 전에는 gemini 하나뿐이라 이름을 못 박아 두었었다)
     """
-    from src.speech.intake import choose_stt_provider
+    from src.speech.intake import azure_pronunciation_available, choose_stt_provider
 
     payload = client.get("/health").json()
     assert payload["stt_provider"] == choose_stt_provider()
 
+    # 받아쓰기(전사)의 '임시' 여부는 제공자에 달렸다.
+    # azure = 원래 계획(임시 아님), gemini·lora = 자리 메우거나 검증 전(임시).
     if payload["stt_provider"] == "azure":
-        # Azure 는 원래 계획하던 것이라 '임시'가 아니고, 발음까지 잰다
         assert payload["stt_provisional"] is False
-        assert payload["pronunciation_scoring"] is True
     else:
-        # Gemini 는 Azure 자리에 임시로 꽂아 둔 것이고 발음은 못 잰다
         assert payload["stt_provisional"] is True
-        assert payload["pronunciation_scoring"] is False
+
+    # 발음 채점은 전사 제공자와 **따로** 돈다(2026-08-22 분리).
+    # 받아쓰기가 무엇이든 Azure 열쇠만 있으면 delivery 를 잰다.
+    assert payload["pronunciation_scoring"] is azure_pronunciation_available()
 
 
 # ---------------------------------------------------------------------------
