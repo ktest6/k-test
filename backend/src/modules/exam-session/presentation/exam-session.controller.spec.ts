@@ -51,8 +51,8 @@ function buildQuestion(id: string): Question {
   );
 }
 
-function buildSessionQuestion(id: string, answered = false): SessionQuestion {
-  return { question: buildQuestion(id), answered };
+function buildSessionQuestion(id: string, answered = false, skipped = false): SessionQuestion {
+  return { question: buildQuestion(id), answered, skipped };
 }
 
 function buildAnswer(overrides: Partial<{ id: string; questionId: string }> = {}): Answer {
@@ -89,6 +89,7 @@ function buildController(
   answerOverrides: Partial<{
     save: jest.Mock;
     get: jest.Mock;
+    skip: jest.Mock;
   }> = {},
 ) {
   const sessionService = {
@@ -104,6 +105,7 @@ function buildController(
   const answerService = {
     save: jest.fn(),
     get: jest.fn(),
+    skip: jest.fn(),
     ...answerOverrides,
   } as unknown as ExamSessionAnswerService;
   return new ExamSessionController(
@@ -168,6 +170,7 @@ describe('ExamSessionController.listQuestions', () => {
         id: '1',
         part: QuestionSectionType.SITUATION_DESCRIPTION,
         answered: true,
+        skipped: false,
         preparationSeconds: 40,
         responseSeconds: 60,
         guideTexts: ['안내문구'],
@@ -181,6 +184,7 @@ describe('ExamSessionController.listQuestions', () => {
         id: '2',
         part: QuestionSectionType.SITUATION_DESCRIPTION,
         answered: false,
+        skipped: false,
         preparationSeconds: 40,
         responseSeconds: 60,
         guideTexts: ['안내문구'],
@@ -211,6 +215,7 @@ describe('ExamSessionController.getQuestion', () => {
       id: '3',
       part: QuestionSectionType.SITUATION_DESCRIPTION,
       answered: true,
+      skipped: false,
       preparationSeconds: 40,
       responseSeconds: 60,
       guideTexts: ['안내문구'],
@@ -239,7 +244,7 @@ describe('ExamSessionController.getQuestion', () => {
       [],
       new Date(),
     );
-    const getQuestion = jest.fn().mockResolvedValue({ question, answered: false });
+    const getQuestion = jest.fn().mockResolvedValue({ question, answered: false, skipped: false });
     const controller = buildController({}, { getQuestion });
 
     const result = await controller.getQuestion('1', '4', buildUser());
@@ -319,5 +324,20 @@ describe('ExamSessionController.getAnswer', () => {
     expect(get).toHaveBeenCalledWith('1', '1', '1');
     expect(result.graded).toBe(true);
     expect(result.score).toEqual({ total: 90 });
+  });
+});
+
+describe('ExamSessionController.skipQuestion', () => {
+  it('delegates to ExamSessionAnswerService.skip then returns the updated question', async () => {
+    const skip = jest.fn().mockResolvedValue(undefined);
+    const getQuestion = jest.fn().mockResolvedValue(buildSessionQuestion('1', false, true));
+    const controller = buildController({}, { getQuestion }, { skip });
+
+    const result = await controller.skipQuestion('1', '1', buildUser());
+
+    expect(skip).toHaveBeenCalledWith('1', '1', '1');
+    expect(getQuestion).toHaveBeenCalledWith('1', '1', '1');
+    expect(result.skipped).toBe(true);
+    expect(result.answered).toBe(false);
   });
 });

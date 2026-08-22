@@ -1,4 +1,7 @@
-import { NotFoundDomainException } from '../../../../common/exceptions/domain.exception';
+import {
+  ConflictDomainException,
+  NotFoundDomainException,
+} from '../../../../common/exceptions/domain.exception';
 import { StorageUploadUrlService } from '../../../../infrastructure/supabase/storage-upload-url.service';
 import { AnswerService } from '../../../answer/application/services/answer.service';
 import { Answer } from '../../../answer/domain/entities/answer.entity';
@@ -8,6 +11,7 @@ import { Question } from '../../../question/domain/entities/question.entity';
 import { QuestionSectionType } from '../../../question/domain/enums/question-section-type.enum';
 import { ScoringService } from '../../../scoring/application/services/scoring.service';
 import { Score } from '../../../scoring/domain/entities/score.entity';
+import { SkippedQuestionRepository } from '../../domain/skipped-question.repository.interface';
 import { ExamSessionQuestionService } from './exam-session-question.service';
 import { ExamSessionService } from './exam-session.service';
 import { ExamSessionAnswerService } from './exam-session-answer.service';
@@ -43,6 +47,21 @@ function buildStorageUploadUrlService(
   } as unknown as StorageUploadUrlService;
 }
 
+function buildSkippedQuestionRepository(
+  overrides: Partial<{
+    create: jest.Mock;
+    listSkippedQuestionIds: jest.Mock;
+    deleteBySessionAndQuestion: jest.Mock;
+  }> = {},
+) {
+  return {
+    create: jest.fn(),
+    listSkippedQuestionIds: jest.fn().mockResolvedValue([]),
+    deleteBySessionAndQuestion: jest.fn(),
+    ...overrides,
+  } as unknown as SkippedQuestionRepository;
+}
+
 describe('ExamSessionAnswerService.save', () => {
   it('gates on assertActiveSession and question membership before saving', async () => {
     const assertActiveSession = jest.fn().mockResolvedValue(undefined);
@@ -60,6 +79,7 @@ describe('ExamSessionAnswerService.save', () => {
       answerService,
       scoringService,
       buildStorageUploadUrlService(),
+      buildSkippedQuestionRepository(),
     );
 
     const result = await service.save('1', '1', '1', {
@@ -96,6 +116,7 @@ describe('ExamSessionAnswerService.save', () => {
       answerService,
       scoringService,
       buildStorageUploadUrlService(),
+      buildSkippedQuestionRepository(),
     );
 
     await service.save('1', '1', '1', {
@@ -115,6 +136,34 @@ describe('ExamSessionAnswerService.save', () => {
     );
   });
 
+  it('clears any existing skip record for the question once an answer is saved', async () => {
+    const examSessionService = {
+      assertActiveSession: jest.fn().mockResolvedValue(undefined),
+    } as unknown as ExamSessionService;
+    const examSessionQuestionService = {
+      getQuestion: jest.fn().mockResolvedValue(buildQuestion()),
+    } as unknown as ExamSessionQuestionService;
+    const answerService = {
+      save: jest.fn().mockResolvedValue(buildAnswer()),
+    } as unknown as AnswerService;
+    const scoringService = {
+      findByAnswerId: jest.fn().mockResolvedValue(null),
+    } as unknown as ScoringService;
+    const deleteBySessionAndQuestion = jest.fn();
+    const service = new ExamSessionAnswerService(
+      examSessionService,
+      examSessionQuestionService,
+      answerService,
+      scoringService,
+      buildStorageUploadUrlService(),
+      buildSkippedQuestionRepository({ deleteBySessionAndQuestion }),
+    );
+
+    await service.save('1', '1', '1', { audioFileUrl: '1/1/1.webm' });
+
+    expect(deleteBySessionAndQuestion).toHaveBeenCalledWith('1', '1');
+  });
+
   it('propagates a rejection from assertActiveSession without saving', async () => {
     const assertActiveSession = jest.fn().mockRejectedValue(new Error('session not active'));
     const examSessionService = { assertActiveSession } as unknown as ExamSessionService;
@@ -129,6 +178,7 @@ describe('ExamSessionAnswerService.save', () => {
       answerService,
       scoringService,
       buildStorageUploadUrlService(),
+      buildSkippedQuestionRepository(),
     );
 
     await expect(service.save('1', '1', '1', { audioFileUrl: '1/1/1.webm' })).rejects.toThrow(
@@ -156,6 +206,7 @@ describe('ExamSessionAnswerService.get', () => {
       answerService,
       scoringService,
       buildStorageUploadUrlService(),
+      buildSkippedQuestionRepository(),
     );
 
     const result = await service.get('1', '1', '1');
@@ -177,6 +228,7 @@ describe('ExamSessionAnswerService.get', () => {
       answerService,
       scoringService,
       buildStorageUploadUrlService(),
+      buildSkippedQuestionRepository(),
     );
 
     await expect(service.get('1', '1', '1')).rejects.toThrow(NotFoundDomainException);
@@ -201,6 +253,7 @@ describe('ExamSessionAnswerService.createUploadUrl', () => {
       answerService,
       scoringService,
       storageUploadUrlService,
+      buildSkippedQuestionRepository(),
     );
 
     const result = await service.createUploadUrl('100', '50', '9', 'audio/webm');
@@ -228,6 +281,7 @@ describe('ExamSessionAnswerService.createUploadUrl', () => {
       answerService,
       scoringService,
       storageUploadUrlService,
+      buildSkippedQuestionRepository(),
     );
 
     await expect(service.createUploadUrl('100', '50', '9', 'audio/webm')).rejects.toThrow(
@@ -235,5 +289,73 @@ describe('ExamSessionAnswerService.createUploadUrl', () => {
     );
     expect(getQuestion).not.toHaveBeenCalled();
     expect(createSignedUploadUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe('ExamSessionAnswerService.skip', () => {
+  it('records the skip when the question has not been answered yet', async () => {
+    const assertActiveSession = jest.fn().mockResolvedValue(undefined);
+    const examSessionService = { assertActiveSession } as unknown as ExamSessionService;
+    const getQuestion = jest
+      .fn()
+      .mockResolvedValue({ question: buildQuestion(), answered: false, skipped: false });
+    const examSessionQuestionService = { getQuestion } as unknown as ExamSessionQuestionService;
+    const create = jest.fn();
+    const service = new ExamSessionAnswerService(
+      examSessionService,
+      examSessionQuestionService,
+      {} as unknown as AnswerService,
+      {} as unknown as ScoringService,
+      buildStorageUploadUrlService(),
+      buildSkippedQuestionRepository({ create }),
+    );
+
+    await service.skip('1', '1', '1');
+
+    expect(assertActiveSession).toHaveBeenCalledWith('1', '1');
+    expect(getQuestion).toHaveBeenCalledWith('1', '1', '1');
+    expect(create).toHaveBeenCalledWith('1', '1');
+  });
+
+  it('rejects skipping a question that has already been answered', async () => {
+    const examSessionService = {
+      assertActiveSession: jest.fn().mockResolvedValue(undefined),
+    } as unknown as ExamSessionService;
+    const getQuestion = jest
+      .fn()
+      .mockResolvedValue({ question: buildQuestion(), answered: true, skipped: false });
+    const examSessionQuestionService = { getQuestion } as unknown as ExamSessionQuestionService;
+    const create = jest.fn();
+    const service = new ExamSessionAnswerService(
+      examSessionService,
+      examSessionQuestionService,
+      {} as unknown as AnswerService,
+      {} as unknown as ScoringService,
+      buildStorageUploadUrlService(),
+      buildSkippedQuestionRepository({ create }),
+    );
+
+    await expect(service.skip('1', '1', '1')).rejects.toThrow(ConflictDomainException);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('propagates a rejection from assertActiveSession without recording anything', async () => {
+    const assertActiveSession = jest.fn().mockRejectedValue(new Error('session not active'));
+    const examSessionService = { assertActiveSession } as unknown as ExamSessionService;
+    const getQuestion = jest.fn();
+    const examSessionQuestionService = { getQuestion } as unknown as ExamSessionQuestionService;
+    const create = jest.fn();
+    const service = new ExamSessionAnswerService(
+      examSessionService,
+      examSessionQuestionService,
+      {} as unknown as AnswerService,
+      {} as unknown as ScoringService,
+      buildStorageUploadUrlService(),
+      buildSkippedQuestionRepository({ create }),
+    );
+
+    await expect(service.skip('1', '1', '1')).rejects.toThrow('session not active');
+    expect(getQuestion).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
   });
 });

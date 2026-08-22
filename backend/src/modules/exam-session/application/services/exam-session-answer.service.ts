@@ -1,5 +1,8 @@
-import { Injectable } from '@nestjs/common';
-import { NotFoundDomainException } from '../../../../common/exceptions/domain.exception';
+import { Inject, Injectable } from '@nestjs/common';
+import {
+  ConflictDomainException,
+  NotFoundDomainException,
+} from '../../../../common/exceptions/domain.exception';
 import {
   SignedUploadUrl,
   StorageUploadUrlService,
@@ -8,6 +11,10 @@ import { AnswerService } from '../../../answer/application/services/answer.servi
 import { Answer } from '../../../answer/domain/entities/answer.entity';
 import { AnswerType } from '../../../answer/domain/enums/answer-type.enum';
 import { ScoringService } from '../../../scoring/application/services/scoring.service';
+import {
+  SKIPPED_QUESTION_REPOSITORY,
+  SkippedQuestionRepository,
+} from '../../domain/skipped-question.repository.interface';
 import { ExamSessionQuestionService } from './exam-session-question.service';
 import { ExamSessionService } from './exam-session.service';
 
@@ -41,6 +48,8 @@ export class ExamSessionAnswerService {
     private readonly answerService: AnswerService,
     private readonly scoringService: ScoringService,
     private readonly storageUploadUrlService: StorageUploadUrlService,
+    @Inject(SKIPPED_QUESTION_REPOSITORY)
+    private readonly skippedQuestionRepository: SkippedQuestionRepository,
   ) {}
 
   async save(
@@ -63,7 +72,32 @@ export class ExamSessionAnswerService {
       input.durationMs ?? null,
     );
 
+    // 건너뛴 문항에 마음을 바꿔 답을 저장하는 경우 — 스킵 기록을 지워서
+    // "답했는데 건너뛴 것으로도 잡히는" 이중 상태를 막는다.
+    await this.skippedQuestionRepository.deleteBySessionAndQuestion(examSessionId, questionId);
+
     return this.withScore(answer);
+  }
+
+  /**
+   * 문항을 답하지 않고 건너뛴다. 답안이 없으므로 채점 파이프라인과는 접점이
+   * 없다 — "이 문항은 처리됐다(답했거나 건너뛰었거나)"만 기록해서, 나중에
+   * 마지막 문항까지 처리됐는지 판정(최종 리포트 제출 트리거)에 쓴다. 이미
+   * 답안이 저장된 문항은 건너뛸 수 없다 — 되돌리려면 신청 취소가 아니라
+   * 관리자 개입이 필요한 수준의 예외 상황으로 본다.
+   */
+  async skip(examSessionId: string, questionId: string, userId: string): Promise<void> {
+    await this.examSessionService.assertActiveSession(examSessionId, userId);
+    const { answered } = await this.examSessionQuestionService.getQuestion(
+      examSessionId,
+      questionId,
+      userId,
+    );
+    if (answered) {
+      throw new ConflictDomainException('이미 답안을 저장한 문항은 건너뛸 수 없습니다.');
+    }
+
+    await this.skippedQuestionRepository.create(examSessionId, questionId);
   }
 
   async get(

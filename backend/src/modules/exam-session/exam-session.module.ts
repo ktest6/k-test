@@ -5,10 +5,12 @@ import { ExamQuestionModule } from '../exam-question/exam-question.module';
 import { ScoringModule } from '../scoring/scoring.module';
 import { VerificationsModule } from '../verifications/verifications.module';
 import { EXAM_SESSION_REPOSITORY } from './domain/exam-session.repository.interface';
+import { SKIPPED_QUESTION_REPOSITORY } from './domain/skipped-question.repository.interface';
 import { ExamSessionAnswerService } from './application/services/exam-session-answer.service';
 import { ExamSessionQuestionService } from './application/services/exam-session-question.service';
 import { ExamSessionService } from './application/services/exam-session.service';
 import { SupabaseExamSessionRepository } from './infrastructure/repositories/supabase-exam-session.repository';
+import { SupabaseSkippedQuestionRepository } from './infrastructure/repositories/supabase-skipped-question.repository';
 import { AdminExamSessionController } from './presentation/admin-exam-session.controller';
 import { ExamSessionController } from './presentation/exam-session.controller';
 import { MypageController } from './presentation/mypage.controller';
@@ -21,6 +23,7 @@ import { MypageController } from './presentation/mypage.controller';
     ExamSessionQuestionService,
     ExamSessionAnswerService,
     { provide: EXAM_SESSION_REPOSITORY, useClass: SupabaseExamSessionRepository },
+    { provide: SKIPPED_QUESTION_REPOSITORY, useClass: SupabaseSkippedQuestionRepository },
   ],
   exports: [ExamSessionService, ExamSessionQuestionService, ExamSessionAnswerService],
 })
