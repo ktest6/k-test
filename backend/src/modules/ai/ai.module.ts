@@ -2,11 +2,13 @@ import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
 import { AI_PROVIDER } from './domain/ports/ai-provider.port';
 import { EARPHONE_PROVIDER } from './domain/ports/earphone-provider.port';
+import { FINALIZE_PROVIDER } from './domain/ports/finalize-provider.port';
 import { IDENTITY_PROVIDER } from './domain/ports/identity-provider.port';
 import { MONITORING_PROVIDER } from './domain/ports/monitoring-provider.port';
 import { QUESTION_GENERATOR } from './domain/ports/question-generator.port';
 import { SCORING_PROVIDER } from './domain/ports/scoring-provider.port';
 import { AiService } from './application/services/ai.service';
+import { AssessmentFinalizeAdapter } from './infrastructure/providers/assessment-finalize.adapter';
 import { AssessmentScoringAdapter } from './infrastructure/providers/assessment-scoring.adapter';
 import { FastApiEarphoneAdapter } from './infrastructure/providers/fastapi-earphone.adapter';
 import { FastApiIdentityAdapter } from './infrastructure/providers/fastapi-identity.adapter';
@@ -23,6 +25,7 @@ import { AiController } from './presentation/ai.controller';
     { provide: AI_PROVIDER, useClass: StubAiProviderAdapter },
     { provide: QUESTION_GENERATOR, useClass: MockQuestionGeneratorAdapter },
     { provide: SCORING_PROVIDER, useClass: AssessmentScoringAdapter },
+    { provide: FINALIZE_PROVIDER, useClass: AssessmentFinalizeAdapter },
     { provide: MONITORING_PROVIDER, useClass: MonitoringAdapter },
     { provide: IDENTITY_PROVIDER, useClass: FastApiIdentityAdapter },
     { provide: EARPHONE_PROVIDER, useClass: FastApiEarphoneAdapter },
@@ -30,6 +33,7 @@ import { AiController } from './presentation/ai.controller';
   exports: [
     QUESTION_GENERATOR,
     SCORING_PROVIDER,
+    FINALIZE_PROVIDER,
     MONITORING_PROVIDER,
     IDENTITY_PROVIDER,
     EARPHONE_PROVIDER,

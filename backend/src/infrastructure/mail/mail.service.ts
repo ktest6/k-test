@@ -3,6 +3,7 @@ import { ConfigType } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { appConfig } from '../../config/configuration';
 import { describeError } from '../../common/utils/describe-error.util';
+import { buildExamResultReadyEmail } from './templates/exam-result-ready.template';
 import { buildVerificationCodeEmail } from './templates/verification-code.template';
 
 /**
@@ -39,6 +40,23 @@ export class MailService {
       });
     } catch (err) {
       this.logger.warn(`인증 메일 발송 실패 (email=${email}): ${describeError(err)}`);
+      throw err;
+    }
+  }
+
+  /** 실패해도 이 메서드는 예외를 던진다 — 조용히 삼킬지는 호출부(리스너 등)가 정한다. */
+  async sendExamResultReady(email: string): Promise<void> {
+    const { subject, text, html } = buildExamResultReadyEmail();
+    try {
+      await this.transporter.sendMail({
+        from: this.config.mail.from,
+        to: email,
+        subject,
+        text,
+        html,
+      });
+    } catch (err) {
+      this.logger.warn(`결과 안내 메일 발송 실패 (email=${email}): ${describeError(err)}`);
       throw err;
     }
   }

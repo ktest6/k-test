@@ -15,4 +15,8 @@ export interface ExamSessionRepository {
   findByUserAndExam(userId: string, examId: string): Promise<ExamSession | null>;
   updateResumeCount(id: string, resumeCount: number): Promise<ExamSession>;
   updateStatus(id: string, status: SessionStatus): Promise<ExamSession>;
+  /** status를 SUBMITTED로, submittedAt을 지금 시각으로 함께 세팅한다. */
+  markSubmitted(id: string): Promise<ExamSession>;
+  /** 최종 리포트 제출 재시도 배치(ExamSessionReportRetryScheduler)용 — 전체 회차를 통틀어 SUBMITTED인 세션. */
+  findAllSubmitted(): Promise<ExamSession[]>;
 }

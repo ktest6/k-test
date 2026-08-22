@@ -13,6 +13,7 @@ import { ScoringService } from '../../../scoring/application/services/scoring.se
 import { Score } from '../../../scoring/domain/entities/score.entity';
 import { SkippedQuestionRepository } from '../../domain/skipped-question.repository.interface';
 import { ExamSessionQuestionService } from './exam-session-question.service';
+import { ExamSessionReportService } from './exam-session-report.service';
 import { ExamSessionService } from './exam-session.service';
 import { ExamSessionAnswerService } from './exam-session-answer.service';
 
@@ -45,6 +46,13 @@ function buildStorageUploadUrlService(
       .mockResolvedValue({ path: '1/1/1.webm', signedUrl: 'https://signed', token: 'token' }),
     ...overrides,
   } as unknown as StorageUploadUrlService;
+}
+
+function buildExamSessionReportService(overrides: Partial<{ checkAndFinalize: jest.Mock }> = {}) {
+  return {
+    checkAndFinalize: jest.fn().mockResolvedValue(undefined),
+    ...overrides,
+  } as unknown as ExamSessionReportService;
 }
 
 function buildSkippedQuestionRepository(
@@ -80,6 +88,7 @@ describe('ExamSessionAnswerService.save', () => {
       scoringService,
       buildStorageUploadUrlService(),
       buildSkippedQuestionRepository(),
+      buildExamSessionReportService(),
     );
 
     const result = await service.save('1', '1', '1', {
@@ -117,6 +126,7 @@ describe('ExamSessionAnswerService.save', () => {
       scoringService,
       buildStorageUploadUrlService(),
       buildSkippedQuestionRepository(),
+      buildExamSessionReportService(),
     );
 
     await service.save('1', '1', '1', {
@@ -157,11 +167,71 @@ describe('ExamSessionAnswerService.save', () => {
       scoringService,
       buildStorageUploadUrlService(),
       buildSkippedQuestionRepository({ deleteBySessionAndQuestion }),
+      buildExamSessionReportService(),
     );
 
     await service.save('1', '1', '1', { audioFileUrl: '1/1/1.webm' });
 
     expect(deleteBySessionAndQuestion).toHaveBeenCalledWith('1', '1');
+  });
+
+  it('checks whether the session is now complete after saving the answer', async () => {
+    const examSessionService = {
+      assertActiveSession: jest.fn().mockResolvedValue(undefined),
+    } as unknown as ExamSessionService;
+    const examSessionQuestionService = {
+      getQuestion: jest.fn().mockResolvedValue(buildQuestion()),
+    } as unknown as ExamSessionQuestionService;
+    const answerService = {
+      save: jest.fn().mockResolvedValue(buildAnswer()),
+    } as unknown as AnswerService;
+    const scoringService = {
+      findByAnswerId: jest.fn().mockResolvedValue(null),
+    } as unknown as ScoringService;
+    const checkAndFinalize = jest.fn().mockResolvedValue(undefined);
+    const service = new ExamSessionAnswerService(
+      examSessionService,
+      examSessionQuestionService,
+      answerService,
+      scoringService,
+      buildStorageUploadUrlService(),
+      buildSkippedQuestionRepository(),
+      buildExamSessionReportService({ checkAndFinalize }),
+    );
+
+    await service.save('1', '1', '1', { audioFileUrl: '1/1/1.webm' });
+
+    expect(checkAndFinalize).toHaveBeenCalledWith('1', '1');
+  });
+
+  it('does not let a failed finalize check break the save response', async () => {
+    const examSessionService = {
+      assertActiveSession: jest.fn().mockResolvedValue(undefined),
+    } as unknown as ExamSessionService;
+    const examSessionQuestionService = {
+      getQuestion: jest.fn().mockResolvedValue(buildQuestion()),
+    } as unknown as ExamSessionQuestionService;
+    const saved = buildAnswer();
+    const answerService = {
+      save: jest.fn().mockResolvedValue(saved),
+    } as unknown as AnswerService;
+    const scoringService = {
+      findByAnswerId: jest.fn().mockResolvedValue(null),
+    } as unknown as ScoringService;
+    const checkAndFinalize = jest.fn().mockRejectedValue(new Error('assessment down'));
+    const service = new ExamSessionAnswerService(
+      examSessionService,
+      examSessionQuestionService,
+      answerService,
+      scoringService,
+      buildStorageUploadUrlService(),
+      buildSkippedQuestionRepository(),
+      buildExamSessionReportService({ checkAndFinalize }),
+    );
+
+    const result = await service.save('1', '1', '1', { audioFileUrl: '1/1/1.webm' });
+
+    expect(result.answer).toBe(saved);
   });
 
   it('propagates a rejection from assertActiveSession without saving', async () => {
@@ -179,6 +249,7 @@ describe('ExamSessionAnswerService.save', () => {
       scoringService,
       buildStorageUploadUrlService(),
       buildSkippedQuestionRepository(),
+      buildExamSessionReportService(),
     );
 
     await expect(service.save('1', '1', '1', { audioFileUrl: '1/1/1.webm' })).rejects.toThrow(
@@ -207,6 +278,7 @@ describe('ExamSessionAnswerService.get', () => {
       scoringService,
       buildStorageUploadUrlService(),
       buildSkippedQuestionRepository(),
+      buildExamSessionReportService(),
     );
 
     const result = await service.get('1', '1', '1');
@@ -229,6 +301,7 @@ describe('ExamSessionAnswerService.get', () => {
       scoringService,
       buildStorageUploadUrlService(),
       buildSkippedQuestionRepository(),
+      buildExamSessionReportService(),
     );
 
     await expect(service.get('1', '1', '1')).rejects.toThrow(NotFoundDomainException);
@@ -254,6 +327,7 @@ describe('ExamSessionAnswerService.createUploadUrl', () => {
       scoringService,
       storageUploadUrlService,
       buildSkippedQuestionRepository(),
+      buildExamSessionReportService(),
     );
 
     const result = await service.createUploadUrl('100', '50', '9', 'audio/webm');
@@ -282,6 +356,7 @@ describe('ExamSessionAnswerService.createUploadUrl', () => {
       scoringService,
       storageUploadUrlService,
       buildSkippedQuestionRepository(),
+      buildExamSessionReportService(),
     );
 
     await expect(service.createUploadUrl('100', '50', '9', 'audio/webm')).rejects.toThrow(
@@ -308,6 +383,7 @@ describe('ExamSessionAnswerService.skip', () => {
       {} as unknown as ScoringService,
       buildStorageUploadUrlService(),
       buildSkippedQuestionRepository({ create }),
+      buildExamSessionReportService(),
     );
 
     await service.skip('1', '1', '1');
@@ -333,6 +409,7 @@ describe('ExamSessionAnswerService.skip', () => {
       {} as unknown as ScoringService,
       buildStorageUploadUrlService(),
       buildSkippedQuestionRepository({ create }),
+      buildExamSessionReportService(),
     );
 
     await expect(service.skip('1', '1', '1')).rejects.toThrow(ConflictDomainException);
@@ -352,10 +429,57 @@ describe('ExamSessionAnswerService.skip', () => {
       {} as unknown as ScoringService,
       buildStorageUploadUrlService(),
       buildSkippedQuestionRepository({ create }),
+      buildExamSessionReportService(),
     );
 
     await expect(service.skip('1', '1', '1')).rejects.toThrow('session not active');
     expect(getQuestion).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('checks whether the session is now complete after recording the skip', async () => {
+    const examSessionService = {
+      assertActiveSession: jest.fn().mockResolvedValue(undefined),
+    } as unknown as ExamSessionService;
+    const getQuestion = jest
+      .fn()
+      .mockResolvedValue({ question: buildQuestion(), answered: false, skipped: false });
+    const examSessionQuestionService = { getQuestion } as unknown as ExamSessionQuestionService;
+    const checkAndFinalize = jest.fn().mockResolvedValue(undefined);
+    const service = new ExamSessionAnswerService(
+      examSessionService,
+      examSessionQuestionService,
+      {} as unknown as AnswerService,
+      {} as unknown as ScoringService,
+      buildStorageUploadUrlService(),
+      buildSkippedQuestionRepository(),
+      buildExamSessionReportService({ checkAndFinalize }),
+    );
+
+    await service.skip('1', '1', '1');
+
+    expect(checkAndFinalize).toHaveBeenCalledWith('1', '1');
+  });
+
+  it('does not let a failed finalize check break the skip response', async () => {
+    const examSessionService = {
+      assertActiveSession: jest.fn().mockResolvedValue(undefined),
+    } as unknown as ExamSessionService;
+    const getQuestion = jest
+      .fn()
+      .mockResolvedValue({ question: buildQuestion(), answered: false, skipped: false });
+    const examSessionQuestionService = { getQuestion } as unknown as ExamSessionQuestionService;
+    const checkAndFinalize = jest.fn().mockRejectedValue(new Error('assessment down'));
+    const service = new ExamSessionAnswerService(
+      examSessionService,
+      examSessionQuestionService,
+      {} as unknown as AnswerService,
+      {} as unknown as ScoringService,
+      buildStorageUploadUrlService(),
+      buildSkippedQuestionRepository(),
+      buildExamSessionReportService({ checkAndFinalize }),
+    );
+
+    await expect(service.skip('1', '1', '1')).resolves.toBeUndefined();
   });
 });

@@ -108,4 +108,29 @@ export class SupabaseExamSessionRepository implements ExamSessionRepository {
     }
     return toDomain(data);
   }
+
+  async markSubmitted(id: string): Promise<ExamSession> {
+    const client = this.supabaseService.getAdminClient();
+    const { data, error } = await client
+      .from(TABLE)
+      .update({ status: SessionStatus.SUBMITTED, submitted_at: new Date().toISOString() })
+      .eq('exam_session_id', Number(id))
+      .select()
+      .single<ExamSessionRow>();
+
+    if (error || !data) {
+      throw new ConflictDomainException(error?.message ?? '응시 세션 갱신에 실패했습니다.');
+    }
+    return toDomain(data);
+  }
+
+  async findAllSubmitted(): Promise<ExamSession[]> {
+    const client = this.supabaseService.getAdminClient();
+    const { data } = await client
+      .from(TABLE)
+      .select('*')
+      .eq('status', SessionStatus.SUBMITTED)
+      .is('deleted_at', null);
+    return (data ?? []).map((row: ExamSessionRow) => toDomain(row));
+  }
 }

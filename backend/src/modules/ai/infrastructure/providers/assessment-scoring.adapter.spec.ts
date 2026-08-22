@@ -14,6 +14,7 @@ function buildConfig(overrides: Partial<{ url: string; apiKey: string }> = {}): 
     requireIdentityVerification: true,
     requireEarphoneCheck: true,
     requireMonitoringService: true,
+    reportRetrySchedulerEnabled: true,
     supabase: { url: 'https://project.supabase.co', anonKey: '', serviceRoleKey: '' },
     identityVerification: {
       minIntervalMinutes: 5,

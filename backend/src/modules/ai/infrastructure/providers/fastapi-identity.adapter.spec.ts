@@ -13,6 +13,7 @@ function buildConfig(): AppConfig {
     requireIdentityVerification: true,
     requireEarphoneCheck: true,
     requireMonitoringService: true,
+    reportRetrySchedulerEnabled: true,
     supabase: { url: '', anonKey: '', serviceRoleKey: '' },
     identityVerification: {
       minIntervalMinutes: 5,
