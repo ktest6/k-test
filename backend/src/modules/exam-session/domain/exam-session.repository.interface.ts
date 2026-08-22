@@ -19,4 +19,6 @@ export interface ExamSessionRepository {
   markSubmitted(id: string): Promise<ExamSession>;
   /** 최종 리포트 제출 재시도 배치(ExamSessionReportRetryScheduler)용 — 전체 회차를 통틀어 SUBMITTED인 세션. */
   findAllSubmitted(): Promise<ExamSession[]>;
+  /** 방치 세션 정리 배치(ExamSessionExpiryScheduler)용 — 전체 회차를 통틀어 INPROGRESS인 세션. */
+  findAllInProgress(): Promise<ExamSession[]>;
 }

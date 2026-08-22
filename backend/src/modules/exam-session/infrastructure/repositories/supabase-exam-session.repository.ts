@@ -133,4 +133,14 @@ export class SupabaseExamSessionRepository implements ExamSessionRepository {
       .is('deleted_at', null);
     return (data ?? []).map((row: ExamSessionRow) => toDomain(row));
   }
+
+  async findAllInProgress(): Promise<ExamSession[]> {
+    const client = this.supabaseService.getAdminClient();
+    const { data } = await client
+      .from(TABLE)
+      .select('*')
+      .eq('status', SessionStatus.INPROGRESS)
+      .is('deleted_at', null);
+    return (data ?? []).map((row: ExamSessionRow) => toDomain(row));
+  }
 }

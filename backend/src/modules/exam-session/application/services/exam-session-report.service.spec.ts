@@ -4,6 +4,8 @@ import { AnswerStatus } from '../../../answer/domain/enums/answer-status.enum';
 import { AnswerType } from '../../../answer/domain/enums/answer-type.enum';
 import { FinalizeProviderPort } from '../../../ai/domain/ports/finalize-provider.port';
 import { ScoringProviderPort } from '../../../ai/domain/ports/scoring-provider.port';
+import { Exam } from '../../../exam/domain/entities/exam.entity';
+import { ExamService } from '../../../exam/application/services/exam.service';
 import { ExamQuestionService } from '../../../exam-question/application/services/exam-question.service';
 import { QuestionService } from '../../../question/application/services/question.service';
 import { Question } from '../../../question/domain/entities/question.entity';
@@ -32,6 +34,19 @@ function buildSession(
     null,
     null,
     new Date(),
+  );
+}
+
+function buildExam(overrides: Partial<{ id: string; closeAt: Date }> = {}): Exam {
+  return new Exam(
+    overrides.id ?? '7',
+    '202601',
+    new Date('2026-08-01T00:00:00.000Z'),
+    new Date('2026-08-03T00:00:00.000Z'),
+    new Date('2026-08-04T00:00:00.000Z'),
+    overrides.closeAt ?? new Date('2026-08-05T00:00:00.000Z'),
+    10,
+    new Date('2026-08-01T00:00:00.000Z'),
   );
 }
 
@@ -68,6 +83,9 @@ interface BuildServiceMocks {
   findById: jest.Mock;
   markSubmitted: jest.Mock;
   findAllSubmitted: jest.Mock;
+  findAllInProgress: jest.Mock;
+  updateStatus: jest.Mock;
+  findExamById: jest.Mock;
   listSkippedQuestionIds: jest.Mock;
   listAssignedQuestions: jest.Mock;
   findQuestionById: jest.Mock;
@@ -87,6 +105,9 @@ function buildService(overrides: Partial<BuildServiceMocks> = {}) {
     findById: jest.fn().mockResolvedValue(buildSession()),
     markSubmitted: jest.fn(),
     findAllSubmitted: jest.fn().mockResolvedValue([]),
+    findAllInProgress: jest.fn().mockResolvedValue([]),
+    updateStatus: jest.fn(),
+    findExamById: jest.fn().mockResolvedValue(buildExam()),
     listSkippedQuestionIds: jest.fn().mockResolvedValue([]),
     listAssignedQuestions: jest.fn().mockResolvedValue([]),
     findQuestionById: jest.fn(),
@@ -106,10 +127,13 @@ function buildService(overrides: Partial<BuildServiceMocks> = {}) {
     findById: mocks.findById,
     markSubmitted: mocks.markSubmitted,
     findAllSubmitted: mocks.findAllSubmitted,
+    findAllInProgress: mocks.findAllInProgress,
+    updateStatus: mocks.updateStatus,
   } as unknown as ExamSessionRepository;
   const skippedQuestionRepository = {
     listSkippedQuestionIds: mocks.listSkippedQuestionIds,
   } as unknown as SkippedQuestionRepository;
+  const examService = { findById: mocks.findExamById } as unknown as ExamService;
   const examQuestionService = {
     listAssignedQuestions: mocks.listAssignedQuestions,
   } as unknown as ExamQuestionService;
@@ -133,6 +157,7 @@ function buildService(overrides: Partial<BuildServiceMocks> = {}) {
   const service = new ExamSessionReportService(
     examSessionRepository,
     skippedQuestionRepository,
+    examService,
     examQuestionService,
     questionService,
     answerService,
@@ -166,6 +191,30 @@ describe('ExamSessionReportService.checkAndFinalize', () => {
 
     expect(mocks.finalize).not.toHaveBeenCalled();
     expect(mocks.markSubmitted).not.toHaveBeenCalled();
+  });
+
+  it('finalizes an incomplete session anyway when force is true', async () => {
+    const { service, mocks } = buildService({
+      listAssignedQuestions: jest.fn().mockResolvedValue([buildQuestion('1'), buildQuestion('2')]),
+      listAnsweredQuestionIds: jest.fn().mockResolvedValue(['1']),
+      listSkippedQuestionIds: jest.fn().mockResolvedValue([]),
+      listBySession: jest.fn().mockResolvedValue([buildAnswer('a1', '1')]),
+      findByAnswerId: jest
+        .fn()
+        .mockResolvedValue(new Score('s1', 'a1', { submission_id: 'a1' }, new Date())),
+    });
+
+    await service.checkAndFinalize('100', '9', { force: true });
+
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedItems: [
+          { itemId: '1', mode: 'speaking' },
+          { itemId: '2', mode: 'speaking' },
+        ],
+      }),
+    );
+    expect(mocks.markSubmitted).toHaveBeenCalledWith('100');
   });
 
   it('finalizes once every assigned question is either answered or skipped', async () => {
@@ -332,5 +381,76 @@ describe('ExamSessionReportService.syncPendingReports', () => {
     const count = await service.syncPendingReports();
 
     expect(count).toBe(1);
+  });
+});
+
+describe('ExamSessionReportService.expireAbandonedSessions', () => {
+  it('leaves sessions alone while still within the grace period after close', async () => {
+    const session = buildSession({ id: '100', userId: '9' });
+    const { service, mocks } = buildService({
+      findAllInProgress: jest.fn().mockResolvedValue([session]),
+      findExamById: jest.fn().mockResolvedValue(buildExam({ closeAt: new Date() })),
+    });
+
+    const result = await service.expireAbandonedSessions();
+
+    expect(mocks.updateStatus).not.toHaveBeenCalled();
+    expect(result).toEqual({ expiredCount: 0, forcedSubmitCount: 0 });
+  });
+
+  it('marks a session EXPIRED when nothing was ever answered', async () => {
+    const session = buildSession({ id: '100', userId: '9' });
+    const longClosed = new Date(Date.now() - 4 * 60 * 60 * 1000);
+    const { service, mocks } = buildService({
+      findAllInProgress: jest.fn().mockResolvedValue([session]),
+      findExamById: jest.fn().mockResolvedValue(buildExam({ closeAt: longClosed })),
+      listAnsweredQuestionIds: jest.fn().mockResolvedValue([]),
+    });
+
+    const result = await service.expireAbandonedSessions();
+
+    expect(mocks.updateStatus).toHaveBeenCalledWith('100', SessionStatus.EXPIRED);
+    expect(result).toEqual({ expiredCount: 1, forcedSubmitCount: 0 });
+  });
+
+  it('force-finalizes a session that answered at least one question', async () => {
+    const session = buildSession({ id: '100', userId: '9' });
+    const longClosed = new Date(Date.now() - 4 * 60 * 60 * 1000);
+    const { service, mocks } = buildService({
+      findAllInProgress: jest.fn().mockResolvedValue([session]),
+      findExamById: jest.fn().mockResolvedValue(buildExam({ closeAt: longClosed })),
+      listAnsweredQuestionIds: jest.fn().mockResolvedValue(['1']),
+    });
+    const checkAndFinalizeSpy = jest
+      .spyOn(service, 'checkAndFinalize')
+      .mockResolvedValue(undefined);
+
+    const result = await service.expireAbandonedSessions();
+
+    expect(checkAndFinalizeSpy).toHaveBeenCalledWith('100', '9', { force: true });
+    expect(mocks.updateStatus).not.toHaveBeenCalled();
+    expect(result).toEqual({ expiredCount: 0, forcedSubmitCount: 1 });
+  });
+
+  it('keeps processing remaining sessions when a force-finalize fails', async () => {
+    const sessionA = buildSession({ id: '100', userId: '9' });
+    const sessionB = buildSession({ id: '200', userId: '15' });
+    const longClosed = new Date(Date.now() - 4 * 60 * 60 * 1000);
+    const { service } = buildService({
+      findAllInProgress: jest.fn().mockResolvedValue([sessionA, sessionB]),
+      findExamById: jest.fn().mockResolvedValue(buildExam({ closeAt: longClosed })),
+      listAnsweredQuestionIds: jest.fn().mockResolvedValue(['1']),
+    });
+    jest
+      .spyOn(service, 'checkAndFinalize')
+      .mockImplementation((examSessionId: string) =>
+        examSessionId === '100'
+          ? Promise.reject(new Error('assessment down'))
+          : Promise.resolve(undefined),
+      );
+
+    const result = await service.expireAbandonedSessions();
+
+    expect(result).toEqual({ expiredCount: 0, forcedSubmitCount: 1 });
   });
 });

@@ -11,6 +11,7 @@ import {
   SCORING_PROVIDER,
   ScoringProviderPort,
 } from '../../../ai/domain/ports/scoring-provider.port';
+import { ExamService } from '../../../exam/application/services/exam.service';
 import { ExamQuestionService } from '../../../exam-question/application/services/exam-question.service';
 import { QuestionService } from '../../../question/application/services/question.service';
 import { ExamResultService } from '../../../scoring/application/services/exam-result.service';
@@ -19,10 +20,18 @@ import {
   EXAM_SESSION_REPOSITORY,
   ExamSessionRepository,
 } from '../../domain/exam-session.repository.interface';
+import { SessionStatus } from '../../domain/enums/session-status.enum';
 import {
   SKIPPED_QUESTION_REPOSITORY,
   SkippedQuestionRepository,
 } from '../../domain/skipped-question.repository.interface';
+
+/**
+ * 마감 후 이 시간이 지나도록 INPROGRESS로 남아있으면 "방치된 세션"으로 본다
+ * (SESSION-01의 START_BUFFER_BEFORE_CLOSE_MS와 별개 — 그건 신규 시작 차단용, 이건
+ * 이미 시작한 세션을 강제로 종료 처리하는 유예 시간).
+ */
+const SESSION_ABANDON_GRACE_MS = 3 * 60 * 60 * 1000;
 
 /**
  * "문항이 하나 처리(답했거나 건너뛰었거나)될 때마다" 세션이 다 끝났는지 확인하고,
@@ -38,6 +47,7 @@ export class ExamSessionReportService {
     @Inject(EXAM_SESSION_REPOSITORY) private readonly examSessionRepository: ExamSessionRepository,
     @Inject(SKIPPED_QUESTION_REPOSITORY)
     private readonly skippedQuestionRepository: SkippedQuestionRepository,
+    private readonly examService: ExamService,
     private readonly examQuestionService: ExamQuestionService,
     private readonly questionService: QuestionService,
     private readonly answerService: AnswerService,
@@ -56,8 +66,16 @@ export class ExamSessionReportService {
    * resumeCount가 올라가다 BLOCKED까지 걸릴 수 있다 — 이미 끝난 사람인데도.
    * finalize 성공 여부는 tb_exam_results에 결과가 있는지로 따로 판정한다
    * (`syncPendingReports`가 그 기준으로 재시도 대상을 찾는다).
+   *
+   * options.force가 true면 배정 문항을 다 처리하지 못했어도 강제로 진행한다 —
+   * `ExamSessionExpiryScheduler`가 마감 후 오래 방치된 세션을 그때까지 푼 것만이라도
+   * 채점해서 종료시킬 때 쓴다.
    */
-  async checkAndFinalize(examSessionId: string, userId: string): Promise<void> {
+  async checkAndFinalize(
+    examSessionId: string,
+    userId: string,
+    options: { force?: boolean } = {},
+  ): Promise<void> {
     const session = await this.examSessionRepository.findById(examSessionId);
     if (!session) {
       return;
@@ -71,7 +89,7 @@ export class ExamSessionReportService {
 
     const handledIds = new Set([...answeredIds, ...skippedIds]);
     const isComplete = assignedQuestions.every((question) => handledIds.has(question.id));
-    if (!isComplete) {
+    if (!isComplete && !options.force) {
       return;
     }
 
@@ -149,6 +167,48 @@ export class ExamSessionReportService {
     );
 
     return results.filter(Boolean).length;
+  }
+
+  /**
+   * 마감 후 SESSION_ABANDON_GRACE_MS(3시간)가 지나도록 INPROGRESS로 남은 세션을 정리한다.
+   * 답변한 문항이 하나도 없으면(시작만 해놓고 손도 안 댄 경우) EXPIRED로 처리한다 —
+   * 채점할 내용이 없으니 assessment를 부를 이유가 없다. 하나라도 답변했으면 그때까지
+   * 푼 것만이라도 채점하도록 checkAndFinalize를 force로 강제 실행한다(문항을 다 못
+   * 채웠어도 진행 — assessment가 커버리지 부족은 알아서 insufficient로 처리한다).
+   * `ExamSessionExpiryScheduler`가 주기적으로 호출.
+   */
+  async expireAbandonedSessions(): Promise<{ expiredCount: number; forcedSubmitCount: number }> {
+    const inProgressSessions = await this.examSessionRepository.findAllInProgress();
+
+    let expiredCount = 0;
+    let forcedSubmitCount = 0;
+
+    await Promise.all(
+      inProgressSessions.map(async (session) => {
+        const exam = await this.examService.findById(session.examId);
+        if (Date.now() - exam.closeAt.getTime() < SESSION_ABANDON_GRACE_MS) {
+          return;
+        }
+
+        const answeredIds = await this.answerService.listAnsweredQuestionIds(session.id);
+        if (answeredIds.length === 0) {
+          await this.examSessionRepository.updateStatus(session.id, SessionStatus.EXPIRED);
+          expiredCount += 1;
+          return;
+        }
+
+        try {
+          await this.checkAndFinalize(session.id, session.userId, { force: true });
+          forcedSubmitCount += 1;
+        } catch (err) {
+          this.logger.error(
+            `방치 세션 강제 제출 실패 (examSessionId=${session.id}): ${describeError(err)}`,
+          );
+        }
+      }),
+    );
+
+    return { expiredCount, forcedSubmitCount };
   }
 
   /**
