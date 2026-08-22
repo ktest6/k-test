@@ -45,10 +45,12 @@ export class ExamSessionController {
   @ApiOperation({
     summary: '오늘 응시 가능한 시험 목록 조회',
     description:
-      '로그인 없이도 호출할 수 있다 — 비로그인이면 지금 신청 가능한(신청 기간 내 + 정원 여유) ' +
-      '시험만 내려주고(isApplied는 항상 false), 로그인했으면 신청해서 아직 안 끝난(세션 없음 또는 ' +
-      'INPROGRESS) 시험까지 합쳐서 준다. isApplied가 false면 examSessionId/sessionStatus는 항상 ' +
-      'null이다 — 프런트는 isApplied로 [신청하기] vs [이어서 풀기]를 구분하면 된다.',
+      '로그인 없이도 호출할 수 있다 — 비로그인이면 지금 신청 기간이 열려 있는 시험만 ' +
+      '내려주고(isApplied는 항상 false), 로그인했으면 신청해서 아직 안 끝난(세션 없음 또는 ' +
+      'INPROGRESS) 시험까지 합쳐서 준다. 정원이 찬 시험도 목록에서 빠지지 않고 ' +
+      'isCapacityFull:true로만 표시된다. isApplied가 false면 examSessionId/sessionStatus는 항상 ' +
+      'null이다 — 프런트는 isApplied로 [신청하기] vs [이어서 풀기]를, isCapacityFull로 마감 배지를 ' +
+      '구분하면 된다.',
   })
   @ApiStandardResponse(AvailableExamResponseDto, {
     isArray: true,
@@ -66,6 +68,7 @@ export class ExamSessionController {
       applicationOpenAt: item.exam.applicationOpenAt,
       applicationCloseAt: item.exam.applicationCloseAt,
       isApplied: item.isApplied,
+      isCapacityFull: item.isCapacityFull,
       examSessionId: item.session?.id ?? null,
       sessionStatus: item.session?.status ?? null,
     }));

@@ -811,7 +811,7 @@ describe('ExamSessionService.listAvailable', () => {
 
     const result = await service.listAvailable('1');
 
-    expect(result).toEqual([{ exam, isApplied: true, session: null }]);
+    expect(result).toEqual([{ exam, isApplied: true, isCapacityFull: false, session: null }]);
   });
 
   it('includes an applied exam that is still INPROGRESS', async () => {
@@ -841,7 +841,12 @@ describe('ExamSessionService.listAvailable', () => {
     const result = await service.listAvailable('1');
 
     expect(result).toEqual([
-      { exam, isApplied: true, session: { id: session.id, status: SessionStatus.INPROGRESS } },
+      {
+        exam,
+        isApplied: true,
+        isCapacityFull: false,
+        session: { id: session.id, status: SessionStatus.INPROGRESS },
+      },
     ]);
   });
 
@@ -897,7 +902,7 @@ describe('ExamSessionService.listAvailable', () => {
 
     const result = await service.listAvailable('1');
 
-    expect(result).toEqual([{ exam, isApplied: false, session: null }]);
+    expect(result).toEqual([{ exam, isApplied: false, isCapacityFull: false, session: null }]);
   });
 
   it('excludes an unapplied exam whose application window is closed', async () => {
@@ -929,7 +934,7 @@ describe('ExamSessionService.listAvailable', () => {
     expect(result).toEqual([]);
   });
 
-  it('excludes an unapplied exam that has reached capacity', async () => {
+  it('includes an unapplied exam that has reached capacity, marked isCapacityFull', async () => {
     const exam = buildExam();
     const examService = {
       findById: jest.fn().mockResolvedValue(exam),
@@ -952,7 +957,7 @@ describe('ExamSessionService.listAvailable', () => {
 
     const result = await service.listAvailable('1');
 
-    expect(result).toEqual([]);
+    expect(result).toEqual([{ exam, isApplied: false, isCapacityFull: true, session: null }]);
   });
 
   it('returns only open-for-application exams and skips the applications lookup when userId is null', async () => {
@@ -980,7 +985,7 @@ describe('ExamSessionService.listAvailable', () => {
     const result = await service.listAvailable(null);
 
     expect(listMine).not.toHaveBeenCalled();
-    expect(result).toEqual([{ exam, isApplied: false, session: null }]);
+    expect(result).toEqual([{ exam, isApplied: false, isCapacityFull: false, session: null }]);
   });
 });
 

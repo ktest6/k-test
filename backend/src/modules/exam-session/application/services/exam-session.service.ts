@@ -50,12 +50,14 @@ export interface MyExamStatus {
 
 /**
  * "오늘 응시 가능한 시험" 한 줄 — 신청해서 아직 안 끝난(응시전/진행중) 시험 +
- * 아직 신청 안 했지만 신청 기간이 열려 있고 정원도 안 찬 시험. isApplied로 프런트가
- * "이어서 풀기"/"신청하기" 버튼을 구분한다.
+ * 아직 신청 안 했지만 신청 기간이 열려 있는 시험(정원이 찼어도 포함 — isCapacityFull로
+ * 표시만 하고 목록에서 빼지는 않는다). isApplied로 프런트가 "이어서 풀기"/"신청하기"
+ * 버튼을 구분한다.
  */
 export interface AvailableExam {
   exam: Exam;
   isApplied: boolean;
+  isCapacityFull: boolean;
   session: { id: string; status: SessionStatus } | null;
 }
 
@@ -196,9 +198,10 @@ export class ExamSessionService {
 
   /**
    * "오늘 응시 가능한 시험" — 신청해서 아직 안 끝난(세션 없음 또는 INPROGRESS) 시험과,
-   * 아직 신청 안 했지만 지금 신청할 수 있는(신청 기간 내 + 정원 여유) 시험을 합쳐서 준다.
-   * 이미 SUBMITTED/EXPIRED/DISQUALIFIED/BLOCKED인, 응시자 입장에서 더 할 게 없는 신청
-   * 건은 제외한다.
+   * 아직 신청 안 했지만 신청 기간이 열려 있는 시험을 합쳐서 준다. 정원이 찬 시험도
+   * 목록에서 빼지 않고 isCapacityFull:true로 표시만 한다 — 신청 자체는 어차피
+   * POST /exams/:id/apply가 막아준다(409). 이미 SUBMITTED/EXPIRED/DISQUALIFIED/
+   * BLOCKED인, 응시자 입장에서 더 할 게 없는 신청 건은 제외한다.
    *
    * userId가 null이면(비로그인) "신청 가능한 시험"만 준다 — 누구 신청 내역인지 알 수
    * 없으니 isApplied는 항상 false, session은 항상 null이다.
@@ -224,6 +227,7 @@ export class ExamSessionService {
           return {
             exam,
             isApplied: true,
+            isCapacityFull: false,
             session: session ? { id: session.id, status: session.status } : null,
           };
         }
@@ -232,10 +236,12 @@ export class ExamSessionService {
           return null;
         }
         const activeCount = await this.examApplicationService.countActive(exam.id);
-        if (activeCount >= exam.capacity) {
-          return null;
-        }
-        return { exam, isApplied: false, session: null };
+        return {
+          exam,
+          isApplied: false,
+          isCapacityFull: activeCount >= exam.capacity,
+          session: null,
+        };
       }),
     );
 
