@@ -64,6 +64,11 @@ from .speech.audio import (
     AudioRequestError,
 )
 from .speech.gemini_stt import DEFAULT_STT_MODEL, GeminiStt
+from .speech.intake import (
+    azure_pronunciation_available,
+    build_default_stt,
+    choose_stt_provider,
+)
 from .speech.port import SttUnavailable
 
 # 서버가 켜질 때 예열한 결과를 적어 두는 곳. /health 에서 확인할 수 있게 남긴다.
@@ -86,6 +91,15 @@ def warm_up() -> float:
     _warmup_info["done"] = True
     _warmup_info["elapsed_ms"] = elapsed_ms
     return elapsed_ms
+
+
+def _active_stt():
+    """이 서버에 실제로 꽂혀 있는 받아쓰기 하나를 만들어 돌려준다.
+
+    상태 정보(GET /health, GET /schema)에 '무엇이 꽂혀 있는지'를 그대로 적기 위한 것이다.
+    이름을 손으로 적어 두면 실제로 도는 것과 어긋나도 아무도 모른다.
+    """
+    return build_default_stt()
 
 
 @asynccontextmanager
@@ -139,12 +153,20 @@ def health() -> dict:
         # 문항 생성 모듈이 어떤 모델을 쓰는지. 채점 모델과 다르다
         "generation_version": GENERATION_VERSION,
         "llm_model_generation": DEFAULT_GENERATION_MODEL,
-        # 음성 답안을 받아쓰는 쪽. 지금은 Azure 계정이 없어 Gemini 로 대신하고 있고,
-        # 나중에 바뀌면 이 값이 'azure' 로 바뀐다(응답 형식은 그대로다)
-        "stt_provider": GeminiStt.provider_name,
-        "stt_model": DEFAULT_STT_MODEL,
-        "stt_available": GeminiStt().available,
-        "stt_provisional": True,
+        # 음성 답안을 받아쓰는 쪽. 이 서버에서 실제로 꽂혀 있는 것을 그대로 알려 준다.
+        # lora  : 우리가 학습한 Whisper LoRA(아직 검증 전이라 임시). 글자만 받아쓴다
+        # azure : 받아쓰기 + 발음을 한 번에 한다
+        # gemini: 글자만 준다
+        "stt_provider": _active_stt().provider_name,
+        "stt_model": _active_stt().model_name,
+        "stt_available": getattr(_active_stt(), "available", False),
+        # azure 만 '원래 계획하던 것'이라 임시가 아니다. lora·gemini 는 임시로 본다
+        # (lora 는 골든셋 검증 전, gemini 는 Azure 자리에 임시로 꽂아 둔 것)
+        "stt_provisional": choose_stt_provider() != "azure",
+        # 발음(발화 전달력)을 재는지. **전사 제공자와 별개다** — Azure 열쇠만 있으면
+        # lora·gemini 로 받아써도 발음은 Azure 로 따로 채점돼 delivery 에 점수가 들어온다
+        "pronunciation_scoring": azure_pronunciation_available(),
+        "pronunciation_provider": "azure" if azure_pronunciation_available() else None,
         # 인증이 켜져 있는지. False 면 개발 모드라 POST 가 전부 열려 있다는 뜻이다.
         # 운영 서버에서 이 값이 false 로 보이면 키가 안 들어간 것이다
         "auth_enabled": auth_enabled(),
@@ -187,8 +209,16 @@ def feature_catalog() -> dict:
             {
                 "area": "delivery",
                 "label": "발화 전달력",
-                "scored": False,
-                "note": "Azure 발음평가 도입 전이라 채점하지 않고 자리만 남긴다.",
+                # Azure 열쇠가 있어 발음을 잴 수 있으면 채점된다. **전사 제공자와 별개라**
+                # lora·gemini 로 받아써도 발음은 Azure 가 따로 재서 여기에 점수가 들어온다.
+                # 글로 보낸 답안과 쓰기 답안은 지금까지처럼 자리만 남는다
+                "scored": azure_pronunciation_available(),
+                "note": (
+                    "Azure 발음평가로 음성을 채점한 경우에만 점수가 나온다"
+                    "(비중 0.20, 임시값). 받아쓰기를 lora·gemini 가 했어도 발음은 Azure 가 "
+                    "따로 잰다. 발음 점수가 없으면 status=not_evaluated · "
+                    "weight=0 으로 남고 나머지 두 영역이 예전 비율(0.45:0.55)로 계산된다."
+                ),
             },
         ],
         # 어느 영역이 원본 전사를 보고 어느 영역이 보정본을 보는지 알려 준다.
@@ -256,9 +286,15 @@ def feature_catalog() -> dict:
             "max_bytes": MAX_AUDIO_BYTES,
             "download_timeout_s": DOWNLOAD_TIMEOUT_S,
             "url_schemes": ["http", "https"],
-            "provider": GeminiStt.provider_name,
-            "model": DEFAULT_STT_MODEL,
-            "provider_provisional": True,
+            "provider": _active_stt().provider_name,
+            "model": _active_stt().model_name,
+            "provider_provisional": choose_stt_provider() != "azure",
+            # 어느 것을 쓸지는 서버의 KTEST_STT_PROVIDER 환경변수로 정한다.
+            # 안 정해 두면 Azure 열쇠가 있을 때 azure, 없으면 gemini 다.
+            # lora 는 LORA_STT_URL(추론 서버 주소)이 함께 있어야 고를 수 있다
+            "provider_options": ["lora", "azure", "gemini"],
+            # 발음(발화 전달력)은 전사 제공자와 별개로, Azure 열쇠가 있으면 채점된다
+            "pronunciation_provider": "azure" if azure_pronunciation_available() else None,
             "meta_fields": [
                 "stt_provider",
                 "stt_model",
@@ -270,9 +306,12 @@ def feature_catalog() -> dict:
                 "503": "받아쓰지 못했다. 대체 경로가 없다",
             },
             "note": (
-                "Azure 발음평가 도입 전이라 받아쓰기만 하고 발음은 채점하지 않는다"
-                "(delivery 영역 비중 0). 받아쓰기가 학습자 오류를 표준형으로 "
-                "고쳐 적는 경우가 실측됐으므로 문법 점수가 실제보다 높게 나올 수 있다."
+                "발음(delivery)은 전사 제공자와 별개로, Azure 열쇠가 있으면 채점된다"
+                "(정확도·유창성·완전성, 낱말별 근거 포함). 즉 lora·gemini 로 받아써도 "
+                "발음은 Azure 가 따로 잰다. 받아쓰기가 학습자 오류를 표준형으로 "
+                "고쳐 적는 경우가 실측됐으므로 문법 점수가 실제보다 높게 나올 수 있다. "
+                "Azure 발음 경로는 지금 wav 만 처리한다. "
+                "lora 는 우리가 학습한 Whisper 어댑터로, 아직 골든셋 검증 전이라 임시다."
             ),
         },
         # 문항 생성(POST /generate-items)의 문서 길이 한계.
