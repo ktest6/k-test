@@ -4,6 +4,7 @@ import { StoragePublicUrlService } from '../../../infrastructure/supabase/storag
 import { Answer } from '../../answer/domain/entities/answer.entity';
 import { AnswerStatus } from '../../answer/domain/enums/answer-status.enum';
 import { AnswerType } from '../../answer/domain/enums/answer-type.enum';
+import { Exam } from '../../exam/domain/entities/exam.entity';
 import { Question } from '../../question/domain/entities/question.entity';
 import { QuestionSectionType } from '../../question/domain/enums/question-section-type.enum';
 import { ExamSession } from '../domain/entities/exam-session.entity';
@@ -81,6 +82,7 @@ function buildController(
   sessionOverrides: Partial<{
     start: jest.Mock;
     getStatus: jest.Mock;
+    listAvailable: jest.Mock;
   }> = {},
   questionOverrides: Partial<{
     listQuestions: jest.Mock;
@@ -95,6 +97,7 @@ function buildController(
   const sessionService = {
     start: jest.fn(),
     getStatus: jest.fn(),
+    listAvailable: jest.fn(),
     ...sessionOverrides,
   } as unknown as ExamSessionService;
   const questionService = {
@@ -115,6 +118,71 @@ function buildController(
     buildStoragePublicUrlService(),
   );
 }
+
+function buildExam(): Exam {
+  return new Exam(
+    '1',
+    '2026년 1회차',
+    new Date('2026-01-01T00:00:00.000Z'),
+    new Date('2026-12-31T23:59:59.000Z'),
+    new Date('2026-08-01T00:00:00.000Z'),
+    new Date('2026-08-14T23:59:59.000Z'),
+    100,
+    new Date(),
+  );
+}
+
+describe('ExamSessionController.listAvailable', () => {
+  it('passes the caller id to ExamSessionService.listAvailable when logged in', async () => {
+    const exam = buildExam();
+    const listAvailable = jest
+      .fn()
+      .mockResolvedValue([
+        { exam, isApplied: true, session: { id: '11', status: SessionStatus.INPROGRESS } },
+      ]);
+    const controller = buildController({ listAvailable });
+
+    const result = await controller.listAvailable(buildUser());
+
+    expect(listAvailable).toHaveBeenCalledWith('1');
+    expect(result).toEqual([
+      {
+        examId: '1',
+        roundName: '2026년 1회차',
+        openAt: exam.openAt,
+        closeAt: exam.closeAt,
+        applicationOpenAt: exam.applicationOpenAt,
+        applicationCloseAt: exam.applicationCloseAt,
+        isApplied: true,
+        examSessionId: '11',
+        sessionStatus: SessionStatus.INPROGRESS,
+      },
+    ]);
+  });
+
+  it('passes null when there is no logged-in user', async () => {
+    const exam = buildExam();
+    const listAvailable = jest.fn().mockResolvedValue([{ exam, isApplied: false, session: null }]);
+    const controller = buildController({ listAvailable });
+
+    const result = await controller.listAvailable(undefined);
+
+    expect(listAvailable).toHaveBeenCalledWith(null);
+    expect(result).toEqual([
+      {
+        examId: '1',
+        roundName: '2026년 1회차',
+        openAt: exam.openAt,
+        closeAt: exam.closeAt,
+        applicationOpenAt: exam.applicationOpenAt,
+        applicationCloseAt: exam.applicationCloseAt,
+        isApplied: false,
+        examSessionId: null,
+        sessionStatus: null,
+      },
+    ]);
+  });
+});
 
 describe('ExamSessionController.start', () => {
   it('delegates to ExamSessionService.start and maps the response', async () => {
