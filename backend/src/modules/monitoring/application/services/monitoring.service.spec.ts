@@ -50,7 +50,9 @@ function buildAdminClient(
     updateGazeState?: jest.Mock;
   } = {},
 ) {
-  const upload = overrides.upload ?? jest.fn().mockResolvedValue({ data: { path: 'snapshot.jpg' }, error: null });
+  const upload =
+    overrides.upload ??
+    jest.fn().mockResolvedValue({ data: { path: 'snapshot.jpg' }, error: null });
   const download = overrides.download ?? jest.fn();
   const maybeSingle = jest
     .fn()
@@ -124,7 +126,7 @@ function buildService(overrides: {
   const proctoringEventRepository = {
     create: jest.fn(),
     findById: jest.fn(),
-    findByExamSessionId: jest.fn(),
+    findByExamSessionId: jest.fn().mockResolvedValue([]),
     updateClipPath: jest.fn(),
     ...overrides.proctoringEventRepository,
   };
@@ -426,9 +428,7 @@ describe('MonitoringService.analyze', () => {
       buildFrame(),
     );
 
-    expect(analyze).toHaveBeenCalledWith(
-      expect.objectContaining({ previousGazeState: undefined }),
-    );
+    expect(analyze).toHaveBeenCalledWith(expect.objectContaining({ previousGazeState: undefined }));
   });
 
   it('saves the gaze state returned by the provider for the next call', async () => {
@@ -532,7 +532,7 @@ describe('MonitoringService.reportViolation', () => {
     expect(result.sessionStatus).toBe(SessionStatus.INPROGRESS);
   });
 
-  it('does not auto-disqualify on the first DUAL_MONITOR occurrence', async () => {
+  it('does not auto-disqualify on the first occurrence of a violation type', async () => {
     const create = jest.fn().mockResolvedValue(buildEvent({ eventType: 'DUAL_MONITOR' }));
     const findByExamSessionId = jest
       .fn()
@@ -588,7 +588,44 @@ describe('MonitoringService.reportViolation', () => {
     expect(result.sessionStatus).toBe(SessionStatus.DISQUALIFIED);
   });
 
-  it('does not count other violation types toward the DUAL_MONITOR threshold', async () => {
+  it('auto-disqualifies the session on the 2nd occurrence of a non-dual-monitor type too (e.g. TAB_SWITCH)', async () => {
+    const create = jest.fn().mockResolvedValue(buildEvent({ eventType: 'TAB_SWITCH' }));
+    const findByExamSessionId = jest
+      .fn()
+      .mockResolvedValue([
+        buildEvent({ eventType: 'TAB_SWITCH', severity: 'MEDIUM' }),
+        buildEvent({ eventType: 'TAB_SWITCH', severity: 'MEDIUM' }),
+      ]);
+    const disqualifiedSession = new ExamSession(
+      '100',
+      '7',
+      '9',
+      SessionStatus.DISQUALIFIED,
+      0,
+      new Date('2026-08-04T00:00:00.000Z'),
+      null,
+      null,
+      null,
+      new Date(),
+    );
+    const disqualify = jest.fn().mockResolvedValue(disqualifiedSession);
+    const service = buildService({
+      proctoringEventRepository: { create, findByExamSessionId },
+      examSessionService: {
+        assertActiveSession: jest.fn().mockResolvedValue(buildSession()),
+        disqualify,
+      },
+    });
+
+    const result = await service.reportViolation('100', '9', {
+      violationType: ClientViolationType.TAB_SWITCH,
+    });
+
+    expect(disqualify).toHaveBeenCalledWith('100');
+    expect(result.sessionStatus).toBe(SessionStatus.DISQUALIFIED);
+  });
+
+  it('does not count other violation types toward this type’s threshold', async () => {
     const create = jest.fn().mockResolvedValue(buildEvent({ eventType: 'DUAL_MONITOR' }));
     const findByExamSessionId = jest
       .fn()
