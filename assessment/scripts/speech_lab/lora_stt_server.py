@@ -96,13 +96,16 @@ class AdapterWhisper:
         from transformers import WhisperForConditionalGeneration, WhisperProcessor
 
         self.torch = torch
-        # 처리기(소리를 숫자로 바꾸는 도구 + 글자 사전). 어댑터 폴더에 함께 저장돼 있다
+        # 어댑터 폴더에 '어떤 모델 위에 덧댄 것인지'가 적혀 있다. 그것을 먼저 읽는다
+        base_name = PeftConfig.from_pretrained(adapter_dir).base_model_name_or_path
+
+        # 처리기(소리를 숫자로 바꾸는 도구 + 글자 사전)는 **베이스 모델**에서 부른다.
+        # 어댑터는 가중치만 바꾼 것이라 처리기는 베이스 것과 같고, 학습 때 저장이
+        # 불완전해 preprocessor_config.json 이 빠질 수 있어 베이스에서 부르는 편이 안전하다.
         self.processor = WhisperProcessor.from_pretrained(
-            adapter_dir, language=LANGUAGE, task="transcribe"
+            base_name, language=LANGUAGE, task="transcribe"
         )
 
-        # 어댑터 폴더에 '어떤 모델 위에 덧댄 것인지'가 적혀 있다. 그것을 읽어 베이스를 부른다
-        base_name = PeftConfig.from_pretrained(adapter_dir).base_model_name_or_path
         base = WhisperForConditionalGeneration.from_pretrained(base_name)
         # 베이스 모델 위에 우리 어댑터(수십 MB)를 덧씌운다
         self.model = PeftModel.from_pretrained(base, adapter_dir).eval()
