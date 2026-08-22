@@ -76,11 +76,13 @@ export class ExamController {
     return { examId: id };
   }
 
-  /** capacity/applicantCount는 관리자에게만 노출 — 응답 DTO 자체를 role에 따라 다르게 만든다. */
+  /** capacity/applicantCount 자체는 관리자에게만 노출하고, 일반 응시자에겐 정원 마감
+   * 여부(isCapacityFull)만 계산해서 boolean으로 내려준다. */
   private async toResponse(
     exam: Exam,
     role: Role,
   ): Promise<ExamResponseDto | ExamAdminResponseDto> {
+    const applicantCount = await this.examApplicationService.countActive(exam.id);
     const base: ExamResponseDto = {
       id: exam.id,
       roundName: exam.roundName,
@@ -89,12 +91,12 @@ export class ExamController {
       openAt: exam.openAt,
       closeAt: exam.closeAt,
       status: computeExamStatus(exam.openAt, exam.closeAt),
+      isCapacityFull: applicantCount >= exam.capacity,
     };
     if (role !== Role.ADMIN) {
       return base;
     }
 
-    const applicantCount = await this.examApplicationService.countActive(exam.id);
     return { ...base, capacity: exam.capacity, applicantCount };
   }
 }
