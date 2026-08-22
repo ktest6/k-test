@@ -110,10 +110,14 @@ export class ExamSessionReportService {
       await this.examResultService.record(
         {
           examSessionId,
+          // assessment가 채점 커버리지 부족(문항을 너무 많이 스킵하는 등)으로 등급을
+          // 확정하지 못하면 overall_grade가 null로 온다(status: 'insufficient'). 이 흐름은
+          // finalize가 성공 응답을 준 경우에만 타므로(실패는 위 catch에서 결과 자체를
+          // 안 남김), 등급이 없다는 건 곧 완주하지 못했다는 뜻이라 F로 확정한다.
           finalGrade:
             typeof finalizeResponse.overall_grade === 'string'
               ? finalizeResponse.overall_grade
-              : '',
+              : 'F',
           percentile:
             typeof finalizeResponse.percentile === 'number' ? finalizeResponse.percentile : null,
           domainScores: (finalizeResponse.subscores as Record<string, unknown>[] | undefined)
