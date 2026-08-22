@@ -173,13 +173,36 @@ export class ExamSessionController {
     return this.toAnswerResponse(result);
   }
 
+  @Post('exam-sessions/:examSessionId/questions/:questionId/skip')
+  @ApiOperation({
+    summary: '문항 건너뛰기',
+    description:
+      '답안 없이 이 문항을 건너뛴다. 이미 답안을 저장한 문항은 건너뛸 수 없다(409). ' +
+      '진행중인 세션이 아니면 409. 건너뛴 문항에 나중에 답안을 저장하면 건너뛰기 기록은 자동으로 취소된다.',
+  })
+  @ApiStandardResponse(SessionQuestionResponseDto, { status: 201, message: '문항 건너뛰기 완료' })
+  async skipQuestion(
+    @Param('examSessionId') examSessionId: string,
+    @Param('questionId') questionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<SessionQuestionResponseDto> {
+    await this.examSessionAnswerService.skip(examSessionId, questionId, user.id);
+    const sessionQuestion = await this.examSessionQuestionService.getQuestion(
+      examSessionId,
+      questionId,
+      user.id,
+    );
+    return this.toQuestionResponse(sessionQuestion);
+  }
+
   private toQuestionResponse(sessionQuestion: SessionQuestion): SessionQuestionResponseDto {
-    const { question, answered } = sessionQuestion;
+    const { question, answered, skipped } = sessionQuestion;
     const { content } = question;
     return {
       id: question.id,
       part: question.part,
       answered,
+      skipped,
       preparationSeconds: content.preparationSeconds,
       responseSeconds: content.responseSeconds,
       guideTexts: content.guideTexts,

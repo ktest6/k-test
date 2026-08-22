@@ -9,6 +9,7 @@ import { QuestionSectionType } from '../../../question/domain/enums/question-sec
 import { ExamSession } from '../../domain/entities/exam-session.entity';
 import { SessionStatus } from '../../domain/enums/session-status.enum';
 import { ExamSessionRepository } from '../../domain/exam-session.repository.interface';
+import { SkippedQuestionRepository } from '../../domain/skipped-question.repository.interface';
 import { ExamSessionQuestionService } from './exam-session-question.service';
 
 function buildSession(overrides: Partial<{ userId: string; examId: string }> = {}): ExamSession {
@@ -60,6 +61,17 @@ function buildAnswerService(overrides: Partial<{ listAnsweredQuestionIds: jest.M
   } as unknown as AnswerService;
 }
 
+function buildSkippedQuestionRepository(
+  overrides: Partial<{ listSkippedQuestionIds: jest.Mock }> = {},
+) {
+  return {
+    create: jest.fn(),
+    listSkippedQuestionIds: jest.fn().mockResolvedValue([]),
+    deleteBySessionAndQuestion: jest.fn(),
+    ...overrides,
+  } as unknown as SkippedQuestionRepository;
+}
+
 describe('ExamSessionQuestionService.listQuestions', () => {
   it('rejects when the session does not exist', async () => {
     const repository = buildRepository();
@@ -68,6 +80,7 @@ describe('ExamSessionQuestionService.listQuestions', () => {
     } as unknown as ExamQuestionService;
     const service = new ExamSessionQuestionService(
       repository,
+      buildSkippedQuestionRepository(),
       examQuestionService,
       buildAnswerService(),
     );
@@ -84,6 +97,7 @@ describe('ExamSessionQuestionService.listQuestions', () => {
     } as unknown as ExamQuestionService;
     const service = new ExamSessionQuestionService(
       repository,
+      buildSkippedQuestionRepository(),
       examQuestionService,
       buildAnswerService(),
     );
@@ -107,6 +121,7 @@ describe('ExamSessionQuestionService.listQuestions', () => {
     });
     const serviceA = new ExamSessionQuestionService(
       repositoryA,
+      buildSkippedQuestionRepository(),
       examQuestionService,
       buildAnswerService(),
     );
@@ -126,6 +141,7 @@ describe('ExamSessionQuestionService.listQuestions', () => {
     const repository = buildRepository({ findById: jest.fn().mockResolvedValue(buildSession()) });
     const service = new ExamSessionQuestionService(
       repository,
+      buildSkippedQuestionRepository(),
       examQuestionService,
       buildAnswerService(),
     );
@@ -151,6 +167,7 @@ describe('ExamSessionQuestionService.listQuestions', () => {
     const repository = buildRepository({ findById: jest.fn().mockResolvedValue(buildSession()) });
     const service = new ExamSessionQuestionService(
       repository,
+      buildSkippedQuestionRepository(),
       examQuestionService,
       buildAnswerService(),
     );
@@ -175,7 +192,12 @@ describe('ExamSessionQuestionService.listQuestions', () => {
     const answerService = buildAnswerService({
       listAnsweredQuestionIds: jest.fn().mockResolvedValue(['1', '3']),
     });
-    const service = new ExamSessionQuestionService(repository, examQuestionService, answerService);
+    const service = new ExamSessionQuestionService(
+      repository,
+      buildSkippedQuestionRepository(),
+      examQuestionService,
+      answerService,
+    );
 
     const result = await service.listQuestions('session-a', '1');
 
@@ -201,6 +223,7 @@ describe('ExamSessionQuestionService.getQuestion', () => {
     } as unknown as ExamQuestionService;
     const service = new ExamSessionQuestionService(
       repository,
+      buildSkippedQuestionRepository(),
       examQuestionService,
       buildAnswerService(),
     );
@@ -215,6 +238,7 @@ describe('ExamSessionQuestionService.getQuestion', () => {
     } as unknown as ExamQuestionService;
     const service = new ExamSessionQuestionService(
       repository,
+      buildSkippedQuestionRepository(),
       examQuestionService,
       buildAnswerService(),
     );
@@ -231,7 +255,12 @@ describe('ExamSessionQuestionService.getQuestion', () => {
     const answerService = buildAnswerService({
       listAnsweredQuestionIds: jest.fn().mockResolvedValue(['2']),
     });
-    const service = new ExamSessionQuestionService(repository, examQuestionService, answerService);
+    const service = new ExamSessionQuestionService(
+      repository,
+      buildSkippedQuestionRepository(),
+      examQuestionService,
+      answerService,
+    );
 
     const result = await service.getQuestion('1', '2', '1');
 
@@ -249,6 +278,7 @@ describe('ExamSessionQuestionService.getQuestion', () => {
     } as unknown as ExamQuestionService;
     const service = new ExamSessionQuestionService(
       repository,
+      buildSkippedQuestionRepository(),
       examQuestionService,
       buildAnswerService(),
     );
