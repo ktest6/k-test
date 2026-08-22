@@ -27,13 +27,11 @@ function buildExam(): Exam {
 function buildController(
   overrides: Partial<{
     listMine: jest.Mock;
-    listAvailable: jest.Mock;
     getReport: jest.Mock;
   }> = {},
 ) {
   const examSessionService = {
     listMine: jest.fn(),
-    listAvailable: jest.fn(),
     ...overrides,
   } as unknown as ExamSessionService;
   const mypageReportService = {
@@ -119,45 +117,6 @@ describe('MypageController.listMine', () => {
     const [result] = await controller.listMine(buildUser());
 
     expect(result).toMatchObject({ submittedAt, examResultId: 'r1', finalGrade: 'B' });
-  });
-});
-
-describe('MypageController.listAvailable', () => {
-  it('delegates to ExamSessionService.listAvailable and maps the response', async () => {
-    const exam = buildExam();
-    const listAvailable = jest.fn().mockResolvedValue([
-      { exam, isApplied: false, session: null },
-      { exam, isApplied: true, session: { id: '11', status: SessionStatus.INPROGRESS } },
-    ]);
-    const controller = buildController({ listAvailable });
-
-    const result = await controller.listAvailable(buildUser());
-
-    expect(listAvailable).toHaveBeenCalledWith('1');
-    expect(result).toEqual([
-      {
-        examId: '1',
-        roundName: '2026년 1회차',
-        openAt: exam.openAt,
-        closeAt: exam.closeAt,
-        applicationOpenAt: exam.applicationOpenAt,
-        applicationCloseAt: exam.applicationCloseAt,
-        isApplied: false,
-        examSessionId: null,
-        sessionStatus: null,
-      },
-      {
-        examId: '1',
-        roundName: '2026년 1회차',
-        openAt: exam.openAt,
-        closeAt: exam.closeAt,
-        applicationOpenAt: exam.applicationOpenAt,
-        applicationCloseAt: exam.applicationCloseAt,
-        isApplied: true,
-        examSessionId: '11',
-        sessionStatus: SessionStatus.INPROGRESS,
-      },
-    ]);
   });
 });
 

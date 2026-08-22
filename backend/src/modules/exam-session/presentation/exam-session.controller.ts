@@ -3,11 +3,13 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiCommonErrorResponses } from '../../../common/decorators/api-common-error-responses.decorator';
 import { ApiStandardResponse } from '../../../common/decorators/api-standard-response.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { OptionalAuth } from '../../../common/decorators/optional-auth.decorator';
 import { Role } from '../../../common/enums/role.enum';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { StoragePublicUrlService } from '../../../infrastructure/supabase/storage-public-url.service';
 import { AnswerResponseDto } from '../application/dto/answer-response.dto';
 import { AnswerUploadUrlResponseDto } from '../application/dto/answer-upload-url-response.dto';
+import { AvailableExamResponseDto } from '../application/dto/available-exam-response.dto';
 import { ExamSessionStatusResponseDto } from '../application/dto/exam-session-status-response.dto';
 import { RequestAnswerAudioUploadUrlDto } from '../application/dto/request-answer-audio-upload-url.dto';
 import { SaveAnswerDto } from '../application/dto/save-answer.dto';
@@ -37,6 +39,37 @@ export class ExamSessionController {
     private readonly examSessionAnswerService: ExamSessionAnswerService,
     private readonly storagePublicUrlService: StoragePublicUrlService,
   ) {}
+
+  @Get('available-exams')
+  @OptionalAuth()
+  @ApiOperation({
+    summary: '오늘 응시 가능한 시험 목록 조회',
+    description:
+      '로그인 없이도 호출할 수 있다 — 비로그인이면 지금 신청 가능한(신청 기간 내 + 정원 여유) ' +
+      '시험만 내려주고(isApplied는 항상 false), 로그인했으면 신청해서 아직 안 끝난(세션 없음 또는 ' +
+      'INPROGRESS) 시험까지 합쳐서 준다. isApplied가 false면 examSessionId/sessionStatus는 항상 ' +
+      'null이다 — 프런트는 isApplied로 [신청하기] vs [이어서 풀기]를 구분하면 된다.',
+  })
+  @ApiStandardResponse(AvailableExamResponseDto, {
+    isArray: true,
+    message: '오늘 응시 가능한 시험 목록 조회 성공',
+  })
+  async listAvailable(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+  ): Promise<AvailableExamResponseDto[]> {
+    const availableExams = await this.examSessionService.listAvailable(user?.id ?? null);
+    return availableExams.map((item) => ({
+      examId: item.exam.id,
+      roundName: item.exam.roundName,
+      openAt: item.exam.openAt,
+      closeAt: item.exam.closeAt,
+      applicationOpenAt: item.exam.applicationOpenAt,
+      applicationCloseAt: item.exam.applicationCloseAt,
+      isApplied: item.isApplied,
+      examSessionId: item.session?.id ?? null,
+      sessionStatus: item.session?.status ?? null,
+    }));
+  }
 
   @Post('exams/:id/sessions')
   @ApiOperation({
