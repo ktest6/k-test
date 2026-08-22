@@ -25,7 +25,8 @@ export class MyExamStatusResponseDto {
   @ApiPropertyOptional({
     type: String,
     nullable: true,
-    description: '시험을 아직 시작한 적 없으면 null.',
+    description:
+      '시험을 아직 시작한 적 없으면 null(마감 1시간 전 시작 데드라인이 지나 EXPIRED여도 null).',
   })
   examSessionId: string | null;
 
@@ -33,8 +34,9 @@ export class MyExamStatusResponseDto {
     enum: SessionStatus,
     nullable: true,
     description:
-      '시험을 아직 시작한 적 없으면 null. 참고용 값이며, [이어서 풀기]는 이 값을 쓰지 않고 ' +
-      '항상 POST /exams/:id/sessions를 다시 호출해야 한다(재개 남용 방지 카운트가 그 호출로만 세어짐).',
+      '시험을 아직 시작한 적 없고 마감 1시간 전 시작 데드라인도 지났으면 EXPIRED, 그 전이면 null. ' +
+      'examSessionId는 참고용 값이며, [이어서 풀기]는 이 값을 쓰지 않고 항상 ' +
+      'POST /exams/:id/sessions를 다시 호출해야 한다(재개 남용 방지 카운트가 그 호출로만 세어짐).',
   })
   sessionStatus: SessionStatus | null;
 }

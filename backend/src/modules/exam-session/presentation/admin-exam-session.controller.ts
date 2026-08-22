@@ -19,9 +19,8 @@ export class AdminExamSessionController {
   @ApiOperation({
     summary: '세션 수동 실격 처리 (관리자)',
     description:
-      '모니터링 이벤트를 검토한 관리자가 직접 세션을 실격 처리한다. 이미 제출(SUBMITTED, 마감시각이 ' +
-      '지나 자동 제출 처리된 경우 포함)된 세션은 실격으로 덮어쓸 수 없다. 이미 실격된 세션에 다시 ' +
-      '호출해도 안전하다(멱등).',
+      '모니터링 이벤트를 검토한 관리자가 직접 세션을 실격 처리한다. 이미 제출(SUBMITTED)된 세션은 ' +
+      '실격으로 덮어쓸 수 없다. 이미 실격된 세션에 다시 호출해도 안전하다(멱등).',
   })
   @ApiStandardResponse(ExamSessionStatusResponseDto, {
     status: 201,

@@ -31,12 +31,17 @@ export interface ExamSessionStatusResult {
   status: SessionStatus;
 }
 
-/** 마이페이지 "내 시험 현황" 한 줄. session은 아직 시작한 적 없으면 null. */
+/**
+ * 마이페이지 "내 시험 현황" 한 줄. 세션을 시작한 적 있으면 그 세션의 id/상태.
+ * 시작한 적 없고 마감 1시간 전(START_BUFFER_BEFORE_CLOSE_MS) 시작 데드라인도
+ * 지났으면 id는 null, status는 EXPIRED — 신청만 하고 응시 기회를 놓친 경우다.
+ * 그 외(아직 시작 데드라인 전)엔 session 자체가 null.
+ */
 export interface MyExamStatus {
   exam: Exam;
   examStatus: ExamStatus;
   appliedAt: Date;
-  session: { id: string; status: SessionStatus } | null;
+  session: { id: string | null; status: SessionStatus } | null;
 }
 
 @Injectable()
@@ -114,21 +119,22 @@ export class ExamSessionService {
       throw new ForbiddenDomainException('세션 소유자가 아닙니다.');
     }
 
-    const exam = await this.examService.findById(session.examId);
-    const syncedSession = await this.syncExpiredSession(session, exam);
-
     // 세션이 더 이상 진행중이 아니게 된 시점에 본인인증용 얼굴 이미지를 정리한다.
     // 채점 완료 여부와는 무관 — 얼굴 사진은 채점이 아니라 시험 중 모니터링의
     // 동일인 검사에만 쓰였으므로, 세션이 끝나는 순간 더 이상 쓸모가 없다.
     // 멱등한 정리라 상태 조회가 반복돼도 안전하다.
-    if (syncedSession.status !== SessionStatus.INPROGRESS) {
+    if (session.status !== SessionStatus.INPROGRESS) {
       await this.idCardVerificationService.cleanupVerifiedFaceImage(session.examId, userId);
     }
 
-    return { session: syncedSession, status: syncedSession.status };
+    return { session, status: session.status };
   }
 
-  /** 마이페이지 "내 시험 현황" — 신청한 회차별로 세션 상태(시작 전이면 null)를 함께 내려준다. */
+  /**
+   * 마이페이지 "내 시험 현황" — 신청한 회차별로 세션 상태를 함께 내려준다. 세션을
+   * 시작한 적 있으면 그 상태 그대로, 시작한 적 없고 마감 1시간 전 시작 데드라인도
+   * 지났으면 EXPIRED(신청만 하고 응시 기회를 놓친 경우), 그 전이면 null이다.
+   */
   async listMine(userId: string): Promise<MyExamStatus[]> {
     const applications = await this.examApplicationService.listMine(userId);
 
@@ -139,13 +145,20 @@ export class ExamSessionService {
           this.examSessionRepository.findByUserAndExam(userId, application.examId),
         ]);
 
-        const syncedSession = session ? await this.syncExpiredSession(session, exam) : null;
+        let sessionSummary: { id: string | null; status: SessionStatus } | null;
+        if (session) {
+          sessionSummary = { id: session.id, status: session.status };
+        } else if (exam.closeAt.getTime() - Date.now() < START_BUFFER_BEFORE_CLOSE_MS) {
+          sessionSummary = { id: null, status: SessionStatus.EXPIRED };
+        } else {
+          sessionSummary = null;
+        }
 
         return {
           exam,
           examStatus: computeExamStatus(exam.openAt, exam.closeAt),
           appliedAt: application.appliedAt,
-          session: syncedSession ? { id: syncedSession.id, status: syncedSession.status } : null,
+          session: sessionSummary,
         };
       }),
     );
@@ -164,13 +177,7 @@ export class ExamSessionService {
       throw new ConflictDomainException('이미 종료된 시험입니다.');
     }
 
-    const exam = await this.examService.findById(session.examId);
-    const syncedSession = await this.syncExpiredSession(session, exam);
-    if (syncedSession.status !== SessionStatus.INPROGRESS) {
-      throw new ConflictDomainException('이미 종료된 시험입니다.');
-    }
-
-    return syncedSession;
+    return session;
   }
 
   /**
@@ -188,55 +195,12 @@ export class ExamSessionService {
     if (session.status === SessionStatus.DISQUALIFIED) {
       return session;
     }
-
-    const exam = await this.examService.findById(session.examId);
-    const syncedSession = await this.syncExpiredSession(session, exam);
-
-    if (syncedSession.status === SessionStatus.SUBMITTED) {
+    if (session.status === SessionStatus.SUBMITTED) {
       throw new ConflictDomainException(
         `응시 세션(${examSessionId})은 이미 종료되어 실격시킬 수 없습니다.`,
       );
     }
 
     return this.examSessionRepository.updateStatus(examSessionId, SessionStatus.DISQUALIFIED);
-  }
-
-  /**
-   * 마감시각이 지나도록 INPROGRESS로 남은 세션을 실제로 SUBMITTED로 전환해 저장한다.
-   * 결과리포트 제출(finalize) 연동은 아직 없다 — 지금은 상태만 맞춰서, 이후 어떤
-   * 실격/조회 로직도 "사실은 끝난 세션"을 진행중으로 착각하지 않게 한다.
-   */
-  private async syncExpiredSession(session: ExamSession, exam: Exam): Promise<ExamSession> {
-    if (session.status === SessionStatus.INPROGRESS && Date.now() > exam.closeAt.getTime()) {
-      return this.examSessionRepository.updateStatus(session.id, SessionStatus.SUBMITTED);
-    }
-    return session;
-  }
-
-  /**
-   * 전체 회차를 통틀어 마감 지난 INPROGRESS 세션을 한 번에 SUBMITTED로 동기화한다.
-   * `ExamSessionExpiryScheduler`가 주기적으로 호출 — 아무도 조회하지 않아
-   * `syncExpiredSession`(조회 시점 lazy 동기화)이 닿지 않는 세션들을 위한 안전망이다.
-   * 반환값은 이번 호출에서 실제로 전환된 세션 수(로깅용).
-   */
-  async syncAllExpiredSessions(): Promise<number> {
-    const [sessions, exams] = await Promise.all([
-      this.examSessionRepository.findAllInProgress(),
-      this.examService.list(),
-    ]);
-    const examById = new Map(exams.map((exam) => [exam.id, exam]));
-
-    const results = await Promise.all(
-      sessions.map(async (session) => {
-        const exam = examById.get(session.examId);
-        if (!exam) {
-          return false;
-        }
-        const synced = await this.syncExpiredSession(session, exam);
-        return synced.status === SessionStatus.SUBMITTED;
-      }),
-    );
-
-    return results.filter(Boolean).length;
   }
 }

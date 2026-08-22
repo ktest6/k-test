@@ -3,7 +3,6 @@ import { ConfigModule, ConfigType } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
-import { ScheduleModule } from '@nestjs/schedule';
 import { appConfig } from './config/configuration';
 import { validationSchema } from './config/validation.schema';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -41,7 +40,6 @@ import { TestModule } from './modules/test/test.module';
       }),
     }),
     EventEmitterModule.forRoot(),
-    ScheduleModule.forRoot(),
     SupabaseModule,
     HealthModule,
     AuthModule,
