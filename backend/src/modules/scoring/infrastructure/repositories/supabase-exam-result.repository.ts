@@ -62,6 +62,17 @@ export class SupabaseExamResultRepository implements ExamResultRepository {
     return toDomain(data);
   }
 
+  async findById(id: string): Promise<ExamResult | null> {
+    const client = this.supabaseService.getAdminClient();
+    const { data } = await client
+      .from(TABLE)
+      .select('*')
+      .eq('exam_results_id', Number(id))
+      .is('deleted_at', null)
+      .maybeSingle<ExamResultRow>();
+    return data ? toDomain(data) : null;
+  }
+
   async findByExamSessionId(examSessionId: string): Promise<ExamResult | null> {
     const client = this.supabaseService.getAdminClient();
     const { data } = await client

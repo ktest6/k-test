@@ -29,6 +29,10 @@ export class ExamResultService {
     return result;
   }
 
+  findById(id: string): Promise<ExamResult | null> {
+    return this.examResultRepository.findById(id);
+  }
+
   findByExamSessionId(examSessionId: string): Promise<ExamResult | null> {
     return this.examResultRepository.findByExamSessionId(examSessionId);
   }
