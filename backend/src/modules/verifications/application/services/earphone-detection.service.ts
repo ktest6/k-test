@@ -7,15 +7,15 @@ import {
   EarphoneImageInput,
   EarphoneProviderPort,
 } from '../../../ai/domain/ports/earphone-provider.port';
+import { ExamSessionAccessService } from '../../../exam-session/application/services/exam-session-access.service';
 import { EarphoneDetectResponseDto } from '../dto/earphone-detect-response.dto';
-import { ExamAccessService } from './exam-access.service';
 
 /**
- * 시험 시작 전 이어폰 착용 여부 감지. id-card 인증과 마찬가지로 세션이
- * 생기기 전에 끝나야 하므로 신청 여부만 확인한다. 이미지는 다른 인증
+ * 시험 시작 후 이어폰 착용 여부 감지. id-card 인증과 마찬가지로 examSessionId
+ * 기준(회차 없음, 세션 소유권 + 진행중 여부만 확인)이다. 이미지는 다른 인증
  * 흐름처럼 Storage에 올리지 않고 요청에 그대로 실어 보낸다 — 감사용으로
  * 남겨야 할 필요가 없는 일회성 판정이라 저장 없이 바로 전달만 한다.
- * 판정 "결과"는 남긴다 — 시험 시작 게이트(ExamSessionService.start(),
+ * 판정 "결과"는 남긴다 — 게이트(ExamSessionService.assertVerifiedSession,
  * REQUIRE_EARPHONE_CHECK)에서 "통과했는가"를 나중에 조회해야 하기 때문이다.
  *
  * id-card 인증처럼 보안 게이트이므로 FastAPI 호출 실패를 "탐지 안 됨"으로
@@ -26,30 +26,31 @@ export class EarphoneDetectionService {
   private readonly logger = new Logger(EarphoneDetectionService.name);
 
   constructor(
-    private readonly examAccessService: ExamAccessService,
+    private readonly examSessionAccessService: ExamSessionAccessService,
     private readonly supabaseService: SupabaseService,
     @Inject(EARPHONE_PROVIDER) private readonly earphoneProvider: EarphoneProviderPort,
   ) {}
 
   async detect(
     userId: string,
-    examId: string,
+    examSessionId: string,
     leftEarImage: EarphoneImageInput,
     rightEarImage: EarphoneImageInput,
   ): Promise<EarphoneDetectResponseDto> {
-    await this.examAccessService.assertApplied(userId, examId);
+    await this.examSessionAccessService.assertOwnedInProgress(examSessionId, userId);
 
     let result: EarphoneDetectResponseDto;
     try {
       result = await this.earphoneProvider.detect({
-        examId,
+        // AI팀 외부 계약상 필드명은 examId지만, 회차가 없어져서 세션 id를 그대로 싣는다.
+        examId: examSessionId,
         examineeId: userId,
         leftEarImage,
         rightEarImage,
       });
     } catch (err) {
       this.logger.warn(
-        `이어폰 탐지 서비스 통신 실패 (examId=${examId}, userId=${userId}): ${describeError(err)}`,
+        `이어폰 탐지 서비스 통신 실패 (examSessionId=${examSessionId}, userId=${userId}): ${describeError(err)}`,
       );
       throw new ConflictDomainException(
         '이어폰 탐지 서비스와 통신에 실패했습니다. 잠시 후 다시 시도해주세요.',
@@ -58,8 +59,7 @@ export class EarphoneDetectionService {
 
     const client = this.supabaseService.getAdminClient();
     await client.from('tb_earphone_logs').insert({
-      exam_id: Number(examId),
-      user_id: Number(userId),
+      exam_session_id: Number(examSessionId),
       earphone_detected: result.earphoneDetected,
       checked_at: new Date().toISOString(),
     });
@@ -67,14 +67,13 @@ export class EarphoneDetectionService {
     return result;
   }
 
-  /** 시험 시작 전 게이트 체크(ExamSessionService.start)에서 쓰는 통과 여부 조회. */
-  async hasPassedCheck(examId: string, userId: string): Promise<boolean> {
+  /** 게이트 체크(ExamSessionService.assertVerifiedSession)에서 쓰는 통과 여부 조회. */
+  async hasPassedCheck(examSessionId: string): Promise<boolean> {
     const client = this.supabaseService.getAdminClient();
     const { data } = await client
       .from('tb_earphone_logs')
       .select('earphone_log_id')
-      .eq('exam_id', Number(examId))
-      .eq('user_id', Number(userId))
+      .eq('exam_session_id', Number(examSessionId))
       .eq('earphone_detected', false)
       .limit(1)
       .maybeSingle();

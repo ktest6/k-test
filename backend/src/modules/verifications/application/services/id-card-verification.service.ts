@@ -10,20 +10,24 @@ import {
   IDENTITY_PROVIDER,
   IdentityImageInput,
   IdentityProviderPort,
-  VerifyIdentityInput,
   VerifyIdentityResult,
 } from '../../../ai/domain/ports/identity-provider.port';
+import { ExamSessionAccessService } from '../../../exam-session/application/services/exam-session-access.service';
 import { UserService } from '../../../user/application/services/user.service';
 import { VerifyIdCardDto } from '../dto/verify-id-card.dto';
 import { VerifyIdCardResponseDto } from '../dto/verify-id-card-response.dto';
-import { ExamAccessService } from './exam-access.service';
 
 const IDENTITY_DOCS_BUCKET = 'identity-docs';
 
 /**
- * 시험 시작 전 본인인증(신분증-얼굴 대조). 이미지 자체는 프론트가
+ * 시험 시작 후 본인인증(신분증-얼굴 대조). 이미지 자체는 프론트가
  * POST /verifications/id-card/upload-url로 발급받은 signed URL로 Supabase
  * Storage에 직접 올리고, 여기서는 그 경로만 받아 소유권을 검증한다.
+ *
+ * 회차(Exam) 개념이 없어지고 같은 시험을 여러 번 볼 수 있게 되면서, 이
+ * 인증 기록은 examId가 아니라 examSessionId(이 시도 하나)에 묶인다 — 세션이
+ * 먼저 만들어져야 본인인증을 할 수 있는 순서로 바뀌었다(ExamSessionService.start
+ * 참고).
  *
  * 실제 대조는 FastAPI 서비스(IdentityProviderPort)에 위임한다. scoring/
  * monitoring과 달리 여기서는 외부 서비스 실패를 "이상 없음"으로 눙치지
@@ -51,7 +55,7 @@ export class IdCardVerificationService {
 
   constructor(
     private readonly supabaseService: SupabaseService,
-    private readonly examAccessService: ExamAccessService,
+    private readonly examSessionAccessService: ExamSessionAccessService,
     private readonly userService: UserService,
     @Inject(IDENTITY_PROVIDER) private readonly identityProvider: IdentityProviderPort,
   ) {}
@@ -62,21 +66,19 @@ export class IdCardVerificationService {
     // 1) 전달받은 경로가 실제로 이 사용자 소유 폴더 아래인지 확인.
     // upload-url 발급 단계에서 이미 서버가 경로를 정해줬으므로(바꿔치기 불가),
     // 여기서는 그 경로가 그대로 전달됐는지 한 번 더 확인하는 방어 계층이다.
-    const expectedPrefix = `${userId}/${dto.examId}/`;
+    const expectedPrefix = `${userId}/${dto.examSessionId}/`;
     if (!dto.idCardPath.startsWith(expectedPrefix) || !dto.facePath.startsWith(expectedPrefix)) {
       throw new ForbiddenDomainException('본인 파일 경로가 아닙니다.');
     }
 
-    // 2) 신청한 회차인지 확인
-    await this.examAccessService.assertApplied(userId, dto.examId);
+    // 2) 내 소유의 진행중인 세션인지 확인
+    await this.examSessionAccessService.assertOwnedInProgress(dto.examSessionId, userId);
 
-    // 3) FastAPI로 얼굴 대조 요청 — first_name/last_name/birth_date/documentType은
+    // 3) FastAPI로 얼굴 대조 요청 — first_name/last_name/birth_date는
     // 프론트가 아니라 가입 시 등록된 정보를 그대로 쓴다(신청 정보와의 대조가 목적이므로).
     const user = await this.userService.findById(userId);
     if (!user.idNumber) {
-      throw new ConflictDomainException(
-        '먼저 여권번호를 등록해야 본인인증을 진행할 수 있습니다.',
-      );
+      throw new ConflictDomainException('먼저 여권번호를 등록해야 본인인증을 진행할 수 있습니다.');
     }
 
     const [idCardImage, faceImage] = await Promise.all([
@@ -87,7 +89,8 @@ export class IdCardVerificationService {
     let result: VerifyIdentityResult;
     try {
       result = await this.identityProvider.verify({
-        examId: dto.examId,
+        // AI팀 외부 계약상 필드명은 examId지만, 회차가 없어져서 세션 id를 그대로 싣는다.
+        examId: dto.examSessionId,
         examineeId: userId,
         capturedAt: dto.capturedAt,
         sourceImage: idCardImage,
@@ -99,7 +102,7 @@ export class IdCardVerificationService {
       });
     } catch (err) {
       this.logger.warn(
-        `본인인증 서비스 통신 실패 (examId=${dto.examId}, userId=${userId}): ${describeError(err)}`,
+        `본인인증 서비스 통신 실패 (examSessionId=${dto.examSessionId}, userId=${userId}): ${describeError(err)}`,
       );
       throw new ConflictDomainException(
         '본인인증 서비스와 통신에 실패했습니다. 잠시 후 다시 시도해주세요.',
@@ -119,8 +122,7 @@ export class IdCardVerificationService {
 
     // 5) 결과 로그 저장
     await client.from('identity_logs').insert({
-      exam_id: Number(dto.examId),
-      user_id: Number(userId),
+      exam_session_id: Number(dto.examSessionId),
       id_card_path: dto.idCardPath,
       face_path: dto.facePath,
       matched,
@@ -145,14 +147,13 @@ export class IdCardVerificationService {
     };
   }
 
-  /** 시험 시작 전 게이트 체크(ExamSessionService.start)에서 쓰는 완료 여부 조회. */
-  async hasVerifiedExam(examId: string, userId: string): Promise<boolean> {
+  /** 시작 게이트(ExamSessionService.assertVerifiedSession)에서 쓰는 완료 여부 조회. */
+  async hasVerifiedSession(examSessionId: string): Promise<boolean> {
     const client = this.supabaseService.getAdminClient();
     const { data } = await client
       .from('identity_logs')
       .select('id')
-      .eq('exam_id', Number(examId))
-      .eq('user_id', Number(userId))
+      .eq('exam_session_id', Number(examSessionId))
       .eq('matched', true)
       .limit(1)
       .maybeSingle();
@@ -161,13 +162,12 @@ export class IdCardVerificationService {
   }
 
   /** 모니터링(부정행위 감지)에서 동일인 검사용 기준 얼굴 이미지 경로가 필요할 때 쓴다. */
-  async getVerifiedFacePath(examId: string, userId: string): Promise<string | null> {
+  async getVerifiedFacePath(examSessionId: string): Promise<string | null> {
     const client = this.supabaseService.getAdminClient();
     const { data } = await client
       .from('identity_logs')
       .select('face_path')
-      .eq('exam_id', Number(examId))
-      .eq('user_id', Number(userId))
+      .eq('exam_session_id', Number(examSessionId))
       .eq('matched', true)
       .order('verified_at', { ascending: false })
       .limit(1)
@@ -182,8 +182,8 @@ export class IdCardVerificationService {
    * 없으면 조용히 아무 일도 하지 않는다(멱등) — 세션 상태를 조회할 때마다
    * 반복 호출돼도 안전하다.
    */
-  async cleanupVerifiedFaceImage(examId: string, userId: string): Promise<void> {
-    const facePath = await this.getVerifiedFacePath(examId, userId);
+  async cleanupVerifiedFaceImage(examSessionId: string): Promise<void> {
+    const facePath = await this.getVerifiedFacePath(examSessionId);
     if (!facePath) {
       return;
     }

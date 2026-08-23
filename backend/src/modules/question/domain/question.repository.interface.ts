@@ -21,4 +21,6 @@ export interface QuestionRepository {
   findByDocumentId(documentId: string): Promise<Question[]>;
   findById(id: string): Promise<Question | null>;
   findByIds(ids: string[]): Promise<Question[]>;
+  /** 파트별 전체 문항 풀 — 세션 시작 시 이 안에서 세션별 결정적 랜덤으로 몇 개를 뽑는다. */
+  findByPart(part: QuestionSectionType): Promise<Question[]>;
 }

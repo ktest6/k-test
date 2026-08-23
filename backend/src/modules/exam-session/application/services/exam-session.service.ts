@@ -6,11 +6,6 @@ import {
   ForbiddenDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
-import { ExamApplicationService } from '../../../exam/application/services/exam-application.service';
-import { ExamService } from '../../../exam/application/services/exam.service';
-import { Exam } from '../../../exam/domain/entities/exam.entity';
-import { ExamStatus } from '../../../exam/domain/enums/exam-status.enum';
-import { computeExamStatus, isApplicationOpen } from '../../../exam/domain/exam-status.util';
 import { ExamResultService } from '../../../scoring/application/services/exam-result.service';
 import { EarphoneDetectionService } from '../../../verifications/application/services/earphone-detection.service';
 import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
@@ -20,12 +15,10 @@ import {
   EXAM_SESSION_REPOSITORY,
   ExamSessionRepository,
 } from '../../domain/exam-session.repository.interface';
+import { ExamSessionAccessService } from './exam-session-access.service';
 
 /** 재개(재시작) 시도가 이 횟수에 도달하면 세션을 BLOCKED로 전환하고 더 이상 진행을 막는다. */
 const RESUME_ATTEMPT_LIMIT = 3;
-
-/** 마감 임박(1시간 이내)에는 새로 시작할 수 없다 — 응시자가 사실상 완주할 수 없는 시간에 시작하는 걸 막는다. */
-const START_BUFFER_BEFORE_CLOSE_MS = 60 * 60 * 1000;
 
 export interface ExamSessionStatusResult {
   session: ExamSession;
@@ -33,99 +26,53 @@ export interface ExamSessionStatusResult {
 }
 
 /**
- * 마이페이지 "내 시험 현황" 한 줄. 세션을 시작한 적 있으면 그 세션의 id/상태/제출일시.
- * 시작한 적 없고 마감 1시간 전(START_BUFFER_BEFORE_CLOSE_MS) 시작 데드라인도
- * 지났으면 id는 null, status는 EXPIRED — 신청만 하고 응시 기회를 놓친 경우다.
- * 그 외(아직 시작 데드라인 전)엔 session 자체가 null. examResultId/finalGrade는
- * 최종 리포트(/finalize)가 아직 안 나왔으면(채점 중이거나 세션이 없으면) 둘 다 null이다.
+ * 마이페이지 "내 시험 현황" 한 줄 — 이 사용자가 시작한 적 있는 세션 하나에 대응된다.
+ * 회차(Exam)가 없어졌고 같은 시험을 여러 번 볼 수 있어서, 목록에 세션이 여러 개
+ * 있을 수 있다(전부 같은 시험). examResultId/finalGrade는 최종 리포트(/finalize)가
+ * 아직 안 나왔으면(채점 중이거나 재시도 대기중) 둘 다 null이다.
  */
 export interface MyExamStatus {
-  exam: Exam;
-  examStatus: ExamStatus;
-  appliedAt: Date;
-  session: { id: string | null; status: SessionStatus; submittedAt: Date | null } | null;
+  session: { id: string; status: SessionStatus; startedAt: Date; submittedAt: Date | null };
   examResultId: string | null;
   finalGrade: string | null;
-}
-
-/**
- * "오늘 응시 가능한 시험" 한 줄 — 신청해서 아직 안 끝난(응시전/진행중) 시험 +
- * 아직 신청 안 했지만 신청 기간이 열려 있는 시험(정원이 찼어도 포함 — isCapacityFull로
- * 표시만 하고 목록에서 빼지는 않는다). isApplied로 프런트가 "이어서 풀기"/"신청하기"
- * 버튼을 구분한다.
- */
-export interface AvailableExam {
-  exam: Exam;
-  isApplied: boolean;
-  isCapacityFull: boolean;
-  session: { id: string; status: SessionStatus } | null;
 }
 
 @Injectable()
 export class ExamSessionService {
   constructor(
     @Inject(EXAM_SESSION_REPOSITORY) private readonly examSessionRepository: ExamSessionRepository,
-    private readonly examService: ExamService,
-    private readonly examApplicationService: ExamApplicationService,
+    private readonly examSessionAccessService: ExamSessionAccessService,
     private readonly idCardVerificationService: IdCardVerificationService,
     private readonly earphoneDetectionService: EarphoneDetectionService,
     private readonly examResultService: ExamResultService,
     @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>,
   ) {}
 
-  async start(examId: string, userId: string): Promise<ExamSession> {
-    const exam = await this.examService.findById(examId);
-
-    if (computeExamStatus(exam.openAt, exam.closeAt) !== ExamStatus.OPEN) {
-      throw new ConflictDomainException('지금은 응시 기간이 아닙니다.');
-    }
-
-    const applied = await this.examApplicationService.hasActiveApplication(examId, userId);
-    if (!applied) {
-      throw new ForbiddenDomainException('신청한 회차가 아닙니다.');
-    }
-
-    // AI팀 본인인증 서비스가 아직 배포되지 않은 기간 한정으로 REQUIRE_IDENTITY_VERIFICATION=false
-    // 로 이 게이트를 임시 우회할 수 있다. 기본값은 강제(true) — 실제 서비스 배포 전 반드시 되돌릴 것.
-    if (this.config.requireIdentityVerification) {
-      const verified = await this.idCardVerificationService.hasVerifiedExam(examId, userId);
-      if (!verified) {
-        throw new ForbiddenDomainException('본인인증을 먼저 완료해야 합니다.');
-      }
-    }
-
-    // requireIdentityVerification과 같은 이유(AI팀 서비스 미배포 기간)로 임시 우회 가능.
-    // 기본값은 강제(true) — 실제 서비스 배포 전 반드시 되돌릴 것.
-    if (this.config.requireEarphoneCheck) {
-      const earphoneCheckPassed = await this.earphoneDetectionService.hasPassedCheck(
-        examId,
-        userId,
-      );
-      if (!earphoneCheckPassed) {
-        throw new ForbiddenDomainException('이어폰 미착용 확인을 먼저 완료해야 합니다.');
-      }
-    }
-
-    const existing = await this.examSessionRepository.findByUserAndExam(userId, examId);
+  /**
+   * 회차(Exam) 선택이 없다 — "응시하기"는 항상 이 API 하나다. 이미 진행중인
+   * 세션이 있으면 재개로 처리하고, 없으면 새 세션을 만든다. 본인인증/이어폰
+   * 확인은 여기서 보지 않는다 — 세션부터 만들고 그 세션으로 검증을 진행한다
+   * (assertVerifiedSession 참고).
+   */
+  async start(userId: string): Promise<ExamSession> {
+    const existing = await this.examSessionRepository.findInProgressByUser(userId);
     if (existing) {
       // 중간에 끊겼다가 다시 "시작"을 누른 경우 — 새로 만들지 않고 같은 세션을 이어서 준다.
       // 다만 반복 재접속은 악용(예: 준비/응답 시간 리셋 시도) 신호로 보고 횟수를 제한한다.
-      if (existing.status === SessionStatus.INPROGRESS) {
-        const nextResumeCount = existing.resumeCount + 1;
-        if (nextResumeCount >= RESUME_ATTEMPT_LIMIT) {
-          await this.examSessionRepository.updateStatus(existing.id, SessionStatus.BLOCKED);
-          throw new ForbiddenDomainException('반복적인 재접속으로 시험 응시가 제한되었습니다.');
-        }
-        return this.examSessionRepository.updateResumeCount(existing.id, nextResumeCount);
+      const nextResumeCount = existing.resumeCount + 1;
+      if (nextResumeCount >= RESUME_ATTEMPT_LIMIT) {
+        await this.examSessionRepository.updateStatus(existing.id, SessionStatus.BLOCKED);
+        throw new ForbiddenDomainException('반복적인 재접속으로 시험 응시가 제한되었습니다.');
       }
-      throw new ConflictDomainException('이미 종료된 시험입니다.');
+      return this.examSessionRepository.updateResumeCount(existing.id, nextResumeCount);
     }
 
-    if (exam.closeAt.getTime() - Date.now() < START_BUFFER_BEFORE_CLOSE_MS) {
-      throw new ConflictDomainException('마감 1시간 전에는 새로 시작할 수 없습니다.');
-    }
+    return this.examSessionRepository.create({ userId });
+  }
 
-    return this.examSessionRepository.create({ examId, userId });
+  /** 홈 화면이 "이어서 풀기" vs "응시하기" 버튼을 결정하는 데 쓴다 — 없으면 null. */
+  async getCurrentInProgress(userId: string): Promise<ExamSession | null> {
+    return this.examSessionRepository.findInProgressByUser(userId);
   }
 
   async getStatus(examSessionId: string, userId: string): Promise<ExamSessionStatusResult> {
@@ -142,53 +89,27 @@ export class ExamSessionService {
     // 동일인 검사에만 쓰였으므로, 세션이 끝나는 순간 더 이상 쓸모가 없다.
     // 멱등한 정리라 상태 조회가 반복돼도 안전하다.
     if (session.status !== SessionStatus.INPROGRESS) {
-      await this.idCardVerificationService.cleanupVerifiedFaceImage(session.examId, userId);
+      await this.idCardVerificationService.cleanupVerifiedFaceImage(session.id);
     }
 
     return { session, status: session.status };
   }
 
-  /**
-   * 마이페이지 "내 시험 현황" — 신청한 회차별로 세션 상태를 함께 내려준다. 세션을
-   * 시작한 적 있으면 그 상태 그대로, 시작한 적 없고 마감 1시간 전 시작 데드라인도
-   * 지났으면 EXPIRED(신청만 하고 응시 기회를 놓친 경우), 그 전이면 null이다.
-   */
+  /** 마이페이지 "내 시험 현황" — 이 사용자가 시작한 적 있는 세션들을 최신순으로 내려준다. */
   async listMine(userId: string): Promise<MyExamStatus[]> {
-    const applications = await this.examApplicationService.listMine(userId);
+    const sessions = await this.examSessionRepository.findAllByUser(userId);
 
     return Promise.all(
-      applications.map(async (application) => {
-        const [exam, session] = await Promise.all([
-          this.examService.findById(application.examId),
-          this.examSessionRepository.findByUserAndExam(userId, application.examId),
-        ]);
-
-        let sessionSummary: {
-          id: string | null;
-          status: SessionStatus;
-          submittedAt: Date | null;
-        } | null;
-        if (session) {
-          sessionSummary = {
-            id: session.id,
-            status: session.status,
-            submittedAt: session.submittedAt,
-          };
-        } else if (exam.closeAt.getTime() - Date.now() < START_BUFFER_BEFORE_CLOSE_MS) {
-          sessionSummary = { id: null, status: SessionStatus.EXPIRED, submittedAt: null };
-        } else {
-          sessionSummary = null;
-        }
-
-        const examResult = session
-          ? await this.examResultService.findByExamSessionId(session.id)
-          : null;
+      sessions.map(async (session) => {
+        const examResult = await this.examResultService.findByExamSessionId(session.id);
 
         return {
-          exam,
-          examStatus: computeExamStatus(exam.openAt, exam.closeAt),
-          appliedAt: application.appliedAt,
-          session: sessionSummary,
+          session: {
+            id: session.id,
+            status: session.status,
+            startedAt: session.startedAt,
+            submittedAt: session.submittedAt,
+          },
           examResultId: examResult?.id ?? null,
           finalGrade: examResult?.finalGrade ?? null,
         };
@@ -197,68 +118,61 @@ export class ExamSessionService {
   }
 
   /**
-   * "오늘 응시 가능한 시험" — 신청해서 아직 안 끝난(세션 없음 또는 INPROGRESS) 시험과,
-   * 아직 신청 안 했지만 신청 기간이 열려 있는 시험을 합쳐서 준다. 정원이 찬 시험도
-   * 목록에서 빼지 않고 isCapacityFull:true로 표시만 한다 — 신청 자체는 어차피
-   * POST /exams/:id/apply가 막아준다(409). 이미 SUBMITTED/EXPIRED/DISQUALIFIED/
-   * BLOCKED인, 응시자 입장에서 더 할 게 없는 신청 건은 제외한다.
-   *
-   * userId가 null이면(비로그인) "신청 가능한 시험"만 준다 — 누구 신청 내역인지 알 수
-   * 없으니 isApplied는 항상 false, session은 항상 null이다.
+   * 본인인증/이어폰 확인이 아직 안 끝났으면 그 이유 메시지를, 다 끝났으면
+   * null을 반환한다. AI팀 서비스가 아직 배포되지 않은 기간에는 서버 환경변수
+   * (REQUIRE_IDENTITY_VERIFICATION/REQUIRE_EARPHONE_CHECK)로 각 체크를 개별
+   * 우회할 수 있다 — 기본값은 강제(true), 실제 서비스 배포 전 반드시 되돌릴 것.
    */
-  async listAvailable(userId: string | null): Promise<AvailableExam[]> {
-    const [applications, allExams] = await Promise.all([
-      userId ? this.examApplicationService.listMine(userId) : Promise.resolve([]),
-      this.examService.list(),
-    ]);
+  private async findVerificationGap(examSessionId: string): Promise<string | null> {
+    if (this.config.requireIdentityVerification) {
+      const verified = await this.idCardVerificationService.hasVerifiedSession(examSessionId);
+      if (!verified) {
+        return '본인인증을 먼저 완료해야 합니다.';
+      }
+    }
 
-    const applicationByExamId = new Map(
-      applications.map((application) => [application.examId, application]),
-    );
+    if (this.config.requireEarphoneCheck) {
+      const earphoneCheckPassed = await this.earphoneDetectionService.hasPassedCheck(examSessionId);
+      if (!earphoneCheckPassed) {
+        return '이어폰 미착용 확인을 먼저 완료해야 합니다.';
+      }
+    }
 
-    const results = await Promise.all(
-      allExams.map(async (exam): Promise<AvailableExam | null> => {
-        const application = userId ? applicationByExamId.get(exam.id) : undefined;
-        if (application && userId) {
-          const session = await this.examSessionRepository.findByUserAndExam(userId, exam.id);
-          if (session && session.status !== SessionStatus.INPROGRESS) {
-            return null;
-          }
-          return {
-            exam,
-            isApplied: true,
-            isCapacityFull: false,
-            session: session ? { id: session.id, status: session.status } : null,
-          };
-        }
-
-        if (!isApplicationOpen(exam.applicationOpenAt, exam.applicationCloseAt)) {
-          return null;
-        }
-        const activeCount = await this.examApplicationService.countActive(exam.id);
-        return {
-          exam,
-          isApplied: false,
-          isCapacityFull: activeCount >= exam.capacity,
-          session: null,
-        };
-      }),
-    );
-
-    return results.filter((result): result is AvailableExam => result !== null);
+    return null;
   }
 
-  /** 답안 저장처럼 "지금 실제로 응시 중"이어야만 허용되는 동작들의 공통 게이트. */
-  async assertActiveSession(examSessionId: string, userId: string): Promise<ExamSession> {
+  /** 세션 상태 응답에 실어주는 "지금 문항/답안에 접근 가능한가" 플래그. */
+  async isVerified(examSessionId: string): Promise<boolean> {
+    return (await this.findVerificationGap(examSessionId)) === null;
+  }
+
+  /** 세션 존재 여부만 확인한다(소유권/상태 무관) — 관리자 문항 조회 등 소유권 우회가 필요한 곳에서 쓴다. */
+  async getSessionOrThrow(examSessionId: string): Promise<ExamSession> {
     const session = await this.examSessionRepository.findById(examSessionId);
     if (!session) {
       throw new NotFoundDomainException(`응시 세션(${examSessionId})을 찾을 수 없습니다.`);
     }
-    if (session.userId !== userId) {
-      throw new ForbiddenDomainException('세션 소유자가 아닙니다.');
-    }
-    if (session.status !== SessionStatus.INPROGRESS) {
-      throw new ConflictDomainException('이미 종료된 시험입니다.');
+    return session;
+  }
+
+  /**
+   * 본인인증·이어폰 확인처럼 "세션은 있어야 하지만 아직 검증 전이어도 되는"
+   * 동작들의 공통 게이트 — 소유권 + INPROGRESS만 확인한다.
+   */
+  async assertActiveSession(examSessionId: string, userId: string): Promise<ExamSession> {
+    return this.examSessionAccessService.assertOwnedInProgress(examSessionId, userId);
+  }
+
+  /**
+   * 문항 조회·답안 제출처럼 "본인인증/이어폰 확인까지 다 끝나야만" 허용되는
+   * 동작들의 공통 게이트. assertActiveSession에 검증 완료 여부 체크를 더한다.
+   */
+  async assertVerifiedSession(examSessionId: string, userId: string): Promise<ExamSession> {
+    const session = await this.assertActiveSession(examSessionId, userId);
+
+    const verificationGap = await this.findVerificationGap(examSessionId);
+    if (verificationGap) {
+      throw new ForbiddenDomainException(verificationGap);
     }
 
     return session;

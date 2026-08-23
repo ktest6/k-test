@@ -1,44 +1,20 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ExamStatus } from '../../../exam/domain/enums/exam-status.enum';
 import { SessionStatus } from '../../domain/enums/session-status.enum';
 
-/** 마이페이지 "내 시험 현황" 한 줄 — 신청한 회차 하나에 대응된다. */
+/**
+ * 마이페이지 "내 시험 현황" 한 줄 — 시작한 적 있는 세션 하나에 대응된다.
+ * 회차(Exam)가 없어졌고 같은 시험을 여러 번 볼 수 있어서, 같은 계정이라도
+ * 이 줄이 여러 개 나올 수 있다(전부 같은 시험).
+ */
 export class MyExamStatusResponseDto {
   @ApiProperty()
-  examId: string;
+  examSessionId: string;
 
-  @ApiProperty()
-  roundName: string;
+  @ApiProperty({ enum: SessionStatus })
+  sessionStatus: SessionStatus;
 
-  @ApiProperty({ description: '시험 응시 시작 시각' })
-  openAt: Date;
-
-  @ApiProperty({ description: '시험 응시 마감 시각' })
-  closeAt: Date;
-
-  @ApiProperty({ enum: ExamStatus, description: '회차 자체의 시간 기준 상태(신청과 무관)' })
-  examStatus: ExamStatus;
-
-  @ApiProperty()
-  appliedAt: Date;
-
-  @ApiPropertyOptional({
-    type: String,
-    nullable: true,
-    description:
-      '시험을 아직 시작한 적 없으면 null(마감 1시간 전 시작 데드라인이 지나 EXPIRED여도 null).',
-  })
-  examSessionId: string | null;
-
-  @ApiPropertyOptional({
-    enum: SessionStatus,
-    nullable: true,
-    description:
-      '시험을 아직 시작한 적 없고 마감 1시간 전 시작 데드라인도 지났으면 EXPIRED, 그 전이면 null. ' +
-      'examSessionId는 참고용 값이며, [이어서 풀기]는 이 값을 쓰지 않고 항상 ' +
-      'POST /exams/:id/sessions를 다시 호출해야 한다(재개 남용 방지 카운트가 그 호출로만 세어짐).',
-  })
-  sessionStatus: SessionStatus | null;
+  @ApiProperty({ description: '시험을 시작한 시각' })
+  startedAt: Date;
 
   @ApiPropertyOptional({
     type: String,

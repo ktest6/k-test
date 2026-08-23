@@ -109,15 +109,12 @@ export class MonitoringService {
     command: AnalyzeFrameCommand,
     currentImage: { buffer: Buffer; filename: string; contentType: string },
   ): Promise<AnalyzeFrameResult> {
-    const session = await this.examSessionService.assertActiveSession(examSessionId, userId);
+    const session = await this.examSessionService.assertVerifiedSession(examSessionId, userId);
 
     let runIdentityCheck = command.runIdentityCheck ?? false;
     let referenceImage: MonitoringImageInput | undefined;
     if (runIdentityCheck) {
-      const facePath = await this.idCardVerificationService.getVerifiedFacePath(
-        session.examId,
-        userId,
-      );
+      const facePath = await this.idCardVerificationService.getVerifiedFacePath(session.id);
       if (facePath) {
         referenceImage = await this.downloadReferenceImage(facePath);
       }
@@ -129,10 +126,7 @@ export class MonitoringService {
       }
     }
 
-    const calibration = await this.gazeCalibrationService.getLatestCalibration(
-      session.examId,
-      userId,
-    );
+    const calibration = await this.gazeCalibrationService.getLatestCalibration(session.id);
     const previousGazeState = await this.getGazeState(examSessionId);
 
     let result: {
@@ -141,7 +135,8 @@ export class MonitoringService {
     };
     try {
       const analyzed = await this.monitoringProvider.analyze({
-        examId: session.examId,
+        // AI팀 외부 계약상 필드명은 examId지만, 회차가 없어져서 세션 id를 그대로 싣는다.
+        examId: session.id,
         examineeId: userId,
         requestId: randomUUID(),
         capturedAt: command.capturedAt,

@@ -3,13 +3,11 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiCommonErrorResponses } from '../../../common/decorators/api-common-error-responses.decorator';
 import { ApiStandardResponse } from '../../../common/decorators/api-standard-response.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
-import { OptionalAuth } from '../../../common/decorators/optional-auth.decorator';
 import { Role } from '../../../common/enums/role.enum';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { StoragePublicUrlService } from '../../../infrastructure/supabase/storage-public-url.service';
 import { AnswerResponseDto } from '../application/dto/answer-response.dto';
 import { AnswerUploadUrlResponseDto } from '../application/dto/answer-upload-url-response.dto';
-import { AvailableExamResponseDto } from '../application/dto/available-exam-response.dto';
 import { ExamSessionStatusResponseDto } from '../application/dto/exam-session-status-response.dto';
 import { RequestAnswerAudioUploadUrlDto } from '../application/dto/request-answer-audio-upload-url.dto';
 import { SaveAnswerDto } from '../application/dto/save-answer.dto';
@@ -40,58 +38,47 @@ export class ExamSessionController {
     private readonly storagePublicUrlService: StoragePublicUrlService,
   ) {}
 
-  @Get('available-exams')
-  @OptionalAuth()
+  @Get('exam-sessions/current')
   @ApiOperation({
-    summary: '오늘 응시 가능한 시험 목록 조회',
+    summary: '지금 진행중인 세션 조회',
     description:
-      '로그인 없이도 호출할 수 있다 — 비로그인이면 지금 신청 기간이 열려 있는 시험만 ' +
-      '내려주고(isApplied는 항상 false), 로그인했으면 신청해서 아직 안 끝난(세션 없음 또는 ' +
-      'INPROGRESS) 시험까지 합쳐서 준다. 정원이 찬 시험도 목록에서 빠지지 않고 ' +
-      'isCapacityFull:true로만 표시된다. isApplied가 false면 examSessionId/sessionStatus는 항상 ' +
-      'null이다 — 프런트는 isApplied로 [신청하기] vs [이어서 풀기]를, isCapacityFull로 마감 배지를 ' +
-      '구분하면 된다.',
+      '회차(Exam) 선택이 없어져서 "응시 가능한 시험 목록" 같은 게 없다 — 홈 화면은 이걸로 ' +
+      '"이어서 풀기" 버튼을 보여줄지(진행중인 세션이 있음) "응시하기" 버튼을 보여줄지(없음, ' +
+      'data:null) 결정하면 된다.',
   })
-  @ApiStandardResponse(AvailableExamResponseDto, {
-    isArray: true,
-    message: '오늘 응시 가능한 시험 목록 조회 성공',
+  @ApiStandardResponse(ExamSessionStatusResponseDto, {
+    message: '지금 진행중인 세션 조회 성공',
   })
-  async listAvailable(
-    @CurrentUser() user: AuthenticatedUser | undefined,
-  ): Promise<AvailableExamResponseDto[]> {
-    const availableExams = await this.examSessionService.listAvailable(user?.id ?? null);
-    return availableExams.map((item) => ({
-      examId: item.exam.id,
-      roundName: item.exam.roundName,
-      openAt: item.exam.openAt,
-      closeAt: item.exam.closeAt,
-      applicationOpenAt: item.exam.applicationOpenAt,
-      applicationCloseAt: item.exam.applicationCloseAt,
-      isApplied: item.isApplied,
-      isCapacityFull: item.isCapacityFull,
-      examSessionId: item.session?.id ?? null,
-      sessionStatus: item.session?.status ?? null,
-    }));
+  async getCurrent(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ExamSessionStatusResponseDto | null> {
+    const session = await this.examSessionService.getCurrentInProgress(user.id);
+    if (!session) {
+      return null;
+    }
+    const verified = await this.examSessionService.isVerified(session.id);
+    return { id: session.id, status: session.status, verified };
   }
 
-  @Post('exams/:id/sessions')
+  @Post('exam-sessions')
   @ApiOperation({
-    summary: '시험 시작 (세션 생성)',
+    summary: '시험 시작 (세션 생성 · 재개)',
     description:
-      '신청하지 않았거나 응시 기간이 아니면 409/403. 중단됐던 진행중 세션이 있으면 새로 만들지 않고 그 세션을 그대로 돌려준다(재개).',
+      '회차(Exam) 선택이 없다 — 이 API 하나가 처음 시작·재개·이어서 풀기를 전부 커버한다. ' +
+      '이미 진행중인 세션이 있으면 새로 만들지 않고 그 세션을 그대로 돌려준다(재개). 세션 생성 ' +
+      '자체는 본인인증/이어폰 확인과 무관하게 항상 허용된다 — 응답의 verified가 false면 검증부터 ' +
+      '진행해야 한다(문항 조회·답안 제출 둘 다 verified:true가 될 때까지 403). 반복 재접속 3회째면 403.',
   })
   @ApiStandardResponse(StartExamSessionResponseDto, { status: 201, message: '시험 시작' })
-  async start(
-    @Param('id') examId: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<StartExamSessionResponseDto> {
-    const session = await this.examSessionService.start(examId, user.id);
+  async start(@CurrentUser() user: AuthenticatedUser): Promise<StartExamSessionResponseDto> {
+    const session = await this.examSessionService.start(user.id);
+    const verified = await this.examSessionService.isVerified(session.id);
     return {
       id: session.id,
       examSessionId: session.id,
-      examId: session.examId,
       status: session.status,
       startedAt: session.startedAt,
+      verified,
     };
   }
 
@@ -100,7 +87,8 @@ export class ExamSessionController {
     summary: '세션 상태 조회',
     description:
       '진행중/제출됨/차단 상태를 반환한다. INPROGRESS가 아니면 더 이상 진행할 수 없다는 뜻이다 — ' +
-      '문항별 진행 상황(다음에 풀 문항)은 문항 목록 조회의 answered 필드로 프런트가 직접 계산한다.',
+      '문항별 진행 상황(다음에 풀 문항)은 문항 목록 조회의 answered 필드로 프런트가 직접 계산한다. ' +
+      'verified가 false면 아직 본인인증/이어폰 확인이 끝나지 않아 문항 조회·답안 제출이 막힌 상태다.',
   })
   @ApiStandardResponse(ExamSessionStatusResponseDto, { message: '세션 상태 조회 성공' })
   async getStatus(
@@ -108,11 +96,8 @@ export class ExamSessionController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<ExamSessionStatusResponseDto> {
     const result = await this.examSessionService.getStatus(examSessionId, user.id);
-    return {
-      id: result.session.id,
-      examId: result.session.examId,
-      status: result.status,
-    };
+    const verified = await this.examSessionService.isVerified(result.session.id);
+    return { id: result.session.id, status: result.status, verified };
   }
 
   @Get('exam-sessions/:examSessionId/questions')

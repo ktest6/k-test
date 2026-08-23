@@ -157,6 +157,19 @@ export class SupabaseQuestionRepository implements QuestionRepository {
     return this.attachChecklistItems(questionRows ?? []);
   }
 
+  async findByPart(part: QuestionSectionType): Promise<Question[]> {
+    const client = this.supabaseService.getAdminClient();
+    const { data: questionRows } = await client
+      .from(QUESTION_TABLE)
+      .select('*')
+      .eq('part', part)
+      .is('deleted_at', null)
+      .order('question_id', { ascending: true })
+      .returns<QuestionRow[]>();
+
+    return this.attachChecklistItems(questionRows ?? []);
+  }
+
   private async attachChecklistItems(questionRows: QuestionRow[]): Promise<Question[]> {
     if (questionRows.length === 0) {
       return [];

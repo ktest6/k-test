@@ -9,11 +9,11 @@ import {
   VerifyIdentityInput,
   VerifyIdentityResult,
 } from '../../../ai/domain/ports/identity-provider.port';
+import { ExamSessionAccessService } from '../../../exam-session/application/services/exam-session-access.service';
 import { User } from '../../../user/domain/entities/user.entity';
 import { IdentityDocumentType } from '../../../user/domain/enums/identity-document-type.enum';
 import { UserService } from '../../../user/application/services/user.service';
 import { VerifyIdCardDto } from '../dto/verify-id-card.dto';
-import { ExamAccessService } from './exam-access.service';
 import { IdCardVerificationService } from './id-card-verification.service';
 
 function buildUser(
@@ -43,7 +43,7 @@ function buildUser(
 
 function buildDto(): VerifyIdCardDto {
   return {
-    examId: '7',
+    examSessionId: '7',
     capturedAt: '2026-08-04T13:05:00+09:00',
     idCardPath: '9/7/id-card.jpg',
     facePath: '9/7/face.jpg',
@@ -113,7 +113,7 @@ function buildClient(
 
 function buildService(
   overrides: {
-    examAccessService?: Partial<ExamAccessService>;
+    examSessionAccessService?: Partial<ExamSessionAccessService>;
     userService?: Partial<UserService>;
     identityProvider?: Partial<IdentityProviderPort>;
     client?: {
@@ -124,10 +124,10 @@ function buildService(
     };
   } = {},
 ) {
-  const examAccessService = {
-    assertApplied: jest.fn().mockResolvedValue(undefined),
-    ...overrides.examAccessService,
-  } as unknown as ExamAccessService;
+  const examSessionAccessService = {
+    assertOwnedInProgress: jest.fn().mockResolvedValue(undefined),
+    ...overrides.examSessionAccessService,
+  } as unknown as ExamSessionAccessService;
   const userService = {
     findById: jest.fn().mockResolvedValue(buildUser()),
     ...overrides.userService,
@@ -146,12 +146,12 @@ function buildService(
   return {
     service: new IdCardVerificationService(
       supabaseService,
-      examAccessService,
+      examSessionAccessService,
       userService,
       identityProvider,
     ),
     client,
-    examAccessService,
+    examSessionAccessService,
     userService,
     identityProvider,
   };
@@ -159,13 +159,13 @@ function buildService(
 
 describe('IdCardVerificationService.verify', () => {
   it('rejects paths outside the caller-owned folder before checking anything else', async () => {
-    const assertApplied = jest.fn().mockResolvedValue(undefined);
-    const { service } = buildService({ examAccessService: { assertApplied } });
+    const assertOwnedInProgress = jest.fn().mockResolvedValue(undefined);
+    const { service } = buildService({ examSessionAccessService: { assertOwnedInProgress } });
 
     await expect(
       service.verify('9', { ...buildDto(), idCardPath: '999/7/id-card.jpg' }),
     ).rejects.toThrow(ForbiddenDomainException);
-    expect(assertApplied).not.toHaveBeenCalled();
+    expect(assertOwnedInProgress).not.toHaveBeenCalled();
   });
 
   it("calls the identity provider with the user's passport number and stores the result", async () => {
@@ -175,16 +175,16 @@ describe('IdCardVerificationService.verify', () => {
         .mockResolvedValue(buildResult()),
     };
     const insert = jest.fn().mockResolvedValue({ data: null, error: null });
-    const assertApplied = jest.fn().mockResolvedValue(undefined);
+    const assertOwnedInProgress = jest.fn().mockResolvedValue(undefined);
     const { service } = buildService({
       identityProvider,
       client: { insert },
-      examAccessService: { assertApplied },
+      examSessionAccessService: { assertOwnedInProgress },
     });
 
     const result = await service.verify('9', buildDto());
 
-    expect(assertApplied).toHaveBeenCalledWith('9', '7');
+    expect(assertOwnedInProgress).toHaveBeenCalledWith('7', '9');
     expect(identityProvider.verify).toHaveBeenCalledWith(
       expect.objectContaining({
         examId: '7',
@@ -197,8 +197,7 @@ describe('IdCardVerificationService.verify', () => {
     );
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({
-        exam_id: 7,
-        user_id: 9,
+        exam_session_id: 7,
         matched: true,
         confidence: 0.924,
         document_type: 'passport',
@@ -301,7 +300,7 @@ describe('IdCardVerificationService.cleanupVerifiedFaceImage', () => {
     const remove = jest.fn().mockResolvedValue({ data: null, error: null });
     const { service } = buildService({ client: { maybeSingle, remove } });
 
-    await service.cleanupVerifiedFaceImage('7', '9');
+    await service.cleanupVerifiedFaceImage('7');
 
     expect(remove).toHaveBeenCalledWith(['9/7/face.jpg']);
   });
@@ -311,7 +310,7 @@ describe('IdCardVerificationService.cleanupVerifiedFaceImage', () => {
     const remove = jest.fn();
     const { service } = buildService({ client: { maybeSingle, remove } });
 
-    await service.cleanupVerifiedFaceImage('7', '9');
+    await service.cleanupVerifiedFaceImage('7');
 
     expect(remove).not.toHaveBeenCalled();
   });
@@ -321,6 +320,22 @@ describe('IdCardVerificationService.cleanupVerifiedFaceImage', () => {
     const remove = jest.fn().mockResolvedValue({ data: null, error: { message: 'boom' } });
     const { service } = buildService({ client: { maybeSingle, remove } });
 
-    await expect(service.cleanupVerifiedFaceImage('7', '9')).resolves.toBeUndefined();
+    await expect(service.cleanupVerifiedFaceImage('7')).resolves.toBeUndefined();
+  });
+});
+
+describe('IdCardVerificationService.hasVerifiedSession', () => {
+  it('returns true when a matched log exists for this session', async () => {
+    const maybeSingle = jest.fn().mockResolvedValue({ data: { id: 'log-1' } });
+    const { service } = buildService({ client: { maybeSingle } });
+
+    await expect(service.hasVerifiedSession('7')).resolves.toBe(true);
+  });
+
+  it('returns false when no matched log exists', async () => {
+    const maybeSingle = jest.fn().mockResolvedValue({ data: null });
+    const { service } = buildService({ client: { maybeSingle } });
+
+    await expect(service.hasVerifiedSession('7')).resolves.toBe(false);
   });
 });

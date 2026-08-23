@@ -71,9 +71,9 @@ function buildSkippedQuestionRepository(
 }
 
 describe('ExamSessionAnswerService.save', () => {
-  it('gates on assertActiveSession and question membership before saving', async () => {
-    const assertActiveSession = jest.fn().mockResolvedValue(undefined);
-    const examSessionService = { assertActiveSession } as unknown as ExamSessionService;
+  it('gates on assertVerifiedSession and question membership before saving', async () => {
+    const assertVerifiedSession = jest.fn().mockResolvedValue(undefined);
+    const examSessionService = { assertVerifiedSession } as unknown as ExamSessionService;
     const getQuestion = jest.fn().mockResolvedValue(buildQuestion());
     const examSessionQuestionService = { getQuestion } as unknown as ExamSessionQuestionService;
     const saved = buildAnswer();
@@ -95,7 +95,7 @@ describe('ExamSessionAnswerService.save', () => {
       audioFileUrl: '1/1/1.webm',
     });
 
-    expect(assertActiveSession).toHaveBeenCalledWith('1', '1');
+    expect(assertVerifiedSession).toHaveBeenCalledWith('1', '1');
     expect(getQuestion).toHaveBeenCalledWith('1', '1', '1');
     expect(save).toHaveBeenCalledWith(
       {
@@ -111,8 +111,8 @@ describe('ExamSessionAnswerService.save', () => {
   });
 
   it('passes durationMs through to AnswerService.save when provided', async () => {
-    const assertActiveSession = jest.fn().mockResolvedValue(undefined);
-    const examSessionService = { assertActiveSession } as unknown as ExamSessionService;
+    const assertVerifiedSession = jest.fn().mockResolvedValue(undefined);
+    const examSessionService = { assertVerifiedSession } as unknown as ExamSessionService;
     const getQuestion = jest.fn().mockResolvedValue(buildQuestion());
     const examSessionQuestionService = { getQuestion } as unknown as ExamSessionQuestionService;
     const save = jest.fn().mockResolvedValue(buildAnswer());
@@ -148,7 +148,7 @@ describe('ExamSessionAnswerService.save', () => {
 
   it('clears any existing skip record for the question once an answer is saved', async () => {
     const examSessionService = {
-      assertActiveSession: jest.fn().mockResolvedValue(undefined),
+      assertVerifiedSession: jest.fn().mockResolvedValue(undefined),
     } as unknown as ExamSessionService;
     const examSessionQuestionService = {
       getQuestion: jest.fn().mockResolvedValue(buildQuestion()),
@@ -177,7 +177,7 @@ describe('ExamSessionAnswerService.save', () => {
 
   it('checks whether the session is now complete after saving the answer', async () => {
     const examSessionService = {
-      assertActiveSession: jest.fn().mockResolvedValue(undefined),
+      assertVerifiedSession: jest.fn().mockResolvedValue(undefined),
     } as unknown as ExamSessionService;
     const examSessionQuestionService = {
       getQuestion: jest.fn().mockResolvedValue(buildQuestion()),
@@ -206,7 +206,7 @@ describe('ExamSessionAnswerService.save', () => {
 
   it('does not let a failed finalize check break the save response', async () => {
     const examSessionService = {
-      assertActiveSession: jest.fn().mockResolvedValue(undefined),
+      assertVerifiedSession: jest.fn().mockResolvedValue(undefined),
     } as unknown as ExamSessionService;
     const examSessionQuestionService = {
       getQuestion: jest.fn().mockResolvedValue(buildQuestion()),
@@ -234,9 +234,9 @@ describe('ExamSessionAnswerService.save', () => {
     expect(result.answer).toBe(saved);
   });
 
-  it('propagates a rejection from assertActiveSession without saving', async () => {
-    const assertActiveSession = jest.fn().mockRejectedValue(new Error('session not active'));
-    const examSessionService = { assertActiveSession } as unknown as ExamSessionService;
+  it('propagates a rejection from assertVerifiedSession without saving', async () => {
+    const assertVerifiedSession = jest.fn().mockRejectedValue(new Error('session not active'));
+    const examSessionService = { assertVerifiedSession } as unknown as ExamSessionService;
     const getQuestion = jest.fn();
     const examSessionQuestionService = { getQuestion } as unknown as ExamSessionQuestionService;
     const save = jest.fn();
@@ -309,9 +309,9 @@ describe('ExamSessionAnswerService.get', () => {
 });
 
 describe('ExamSessionAnswerService.createUploadUrl', () => {
-  it('gates on assertActiveSession and question membership, then issues a signed URL scoped to session/question', async () => {
-    const assertActiveSession = jest.fn().mockResolvedValue(undefined);
-    const examSessionService = { assertActiveSession } as unknown as ExamSessionService;
+  it('gates on assertVerifiedSession and question membership, then issues a signed URL scoped to session/question', async () => {
+    const assertVerifiedSession = jest.fn().mockResolvedValue(undefined);
+    const examSessionService = { assertVerifiedSession } as unknown as ExamSessionService;
     const getQuestion = jest.fn().mockResolvedValue(buildQuestion());
     const examSessionQuestionService = { getQuestion } as unknown as ExamSessionQuestionService;
     const answerService = {} as unknown as AnswerService;
@@ -332,7 +332,7 @@ describe('ExamSessionAnswerService.createUploadUrl', () => {
 
     const result = await service.createUploadUrl('100', '50', '9', 'audio/webm');
 
-    expect(assertActiveSession).toHaveBeenCalledWith('100', '9');
+    expect(assertVerifiedSession).toHaveBeenCalledWith('100', '9');
     expect(getQuestion).toHaveBeenCalledWith('100', '50', '9');
     expect(createSignedUploadUrl).toHaveBeenCalledWith('answer-audio', '9/100/50.webm', {
       upsert: true,
@@ -340,9 +340,9 @@ describe('ExamSessionAnswerService.createUploadUrl', () => {
     expect(result).toEqual({ path: '9/100/50.webm', signedUrl: 'https://signed', token: 'token' });
   });
 
-  it('propagates a rejection from assertActiveSession without issuing a URL', async () => {
-    const assertActiveSession = jest.fn().mockRejectedValue(new Error('session not active'));
-    const examSessionService = { assertActiveSession } as unknown as ExamSessionService;
+  it('propagates a rejection from assertVerifiedSession without issuing a URL', async () => {
+    const assertVerifiedSession = jest.fn().mockRejectedValue(new Error('session not active'));
+    const examSessionService = { assertVerifiedSession } as unknown as ExamSessionService;
     const getQuestion = jest.fn();
     const examSessionQuestionService = { getQuestion } as unknown as ExamSessionQuestionService;
     const answerService = {} as unknown as AnswerService;
@@ -369,8 +369,8 @@ describe('ExamSessionAnswerService.createUploadUrl', () => {
 
 describe('ExamSessionAnswerService.skip', () => {
   it('records the skip when the question has not been answered yet', async () => {
-    const assertActiveSession = jest.fn().mockResolvedValue(undefined);
-    const examSessionService = { assertActiveSession } as unknown as ExamSessionService;
+    const assertVerifiedSession = jest.fn().mockResolvedValue(undefined);
+    const examSessionService = { assertVerifiedSession } as unknown as ExamSessionService;
     const getQuestion = jest
       .fn()
       .mockResolvedValue({ question: buildQuestion(), answered: false, skipped: false });
@@ -388,14 +388,14 @@ describe('ExamSessionAnswerService.skip', () => {
 
     await service.skip('1', '1', '1');
 
-    expect(assertActiveSession).toHaveBeenCalledWith('1', '1');
+    expect(assertVerifiedSession).toHaveBeenCalledWith('1', '1');
     expect(getQuestion).toHaveBeenCalledWith('1', '1', '1');
     expect(create).toHaveBeenCalledWith('1', '1');
   });
 
   it('rejects skipping a question that has already been answered', async () => {
     const examSessionService = {
-      assertActiveSession: jest.fn().mockResolvedValue(undefined),
+      assertVerifiedSession: jest.fn().mockResolvedValue(undefined),
     } as unknown as ExamSessionService;
     const getQuestion = jest
       .fn()
@@ -416,9 +416,9 @@ describe('ExamSessionAnswerService.skip', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it('propagates a rejection from assertActiveSession without recording anything', async () => {
-    const assertActiveSession = jest.fn().mockRejectedValue(new Error('session not active'));
-    const examSessionService = { assertActiveSession } as unknown as ExamSessionService;
+  it('propagates a rejection from assertVerifiedSession without recording anything', async () => {
+    const assertVerifiedSession = jest.fn().mockRejectedValue(new Error('session not active'));
+    const examSessionService = { assertVerifiedSession } as unknown as ExamSessionService;
     const getQuestion = jest.fn();
     const examSessionQuestionService = { getQuestion } as unknown as ExamSessionQuestionService;
     const create = jest.fn();
@@ -439,7 +439,7 @@ describe('ExamSessionAnswerService.skip', () => {
 
   it('checks whether the session is now complete after recording the skip', async () => {
     const examSessionService = {
-      assertActiveSession: jest.fn().mockResolvedValue(undefined),
+      assertVerifiedSession: jest.fn().mockResolvedValue(undefined),
     } as unknown as ExamSessionService;
     const getQuestion = jest
       .fn()
@@ -463,7 +463,7 @@ describe('ExamSessionAnswerService.skip', () => {
 
   it('does not let a failed finalize check break the skip response', async () => {
     const examSessionService = {
-      assertActiveSession: jest.fn().mockResolvedValue(undefined),
+      assertVerifiedSession: jest.fn().mockResolvedValue(undefined),
     } as unknown as ExamSessionService;
     const getQuestion = jest
       .fn()
