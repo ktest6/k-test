@@ -10,8 +10,8 @@ import {
   MonitoringImageInput,
   MonitoringProviderPort,
 } from '../../../ai/domain/ports/monitoring-provider.port';
+import { ExamService } from '../../../exam/application/services/exam.service';
 import { GazeCalibrationResponseDto } from '../dto/gaze-calibration-response.dto';
-import { ExamAccessService } from './exam-access.service';
 
 interface GazeCalibrationRow {
   eye_yaw_center: number;
@@ -46,7 +46,7 @@ export class GazeCalibrationService {
 
   constructor(
     private readonly supabaseService: SupabaseService,
-    private readonly examAccessService: ExamAccessService,
+    private readonly examService: ExamService,
     @Inject(MONITORING_PROVIDER) private readonly monitoringProvider: MonitoringProviderPort,
     @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>,
   ) {}
@@ -56,7 +56,8 @@ export class GazeCalibrationService {
     examId: string,
     calibrationImages: MonitoringImageInput[],
   ): Promise<GazeCalibrationResponseDto> {
-    await this.examAccessService.assertApplied(userId, examId);
+    // 존재하는 회차인지 확인(항시 응시 — 신청 여부는 더 이상 확인하지 않는다)
+    await this.examService.findById(examId);
 
     let result: CalibrateGazeResult;
     try {

@@ -7,8 +7,8 @@ import {
   EarphoneImageInput,
   EarphoneProviderPort,
 } from '../../../ai/domain/ports/earphone-provider.port';
+import { ExamService } from '../../../exam/application/services/exam.service';
 import { EarphoneDetectResponseDto } from '../dto/earphone-detect-response.dto';
-import { ExamAccessService } from './exam-access.service';
 
 /**
  * 시험 시작 전 이어폰 착용 여부 감지. id-card 인증과 마찬가지로 세션이
@@ -26,7 +26,7 @@ export class EarphoneDetectionService {
   private readonly logger = new Logger(EarphoneDetectionService.name);
 
   constructor(
-    private readonly examAccessService: ExamAccessService,
+    private readonly examService: ExamService,
     private readonly supabaseService: SupabaseService,
     @Inject(EARPHONE_PROVIDER) private readonly earphoneProvider: EarphoneProviderPort,
   ) {}
@@ -37,7 +37,8 @@ export class EarphoneDetectionService {
     leftEarImage: EarphoneImageInput,
     rightEarImage: EarphoneImageInput,
   ): Promise<EarphoneDetectResponseDto> {
-    await this.examAccessService.assertApplied(userId, examId);
+    // 존재하는 회차인지 확인(항시 응시 — 신청 여부는 더 이상 확인하지 않는다)
+    await this.examService.findById(examId);
 
     let result: EarphoneDetectResponseDto;
     try {

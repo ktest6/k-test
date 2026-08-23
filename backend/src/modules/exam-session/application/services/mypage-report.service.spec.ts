@@ -42,16 +42,7 @@ function buildSession(overrides: Partial<{ userId: string }> = {}): ExamSession 
 }
 
 function buildExam(): Exam {
-  return new Exam(
-    '1',
-    '2026년 1회차',
-    new Date('2026-01-01T00:00:00.000Z'),
-    new Date('2026-12-31T23:59:59.000Z'),
-    new Date('2026-08-01T00:00:00.000Z'),
-    new Date('2026-08-14T23:59:59.000Z'),
-    100,
-    new Date(),
-  );
+  return new Exam('1', '2026년 1회차', new Date());
 }
 
 function buildUser(): User {

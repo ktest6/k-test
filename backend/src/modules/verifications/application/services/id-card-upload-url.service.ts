@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
 import { StorageUploadUrlService } from '../../../../infrastructure/supabase/storage-upload-url.service';
+import { ExamService } from '../../../exam/application/services/exam.service';
 import { IdCardFileType } from '../../domain/enums/id-card-file-type.enum';
 import { RequestIdCardUploadUrlDto } from '../dto/request-id-card-upload-url.dto';
 import { UploadUrlResponseDto } from '../dto/upload-url-response.dto';
-import { ExamAccessService } from './exam-access.service';
 
 const STORAGE_BUCKET = 'identity-docs';
 
@@ -36,14 +36,15 @@ const FILE_NAME_BY_FILE_TYPE: Record<IdCardFileType, string> = {
 export class IdCardUploadUrlService {
   constructor(
     private readonly storageUploadUrlService: StorageUploadUrlService,
-    private readonly examAccessService: ExamAccessService,
+    private readonly examService: ExamService,
   ) {}
 
   async createUploadUrl(
     userId: string,
     dto: RequestIdCardUploadUrlDto,
   ): Promise<UploadUrlResponseDto> {
-    await this.examAccessService.assertApplied(userId, dto.examId);
+    // 존재하는 회차인지 확인(항시 응시 — 신청 여부는 더 이상 확인하지 않는다)
+    await this.examService.findById(dto.examId);
 
     if (!ALLOWED_CONTENT_TYPES_BY_FILE_TYPE[dto.fileType].includes(dto.contentType)) {
       throw new ConflictDomainException(

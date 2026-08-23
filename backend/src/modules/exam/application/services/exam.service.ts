@@ -1,18 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
-import {
-  ConflictDomainException,
-  NotFoundDomainException,
-} from '../../../../common/exceptions/domain.exception';
+import { NotFoundDomainException } from '../../../../common/exceptions/domain.exception';
 import { Exam } from '../../domain/entities/exam.entity';
 import { EXAM_REPOSITORY, ExamRepository } from '../../domain/exam.repository.interface';
-
-export interface CreateExamRequest {
-  applicationOpenAt: Date;
-  applicationCloseAt: Date;
-  openAt: Date;
-  closeAt: Date;
-  capacity: number;
-}
 
 const ROUND_NAME_SEQUENCE_DIGITS = 2;
 
@@ -20,19 +9,9 @@ const ROUND_NAME_SEQUENCE_DIGITS = 2;
 export class ExamService {
   constructor(@Inject(EXAM_REPOSITORY) private readonly examRepository: ExamRepository) {}
 
-  async create(input: CreateExamRequest): Promise<Exam> {
-    if (input.closeAt.getTime() <= input.openAt.getTime()) {
-      throw new ConflictDomainException('시험 마감 시각은 시작 시각보다 나중이어야 합니다.');
-    }
-    if (input.applicationCloseAt.getTime() <= input.applicationOpenAt.getTime()) {
-      throw new ConflictDomainException('신청 마감 시각은 신청 시작 시각보다 나중이어야 합니다.');
-    }
-    if (input.applicationCloseAt.getTime() > input.openAt.getTime()) {
-      throw new ConflictDomainException('신청 마감 시각은 시험 시작 시각보다 늦을 수 없습니다.');
-    }
-
+  async create(): Promise<Exam> {
     const roundName = await this.generateRoundName(new Date().getFullYear());
-    return this.examRepository.create({ ...input, roundName });
+    return this.examRepository.create({ roundName });
   }
 
   async findById(id: string): Promise<Exam> {

@@ -43,18 +43,16 @@ export class ExamSessionController {
   @Get('available-exams')
   @OptionalAuth()
   @ApiOperation({
-    summary: '오늘 응시 가능한 시험 목록 조회',
+    summary: '지금 응시 가능한 시험 목록 조회',
     description:
-      '로그인 없이도 호출할 수 있다 — 비로그인이면 지금 신청 기간이 열려 있는 시험만 ' +
-      '내려주고(isApplied는 항상 false), 로그인했으면 신청해서 아직 안 끝난(세션 없음 또는 ' +
-      'INPROGRESS) 시험까지 합쳐서 준다. 정원이 찬 시험도 목록에서 빠지지 않고 ' +
-      'isCapacityFull:true로만 표시된다. isApplied가 false면 examSessionId/sessionStatus는 항상 ' +
-      'null이다 — 프런트는 isApplied로 [신청하기] vs [이어서 풀기]를, isCapacityFull로 마감 배지를 ' +
-      '구분하면 된다.',
+      '로그인 없이도 호출할 수 있다(비로그인이면 examSessionId/sessionStatus/canStart 전부 ' +
+      'null). 항시 응시 체제라 신청/기간/정원 개념이 없다 — 전체 회차 목록에 이 사용자의 세션 ' +
+      '상태를 얹어서 준다. canStart:false는 이미 이 회차 세션이 있거나(그 경우 [이어서 풀기]를 ' +
+      '보여주면 됨) 다른 회차가 이미 INPROGRESS라는 뜻이다(한 번에 한 시험만 진행 가능).',
   })
   @ApiStandardResponse(AvailableExamResponseDto, {
     isArray: true,
-    message: '오늘 응시 가능한 시험 목록 조회 성공',
+    message: '지금 응시 가능한 시험 목록 조회 성공',
   })
   async listAvailable(
     @CurrentUser() user: AuthenticatedUser | undefined,
@@ -63,14 +61,9 @@ export class ExamSessionController {
     return availableExams.map((item) => ({
       examId: item.exam.id,
       roundName: item.exam.roundName,
-      openAt: item.exam.openAt,
-      closeAt: item.exam.closeAt,
-      applicationOpenAt: item.exam.applicationOpenAt,
-      applicationCloseAt: item.exam.applicationCloseAt,
-      isApplied: item.isApplied,
-      isCapacityFull: item.isCapacityFull,
       examSessionId: item.session?.id ?? null,
       sessionStatus: item.session?.status ?? null,
+      canStart: item.canStart,
     }));
   }
 
@@ -78,7 +71,8 @@ export class ExamSessionController {
   @ApiOperation({
     summary: '시험 시작 (세션 생성)',
     description:
-      '신청하지 않았거나 응시 기간이 아니면 409/403. 중단됐던 진행중 세션이 있으면 새로 만들지 않고 그 세션을 그대로 돌려준다(재개).',
+      '본인인증/이어폰 확인 게이트를 통과 못했으면 403. 이미 진행 중인 다른 시험이 있으면 409. ' +
+      '중단됐던 진행중 세션이 있으면 새로 만들지 않고 그 세션을 그대로 돌려준다(재개).',
   })
   @ApiStandardResponse(StartExamSessionResponseDto, { status: 201, message: '시험 시작' })
   async start(

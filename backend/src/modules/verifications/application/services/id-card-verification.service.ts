@@ -10,13 +10,12 @@ import {
   IDENTITY_PROVIDER,
   IdentityImageInput,
   IdentityProviderPort,
-  VerifyIdentityInput,
   VerifyIdentityResult,
 } from '../../../ai/domain/ports/identity-provider.port';
+import { ExamService } from '../../../exam/application/services/exam.service';
 import { UserService } from '../../../user/application/services/user.service';
 import { VerifyIdCardDto } from '../dto/verify-id-card.dto';
 import { VerifyIdCardResponseDto } from '../dto/verify-id-card-response.dto';
-import { ExamAccessService } from './exam-access.service';
 
 const IDENTITY_DOCS_BUCKET = 'identity-docs';
 
@@ -51,7 +50,7 @@ export class IdCardVerificationService {
 
   constructor(
     private readonly supabaseService: SupabaseService,
-    private readonly examAccessService: ExamAccessService,
+    private readonly examService: ExamService,
     private readonly userService: UserService,
     @Inject(IDENTITY_PROVIDER) private readonly identityProvider: IdentityProviderPort,
   ) {}
@@ -67,16 +66,14 @@ export class IdCardVerificationService {
       throw new ForbiddenDomainException('본인 파일 경로가 아닙니다.');
     }
 
-    // 2) 신청한 회차인지 확인
-    await this.examAccessService.assertApplied(userId, dto.examId);
+    // 2) 존재하는 회차인지 확인(항시 응시 — 신청 여부는 더 이상 확인하지 않는다)
+    await this.examService.findById(dto.examId);
 
     // 3) FastAPI로 얼굴 대조 요청 — first_name/last_name/birth_date/documentType은
     // 프론트가 아니라 가입 시 등록된 정보를 그대로 쓴다(신청 정보와의 대조가 목적이므로).
     const user = await this.userService.findById(userId);
     if (!user.idNumber) {
-      throw new ConflictDomainException(
-        '먼저 여권번호를 등록해야 본인인증을 진행할 수 있습니다.',
-      );
+      throw new ConflictDomainException('먼저 여권번호를 등록해야 본인인증을 진행할 수 있습니다.');
     }
 
     const [idCardImage, faceImage] = await Promise.all([

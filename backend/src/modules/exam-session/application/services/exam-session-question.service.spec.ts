@@ -53,6 +53,8 @@ function buildRepository(overrides: Partial<ExamSessionRepository> = {}) {
     markSubmitted: jest.fn(),
     findAllSubmitted: jest.fn().mockResolvedValue([]),
     findAllInProgress: jest.fn().mockResolvedValue([]),
+    findInProgressByUser: jest.fn().mockResolvedValue(null),
+    findAllByUser: jest.fn().mockResolvedValue([]),
     ...overrides,
   };
 }
