@@ -12,7 +12,16 @@ import { ExamQuestionRepository } from '../../domain/exam-question.repository.in
 import { ExamQuestionService } from './exam-question.service';
 
 function buildExam(): Exam {
-  return new Exam('1', '2026년 1회차', new Date());
+  return new Exam(
+    '1',
+    '2026년 1회차',
+    new Date('2026-01-01T00:00:00.000Z'),
+    new Date('2026-12-31T23:59:59.000Z'),
+    new Date('2027-01-01T00:00:00.000Z'),
+    new Date('2027-01-14T23:59:59.000Z'),
+    100,
+    new Date(),
+  );
 }
 
 function buildQuestion(id = '1'): Question {

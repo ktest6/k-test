@@ -1,10 +1,13 @@
-import { Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiCommonErrorResponses } from '../../../common/decorators/api-common-error-responses.decorator';
 import { ApiStandardResponse } from '../../../common/decorators/api-standard-response.decorator';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { Role } from '../../../common/enums/role.enum';
-import { ExamResponseDto } from '../application/dto/exam-response.dto';
+import { computeExamStatus } from '../domain/exam-status.util';
+import { CreateExamDto } from '../application/dto/create-exam.dto';
+import { ExamAdminResponseDto } from '../application/dto/exam-admin-response.dto';
+import { ExamApplicationService } from '../application/services/exam-application.service';
 import { ExamService } from '../application/services/exam.service';
 
 @ApiBearerAuth()
@@ -12,17 +15,35 @@ import { ExamService } from '../application/services/exam.service';
 @ApiCommonErrorResponses()
 @Controller('exams')
 export class AdminExamController {
-  constructor(private readonly examService: ExamService) {}
+  constructor(
+    private readonly examService: ExamService,
+    private readonly examApplicationService: ExamApplicationService,
+  ) {}
 
   @Post()
   @Roles(Role.ADMIN)
-  @ApiOperation({
-    summary: '회차 추가 (관리자)',
-    description: '별도 입력값 없음 — roundName은 서버가 자동 생성한다(예: 202601).',
-  })
-  @ApiStandardResponse(ExamResponseDto, { status: 201, message: '회차 추가 완료' })
-  async create(): Promise<ExamResponseDto> {
-    const exam = await this.examService.create();
-    return { id: exam.id, roundName: exam.roundName, createdAt: exam.createdAt };
+  @ApiOperation({ summary: '회차 추가 (관리자)' })
+  @ApiStandardResponse(ExamAdminResponseDto, { status: 201, message: '회차 추가 완료' })
+  async create(@Body() dto: CreateExamDto): Promise<ExamAdminResponseDto> {
+    const exam = await this.examService.create({
+      applicationOpenAt: new Date(dto.applicationOpenAt),
+      applicationCloseAt: new Date(dto.applicationCloseAt),
+      openAt: new Date(dto.openAt),
+      closeAt: new Date(dto.closeAt),
+      capacity: dto.capacity,
+    });
+    const applicantCount = await this.examApplicationService.countActive(exam.id);
+    return {
+      id: exam.id,
+      roundName: exam.roundName,
+      applicationOpenAt: exam.applicationOpenAt,
+      applicationCloseAt: exam.applicationCloseAt,
+      openAt: exam.openAt,
+      closeAt: exam.closeAt,
+      status: computeExamStatus(exam.openAt, exam.closeAt),
+      isCapacityFull: applicantCount >= exam.capacity,
+      capacity: exam.capacity,
+      applicantCount,
+    };
   }
 }

@@ -143,28 +143,4 @@ export class SupabaseExamSessionRepository implements ExamSessionRepository {
       .is('deleted_at', null);
     return (data ?? []).map((row: ExamSessionRow) => toDomain(row));
   }
-
-  async findInProgressByUser(userId: string): Promise<ExamSession | null> {
-    const client = this.supabaseService.getAdminClient();
-    const { data } = await client
-      .from(TABLE)
-      .select('*')
-      .eq('user_id', Number(userId))
-      .eq('status', SessionStatus.INPROGRESS)
-      .is('deleted_at', null)
-      .maybeSingle<ExamSessionRow>();
-    return data ? toDomain(data) : null;
-  }
-
-  async findAllByUser(userId: string): Promise<ExamSession[]> {
-    const client = this.supabaseService.getAdminClient();
-    const { data } = await client
-      .from(TABLE)
-      .select('*')
-      .eq('user_id', Number(userId))
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .returns<ExamSessionRow[]>();
-    return (data ?? []).map(toDomain);
-  }
 }

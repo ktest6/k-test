@@ -1,18 +1,116 @@
+import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
 import { Exam } from '../../domain/entities/exam.entity';
 import { ExamRepository } from '../../domain/exam.repository.interface';
 import { ExamService } from './exam.service';
+
+function buildInput(
+  overrides: Partial<{
+    applicationOpenAt: Date;
+    applicationCloseAt: Date;
+    openAt: Date;
+    closeAt: Date;
+  }> = {},
+) {
+  return {
+    applicationOpenAt: new Date('2026-07-01T00:00:00.000Z'),
+    applicationCloseAt: new Date('2026-07-14T23:59:59.000Z'),
+    openAt: new Date('2026-08-01T00:00:00.000Z'),
+    closeAt: new Date('2026-08-14T23:59:59.000Z'),
+    capacity: 100,
+    ...overrides,
+  };
+}
 
 function buildRepository(latestRoundName: string | null) {
   const findLatestRoundNameForYear = jest.fn().mockResolvedValue(latestRoundName);
   const create = jest
     .fn()
-    .mockImplementation((input: { roundName: string }) =>
-      Promise.resolve(new Exam('1', input.roundName, new Date())),
+    .mockImplementation(
+      (input: {
+        roundName: string;
+        applicationOpenAt: Date;
+        applicationCloseAt: Date;
+        openAt: Date;
+        closeAt: Date;
+        capacity: number;
+      }) =>
+        Promise.resolve(
+          new Exam(
+            '1',
+            input.roundName,
+            input.applicationOpenAt,
+            input.applicationCloseAt,
+            input.openAt,
+            input.closeAt,
+            input.capacity,
+            new Date(),
+          ),
+        ),
     );
   return { create, findLatestRoundNameForYear };
 }
 
 describe('ExamService.create', () => {
+  it('rejects when closeAt is before openAt, without touching the repository', async () => {
+    const { create, findLatestRoundNameForYear } = buildRepository(null);
+    const service = new ExamService({
+      create,
+      findLatestRoundNameForYear,
+    } as unknown as ExamRepository);
+
+    const input = buildInput({
+      openAt: new Date('2026-08-14T00:00:00.000Z'),
+      closeAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+
+    await expect(service.create(input)).rejects.toThrow(ConflictDomainException);
+    expect(create).not.toHaveBeenCalled();
+    expect(findLatestRoundNameForYear).not.toHaveBeenCalled();
+  });
+
+  it('rejects when closeAt equals openAt', async () => {
+    const { create, findLatestRoundNameForYear } = buildRepository(null);
+    const service = new ExamService({
+      create,
+      findLatestRoundNameForYear,
+    } as unknown as ExamRepository);
+
+    const sameInstant = new Date('2026-08-01T00:00:00.000Z');
+    const input = buildInput({ openAt: sameInstant, closeAt: sameInstant });
+
+    await expect(service.create(input)).rejects.toThrow(ConflictDomainException);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('rejects when applicationCloseAt is before applicationOpenAt', async () => {
+    const { create, findLatestRoundNameForYear } = buildRepository(null);
+    const service = new ExamService({
+      create,
+      findLatestRoundNameForYear,
+    } as unknown as ExamRepository);
+
+    const input = buildInput({
+      applicationOpenAt: new Date('2026-07-14T00:00:00.000Z'),
+      applicationCloseAt: new Date('2026-07-01T00:00:00.000Z'),
+    });
+
+    await expect(service.create(input)).rejects.toThrow(ConflictDomainException);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('rejects when applicationCloseAt is after the exam openAt', async () => {
+    const { create, findLatestRoundNameForYear } = buildRepository(null);
+    const service = new ExamService({
+      create,
+      findLatestRoundNameForYear,
+    } as unknown as ExamRepository);
+
+    const input = buildInput({ applicationCloseAt: new Date('2026-08-02T00:00:00.000Z') });
+
+    await expect(service.create(input)).rejects.toThrow(ConflictDomainException);
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it('generates the first round number of the year when none exist yet', async () => {
     const year = new Date().getFullYear();
     const { create, findLatestRoundNameForYear } = buildRepository(null);
@@ -21,10 +119,10 @@ describe('ExamService.create', () => {
       findLatestRoundNameForYear,
     } as unknown as ExamRepository);
 
-    const result = await service.create();
+    const result = await service.create(buildInput());
 
     expect(findLatestRoundNameForYear).toHaveBeenCalledWith(year);
-    expect(create).toHaveBeenCalledWith({ roundName: `${year}01` });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ roundName: `${year}01` }));
     expect(result.roundName).toBe(`${year}01`);
   });
 
@@ -36,9 +134,9 @@ describe('ExamService.create', () => {
       findLatestRoundNameForYear,
     } as unknown as ExamRepository);
 
-    await service.create();
+    await service.create(buildInput());
 
-    expect(create).toHaveBeenCalledWith({ roundName: `${year}06` });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ roundName: `${year}06` }));
   });
 
   it('pads single-digit sequence numbers to two digits', async () => {
@@ -49,8 +147,8 @@ describe('ExamService.create', () => {
       findLatestRoundNameForYear,
     } as unknown as ExamRepository);
 
-    await service.create();
+    await service.create(buildInput());
 
-    expect(create).toHaveBeenCalledWith({ roundName: `${year}02` });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ roundName: `${year}02` }));
   });
 });

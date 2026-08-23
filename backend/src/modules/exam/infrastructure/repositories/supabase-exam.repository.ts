@@ -9,11 +9,25 @@ const TABLE = 'tb_exam';
 interface ExamRow {
   exam_id: number;
   round_name: string;
+  application_open_at: string;
+  application_close_at: string;
+  open_at: string;
+  close_at: string;
+  capacity: number;
   created_at: string;
 }
 
 function toDomain(row: ExamRow): Exam {
-  return new Exam(String(row.exam_id), row.round_name, new Date(row.created_at));
+  return new Exam(
+    String(row.exam_id),
+    row.round_name,
+    new Date(row.application_open_at),
+    new Date(row.application_close_at),
+    new Date(row.open_at),
+    new Date(row.close_at),
+    row.capacity,
+    new Date(row.created_at),
+  );
 }
 
 @Injectable()
@@ -24,7 +38,14 @@ export class SupabaseExamRepository implements ExamRepository {
     const client = this.supabaseService.getAdminClient();
     const { data, error } = await client
       .from(TABLE)
-      .insert({ round_name: input.roundName })
+      .insert({
+        round_name: input.roundName,
+        application_open_at: input.applicationOpenAt.toISOString(),
+        application_close_at: input.applicationCloseAt.toISOString(),
+        open_at: input.openAt.toISOString(),
+        close_at: input.closeAt.toISOString(),
+        capacity: input.capacity,
+      })
       .select()
       .single<ExamRow>();
 
@@ -51,7 +72,7 @@ export class SupabaseExamRepository implements ExamRepository {
       .from(TABLE)
       .select('*')
       .is('deleted_at', null)
-      .order('created_at', { ascending: false })
+      .order('open_at', { ascending: false })
       .returns<ExamRow[]>();
     return (data ?? []).map(toDomain);
   }

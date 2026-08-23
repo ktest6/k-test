@@ -7,7 +7,7 @@ import {
   CalibrateGazeResult,
   MonitoringProviderPort,
 } from '../../../ai/domain/ports/monitoring-provider.port';
-import { ExamService } from '../../../exam/application/services/exam.service';
+import { ExamAccessService } from './exam-access.service';
 import { GazeCalibrationService } from './gaze-calibration.service';
 
 function buildImage(name: string) {
@@ -61,16 +61,16 @@ function buildConfig(
 
 function buildService(
   overrides: {
-    examService?: Partial<ExamService>;
+    examAccessService?: Partial<ExamAccessService>;
     monitoringProvider?: Partial<MonitoringProviderPort>;
     client?: { insert?: jest.Mock; maybeSingle?: jest.Mock };
     config?: ConfigType<typeof appConfig>;
   } = {},
 ) {
-  const examService = {
-    findById: jest.fn().mockResolvedValue({ id: '7', roundName: '202607', createdAt: new Date() }),
-    ...overrides.examService,
-  } as unknown as ExamService;
+  const examAccessService = {
+    assertApplied: jest.fn().mockResolvedValue(undefined),
+    ...overrides.examAccessService,
+  } as unknown as ExamAccessService;
   const monitoringProvider = {
     analyze: jest.fn(),
     calibrate: jest
@@ -85,34 +85,36 @@ function buildService(
   const config = overrides.config ?? buildConfig();
 
   return {
-    service: new GazeCalibrationService(supabaseService, examService, monitoringProvider, config),
-    examService,
+    service: new GazeCalibrationService(
+      supabaseService,
+      examAccessService,
+      monitoringProvider,
+      config,
+    ),
     client,
   };
 }
 
 describe('GazeCalibrationService.calibrate', () => {
-  it('confirms the exam exists before calling the provider', async () => {
-    const findById = jest
-      .fn()
-      .mockResolvedValue({ id: '7', roundName: '202607', createdAt: new Date() });
-    const { service } = buildService({ examService: { findById } });
+  it('gates on exam application before calling the provider', async () => {
+    const assertApplied = jest.fn().mockResolvedValue(undefined);
+    const { service } = buildService({ examAccessService: { assertApplied } });
 
     await service.calibrate('9', '7', [buildImage('center_1')]);
 
-    expect(findById).toHaveBeenCalledWith('7');
+    expect(assertApplied).toHaveBeenCalledWith('9', '7');
   });
 
-  it('propagates a rejection when the exam does not exist, without calling the provider', async () => {
-    const findById = jest.fn().mockRejectedValue(new Error('not found'));
+  it('propagates a rejection from assertApplied without calling the provider', async () => {
+    const assertApplied = jest.fn().mockRejectedValue(new Error('not applied'));
     const calibrate = jest.fn();
     const { service } = buildService({
-      examService: { findById },
+      examAccessService: { assertApplied },
       monitoringProvider: { calibrate },
     });
 
     await expect(service.calibrate('9', '7', [buildImage('center_1')])).rejects.toThrow(
-      'not found',
+      'not applied',
     );
     expect(calibrate).not.toHaveBeenCalled();
   });

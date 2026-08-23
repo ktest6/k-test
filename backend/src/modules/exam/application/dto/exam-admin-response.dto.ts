@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ExamStatus } from '../../domain/enums/exam-status.enum';
 
-/** 일반 응시자용 — capacity(정원)는 관리자만 보이므로 ExamAdminResponseDto에만 있음. */
-export class ExamResponseDto {
+/** 관리자에게만 노출 — 일반 응시자용 ExamResponseDto에는 capacity가 없다. */
+export class ExamAdminResponseDto {
   @ApiProperty()
   id: string;
 
@@ -24,10 +24,12 @@ export class ExamResponseDto {
   @ApiProperty({ enum: ExamStatus, description: 'open_at/close_at 기준으로 매번 계산됨' })
   status: ExamStatus;
 
-  @ApiProperty({
-    description:
-      '정원이 찼는지 여부(신청 인원 >= capacity). 실제 정원/신청 인원 숫자는 관리자만 볼 수 있어 ' +
-      '이 필드로만 노출한다.',
-  })
+  @ApiProperty({ description: '정원이 찼는지 여부(신청 인원 >= capacity)' })
   isCapacityFull: boolean;
+
+  @ApiProperty({ description: '정원 — 관리자만 조회 가능' })
+  capacity: number;
+
+  @ApiProperty({ description: '현재 신청 인원(취소 제외) — 관리자만 조회 가능' })
+  applicantCount: number;
 }
