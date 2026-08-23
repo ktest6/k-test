@@ -2,9 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
 import { StorageUploadUrlService } from '../../../../infrastructure/supabase/storage-upload-url.service';
 import { IdCardFileType } from '../../domain/enums/id-card-file-type.enum';
+import { ExamSessionAccessService } from '../../../exam-session/application/services/exam-session-access.service';
 import { RequestIdCardUploadUrlDto } from '../dto/request-id-card-upload-url.dto';
 import { UploadUrlResponseDto } from '../dto/upload-url-response.dto';
-import { ExamAccessService } from './exam-access.service';
 
 const STORAGE_BUCKET = 'identity-docs';
 
@@ -36,14 +36,14 @@ const FILE_NAME_BY_FILE_TYPE: Record<IdCardFileType, string> = {
 export class IdCardUploadUrlService {
   constructor(
     private readonly storageUploadUrlService: StorageUploadUrlService,
-    private readonly examAccessService: ExamAccessService,
+    private readonly examSessionAccessService: ExamSessionAccessService,
   ) {}
 
   async createUploadUrl(
     userId: string,
     dto: RequestIdCardUploadUrlDto,
   ): Promise<UploadUrlResponseDto> {
-    await this.examAccessService.assertApplied(userId, dto.examId);
+    await this.examSessionAccessService.assertOwnedInProgress(dto.examSessionId, userId);
 
     if (!ALLOWED_CONTENT_TYPES_BY_FILE_TYPE[dto.fileType].includes(dto.contentType)) {
       throw new ConflictDomainException(
@@ -53,7 +53,7 @@ export class IdCardUploadUrlService {
 
     const extension = EXTENSION_BY_CONTENT_TYPE[dto.contentType];
     const fileName = FILE_NAME_BY_FILE_TYPE[dto.fileType];
-    const path = `${userId}/${dto.examId}/${fileName}.${extension}`;
+    const path = `${userId}/${dto.examSessionId}/${fileName}.${extension}`;
 
     return this.storageUploadUrlService.createSignedUploadUrl(STORAGE_BUCKET, path, {
       upsert: true,

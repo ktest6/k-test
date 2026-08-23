@@ -10,8 +10,8 @@ import {
   MonitoringImageInput,
   MonitoringProviderPort,
 } from '../../../ai/domain/ports/monitoring-provider.port';
+import { ExamSessionAccessService } from '../../../exam-session/application/services/exam-session-access.service';
 import { GazeCalibrationResponseDto } from '../dto/gaze-calibration-response.dto';
-import { ExamAccessService } from './exam-access.service';
 
 interface GazeCalibrationRow {
   eye_yaw_center: number;
@@ -46,28 +46,29 @@ export class GazeCalibrationService {
 
   constructor(
     private readonly supabaseService: SupabaseService,
-    private readonly examAccessService: ExamAccessService,
+    private readonly examSessionAccessService: ExamSessionAccessService,
     @Inject(MONITORING_PROVIDER) private readonly monitoringProvider: MonitoringProviderPort,
     @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>,
   ) {}
 
   async calibrate(
     userId: string,
-    examId: string,
+    examSessionId: string,
     calibrationImages: MonitoringImageInput[],
   ): Promise<GazeCalibrationResponseDto> {
-    await this.examAccessService.assertApplied(userId, examId);
+    await this.examSessionAccessService.assertOwnedInProgress(examSessionId, userId);
 
     let result: CalibrateGazeResult;
     try {
       result = await this.monitoringProvider.calibrate({
-        examId,
+        // AI팀 외부 계약상 필드명은 examId지만, 회차가 없어져서 세션 id를 그대로 싣는다.
+        examId: examSessionId,
         examineeId: userId,
         calibrationImages,
       });
     } catch (err) {
       this.logger.warn(
-        `시선 캘리브레이션 서비스 통신 실패 (examId=${examId}, userId=${userId}): ${describeError(err)}`,
+        `시선 캘리브레이션 서비스 통신 실패 (examSessionId=${examSessionId}, userId=${userId}): ${describeError(err)}`,
       );
       if (!this.config.requireMonitoringService) {
         return NEUTRAL_RESULT;
@@ -80,8 +81,7 @@ export class GazeCalibrationService {
     if (result.calibrated) {
       const client = this.supabaseService.getAdminClient();
       await client.from('tb_gaze_calibrations').insert({
-        exam_id: Number(examId),
-        user_id: Number(userId),
+        exam_session_id: Number(examSessionId),
         eye_yaw_center: result.eyeYawCenter,
         eye_pitch_center: result.eyePitchCenter,
         sample_count: result.sampleCount,
@@ -94,15 +94,13 @@ export class GazeCalibrationService {
 
   /** 모니터링(부정행위 감지) ANALYZE 요청에 자동으로 실어 보낼 캘리브레이션 기준값 조회. */
   async getLatestCalibration(
-    examId: string,
-    userId: string,
+    examSessionId: string,
   ): Promise<{ eyeYawCenter: number; eyePitchCenter: number } | null> {
     const client = this.supabaseService.getAdminClient();
     const { data } = await client
       .from('tb_gaze_calibrations')
       .select('eye_yaw_center, eye_pitch_center')
-      .eq('exam_id', Number(examId))
-      .eq('user_id', Number(userId))
+      .eq('exam_session_id', Number(examSessionId))
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle<GazeCalibrationRow>();

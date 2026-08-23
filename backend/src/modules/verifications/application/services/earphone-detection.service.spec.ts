@@ -5,7 +5,7 @@ import {
   DetectEarphoneResult,
   EarphoneProviderPort,
 } from '../../../ai/domain/ports/earphone-provider.port';
-import { ExamAccessService } from './exam-access.service';
+import { ExamSessionAccessService } from '../../../exam-session/application/services/exam-session-access.service';
 import { EarphoneDetectionService } from './earphone-detection.service';
 
 function buildImage() {
@@ -53,15 +53,15 @@ function buildClient(overrides: { insert?: jest.Mock; maybeSingle?: jest.Mock } 
 
 function buildService(
   overrides: {
-    examAccessService?: Partial<ExamAccessService>;
+    examSessionAccessService?: Partial<ExamSessionAccessService>;
     earphoneProvider?: Partial<EarphoneProviderPort>;
     client?: { insert?: jest.Mock; maybeSingle?: jest.Mock };
   } = {},
 ) {
-  const examAccessService = {
-    assertApplied: jest.fn().mockResolvedValue(undefined),
-    ...overrides.examAccessService,
-  } as unknown as ExamAccessService;
+  const examSessionAccessService = {
+    assertOwnedInProgress: jest.fn().mockResolvedValue(undefined),
+    ...overrides.examSessionAccessService,
+  } as unknown as ExamSessionAccessService;
   const earphoneProvider = {
     detect: jest
       .fn<Promise<DetectEarphoneResult>, [DetectEarphoneInput]>()
@@ -74,33 +74,35 @@ function buildService(
   } as unknown as SupabaseService;
 
   return {
-    service: new EarphoneDetectionService(examAccessService, supabaseService, earphoneProvider),
+    service: new EarphoneDetectionService(
+      examSessionAccessService,
+      supabaseService,
+      earphoneProvider,
+    ),
     earphoneProvider,
     client,
   };
 }
 
 describe('EarphoneDetectionService.detect', () => {
-  it('gates on exam application before calling the provider', async () => {
-    const assertApplied = jest.fn().mockResolvedValue(undefined);
-    const { service } = buildService({ examAccessService: { assertApplied } });
+  it('gates on the owned in-progress session before calling the provider', async () => {
+    const assertOwnedInProgress = jest.fn().mockResolvedValue(undefined);
+    const { service } = buildService({ examSessionAccessService: { assertOwnedInProgress } });
 
     await service.detect('9', '7', buildImage(), buildImage());
 
-    expect(assertApplied).toHaveBeenCalledWith('9', '7');
+    expect(assertOwnedInProgress).toHaveBeenCalledWith('7', '9');
   });
 
-  it('propagates a rejection from assertApplied without calling the provider', async () => {
-    const assertApplied = jest.fn().mockRejectedValue(new Error('not applied'));
+  it('propagates a rejection from assertOwnedInProgress without calling the provider', async () => {
+    const assertOwnedInProgress = jest.fn().mockRejectedValue(new Error('not owned'));
     const detect = jest.fn();
     const { service } = buildService({
-      examAccessService: { assertApplied },
+      examSessionAccessService: { assertOwnedInProgress },
       earphoneProvider: { detect },
     });
 
-    await expect(service.detect('9', '7', buildImage(), buildImage())).rejects.toThrow(
-      'not applied',
-    );
+    await expect(service.detect('9', '7', buildImage(), buildImage())).rejects.toThrow('not owned');
     expect(detect).not.toHaveBeenCalled();
   });
 
@@ -126,7 +128,7 @@ describe('EarphoneDetectionService.detect', () => {
     });
     expect(client.from).toHaveBeenCalledWith('tb_earphone_logs');
     expect(insert).toHaveBeenCalledWith(
-      expect.objectContaining({ exam_id: 7, user_id: 9, earphone_detected: true }),
+      expect.objectContaining({ exam_session_id: 7, earphone_detected: true }),
     );
     expect(result).toEqual(buildResult({ earphoneDetected: true, leftLabel: 'Earbuds' }));
   });
@@ -148,7 +150,7 @@ describe('EarphoneDetectionService.hasPassedCheck', () => {
     const maybeSingle = jest.fn().mockResolvedValue({ data: null });
     const { service } = buildService({ client: { maybeSingle } });
 
-    const result = await service.hasPassedCheck('7', '9');
+    const result = await service.hasPassedCheck('7');
 
     expect(result).toBe(false);
   });
@@ -157,7 +159,7 @@ describe('EarphoneDetectionService.hasPassedCheck', () => {
     const maybeSingle = jest.fn().mockResolvedValue({ data: { id: 'log-1' } });
     const { service, client } = buildService({ client: { maybeSingle } });
 
-    const result = await service.hasPassedCheck('7', '9');
+    const result = await service.hasPassedCheck('7');
 
     expect(client.from).toHaveBeenCalledWith('tb_earphone_logs');
     expect(result).toBe(true);

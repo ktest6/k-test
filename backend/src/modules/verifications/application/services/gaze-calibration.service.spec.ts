@@ -7,7 +7,7 @@ import {
   CalibrateGazeResult,
   MonitoringProviderPort,
 } from '../../../ai/domain/ports/monitoring-provider.port';
-import { ExamAccessService } from './exam-access.service';
+import { ExamSessionAccessService } from '../../../exam-session/application/services/exam-session-access.service';
 import { GazeCalibrationService } from './gaze-calibration.service';
 
 function buildImage(name: string) {
@@ -61,16 +61,16 @@ function buildConfig(
 
 function buildService(
   overrides: {
-    examAccessService?: Partial<ExamAccessService>;
+    examSessionAccessService?: Partial<ExamSessionAccessService>;
     monitoringProvider?: Partial<MonitoringProviderPort>;
     client?: { insert?: jest.Mock; maybeSingle?: jest.Mock };
     config?: ConfigType<typeof appConfig>;
   } = {},
 ) {
-  const examAccessService = {
-    assertApplied: jest.fn().mockResolvedValue(undefined),
-    ...overrides.examAccessService,
-  } as unknown as ExamAccessService;
+  const examSessionAccessService = {
+    assertOwnedInProgress: jest.fn().mockResolvedValue(undefined),
+    ...overrides.examSessionAccessService,
+  } as unknown as ExamSessionAccessService;
   const monitoringProvider = {
     analyze: jest.fn(),
     calibrate: jest
@@ -87,7 +87,7 @@ function buildService(
   return {
     service: new GazeCalibrationService(
       supabaseService,
-      examAccessService,
+      examSessionAccessService,
       monitoringProvider,
       config,
     ),
@@ -96,25 +96,25 @@ function buildService(
 }
 
 describe('GazeCalibrationService.calibrate', () => {
-  it('gates on exam application before calling the provider', async () => {
-    const assertApplied = jest.fn().mockResolvedValue(undefined);
-    const { service } = buildService({ examAccessService: { assertApplied } });
+  it('gates on the owned in-progress session before calling the provider', async () => {
+    const assertOwnedInProgress = jest.fn().mockResolvedValue(undefined);
+    const { service } = buildService({ examSessionAccessService: { assertOwnedInProgress } });
 
     await service.calibrate('9', '7', [buildImage('center_1')]);
 
-    expect(assertApplied).toHaveBeenCalledWith('9', '7');
+    expect(assertOwnedInProgress).toHaveBeenCalledWith('7', '9');
   });
 
-  it('propagates a rejection from assertApplied without calling the provider', async () => {
-    const assertApplied = jest.fn().mockRejectedValue(new Error('not applied'));
+  it('propagates a rejection from assertOwnedInProgress without calling the provider', async () => {
+    const assertOwnedInProgress = jest.fn().mockRejectedValue(new Error('not owned'));
     const calibrate = jest.fn();
     const { service } = buildService({
-      examAccessService: { assertApplied },
+      examSessionAccessService: { assertOwnedInProgress },
       monitoringProvider: { calibrate },
     });
 
     await expect(service.calibrate('9', '7', [buildImage('center_1')])).rejects.toThrow(
-      'not applied',
+      'not owned',
     );
     expect(calibrate).not.toHaveBeenCalled();
   });
@@ -140,8 +140,7 @@ describe('GazeCalibrationService.calibrate', () => {
     expect(client.from).toHaveBeenCalledWith('tb_gaze_calibrations');
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({
-        exam_id: 7,
-        user_id: 9,
+        exam_session_id: 7,
         eye_yaw_center: -2.1937,
         eye_pitch_center: -20.7994,
         sample_count: 6,
@@ -197,7 +196,7 @@ describe('GazeCalibrationService.getLatestCalibration', () => {
     const maybeSingle = jest.fn().mockResolvedValue({ data: null });
     const { service } = buildService({ client: { maybeSingle } });
 
-    const result = await service.getLatestCalibration('7', '9');
+    const result = await service.getLatestCalibration('7');
 
     expect(result).toBeNull();
   });
@@ -208,7 +207,7 @@ describe('GazeCalibrationService.getLatestCalibration', () => {
       .mockResolvedValue({ data: { eye_yaw_center: -2.1937, eye_pitch_center: -20.7994 } });
     const { service, client } = buildService({ client: { maybeSingle } });
 
-    const result = await service.getLatestCalibration('7', '9');
+    const result = await service.getLatestCalibration('7');
 
     expect(client.from).toHaveBeenCalledWith('tb_gaze_calibrations');
     expect(result).toEqual({ eyeYawCenter: -2.1937, eyePitchCenter: -20.7994 });

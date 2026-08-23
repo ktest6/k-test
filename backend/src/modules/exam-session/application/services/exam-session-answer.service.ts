@@ -63,7 +63,7 @@ export class ExamSessionAnswerService {
     userId: string,
     input: SaveAnswerInput,
   ): Promise<AnswerWithScoreResult> {
-    await this.examSessionService.assertActiveSession(examSessionId, userId);
+    await this.examSessionService.assertVerifiedSession(examSessionId, userId);
     await this.examSessionQuestionService.getQuestion(examSessionId, questionId, userId);
 
     const answer = await this.answerService.save(
@@ -94,7 +94,7 @@ export class ExamSessionAnswerService {
    * 관리자 개입이 필요한 수준의 예외 상황으로 본다.
    */
   async skip(examSessionId: string, questionId: string, userId: string): Promise<void> {
-    await this.examSessionService.assertActiveSession(examSessionId, userId);
+    await this.examSessionService.assertVerifiedSession(examSessionId, userId);
     const { answered } = await this.examSessionQuestionService.getQuestion(
       examSessionId,
       questionId,
@@ -132,7 +132,7 @@ export class ExamSessionAnswerService {
     userId: string,
     contentType: string,
   ): Promise<SignedUploadUrl> {
-    await this.examSessionService.assertActiveSession(examSessionId, userId);
+    await this.examSessionService.assertVerifiedSession(examSessionId, userId);
     await this.examSessionQuestionService.getQuestion(examSessionId, questionId, userId);
 
     const extension = AUDIO_EXTENSION_BY_CONTENT_TYPE[contentType];

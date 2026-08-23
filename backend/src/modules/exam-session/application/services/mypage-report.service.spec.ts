@@ -6,9 +6,6 @@ import { AnswerService } from '../../../answer/application/services/answer.servi
 import { Answer } from '../../../answer/domain/entities/answer.entity';
 import { AnswerStatus } from '../../../answer/domain/enums/answer-status.enum';
 import { AnswerType } from '../../../answer/domain/enums/answer-type.enum';
-import { Exam } from '../../../exam/domain/entities/exam.entity';
-import { ExamService } from '../../../exam/application/services/exam.service';
-import { ExamQuestionService } from '../../../exam-question/application/services/exam-question.service';
 import { ProctoringEvent } from '../../../monitoring/domain/entities/proctoring-event.entity';
 import { ProctoringEventRepository } from '../../../monitoring/domain/proctoring-event.repository.interface';
 import { Question } from '../../../question/domain/entities/question.entity';
@@ -24,12 +21,12 @@ import { ExamSession } from '../../domain/entities/exam-session.entity';
 import { SessionStatus } from '../../domain/enums/session-status.enum';
 import { ExamSessionRepository } from '../../domain/exam-session.repository.interface';
 import { SkippedQuestionRepository } from '../../domain/skipped-question.repository.interface';
+import { ExamSessionQuestionService } from './exam-session-question.service';
 import { MypageReportService } from './mypage-report.service';
 
 function buildSession(overrides: Partial<{ userId: string }> = {}): ExamSession {
   return new ExamSession(
     '100',
-    '1',
     overrides.userId ?? '9',
     SessionStatus.SUBMITTED,
     0,
@@ -38,19 +35,6 @@ function buildSession(overrides: Partial<{ userId: string }> = {}): ExamSession 
     null,
     new Date('2026-08-01T00:30:00.000Z'),
     new Date('2026-08-01T00:00:00.000Z'),
-  );
-}
-
-function buildExam(): Exam {
-  return new Exam(
-    '1',
-    '2026년 1회차',
-    new Date('2026-01-01T00:00:00.000Z'),
-    new Date('2026-12-31T23:59:59.000Z'),
-    new Date('2026-08-01T00:00:00.000Z'),
-    new Date('2026-08-14T23:59:59.000Z'),
-    100,
-    new Date(),
   );
 }
 
@@ -129,8 +113,7 @@ interface Mocks {
   findSessionById: jest.Mock;
   listSkippedQuestionIds: jest.Mock;
   findEventsBySession: jest.Mock;
-  findExamById: jest.Mock;
-  listAssignedQuestions: jest.Mock;
+  getAssignedQuestions: jest.Mock;
   listBySession: jest.Mock;
   findByAnswerId: jest.Mock;
   findExamResultById: jest.Mock;
@@ -142,8 +125,7 @@ function buildService(overrides: Partial<Mocks> = {}) {
     findSessionById: jest.fn().mockResolvedValue(buildSession()),
     listSkippedQuestionIds: jest.fn().mockResolvedValue([]),
     findEventsBySession: jest.fn().mockResolvedValue([]),
-    findExamById: jest.fn().mockResolvedValue(buildExam()),
-    listAssignedQuestions: jest.fn().mockResolvedValue([]),
+    getAssignedQuestions: jest.fn().mockResolvedValue([]),
     listBySession: jest.fn().mockResolvedValue([]),
     findByAnswerId: jest.fn().mockResolvedValue(null),
     findExamResultById: jest.fn().mockResolvedValue(buildExamResult()),
@@ -160,10 +142,9 @@ function buildService(overrides: Partial<Mocks> = {}) {
   const proctoringEventRepository = {
     findByExamSessionId: mocks.findEventsBySession,
   } as unknown as ProctoringEventRepository;
-  const examService = { findById: mocks.findExamById } as unknown as ExamService;
-  const examQuestionService = {
-    listAssignedQuestions: mocks.listAssignedQuestions,
-  } as unknown as ExamQuestionService;
+  const examSessionQuestionService = {
+    getAssignedQuestions: mocks.getAssignedQuestions,
+  } as unknown as ExamSessionQuestionService;
   const answerService = { listBySession: mocks.listBySession } as unknown as AnswerService;
   const scoringService = { findByAnswerId: mocks.findByAnswerId } as unknown as ScoringService;
   const examResultService = { findById: mocks.findExamResultById } as unknown as ExamResultService;
@@ -173,8 +154,7 @@ function buildService(overrides: Partial<Mocks> = {}) {
     examSessionRepository,
     skippedQuestionRepository,
     proctoringEventRepository,
-    examService,
-    examQuestionService,
+    examSessionQuestionService,
     answerService,
     scoringService,
     examResultService,
@@ -202,7 +182,7 @@ describe('MypageReportService.getReport', () => {
   it('marks a question with no answer as skipped and omits response/requiredPoints', async () => {
     const question = buildQuestion('1');
     const { service } = buildService({
-      listAssignedQuestions: jest.fn().mockResolvedValue([question]),
+      getAssignedQuestions: jest.fn().mockResolvedValue([question]),
       listBySession: jest.fn().mockResolvedValue([]),
     });
 
@@ -226,7 +206,7 @@ describe('MypageReportService.getReport', () => {
       new Date(),
     );
     const { service } = buildService({
-      listAssignedQuestions: jest.fn().mockResolvedValue([question]),
+      getAssignedQuestions: jest.fn().mockResolvedValue([question]),
       listBySession: jest.fn().mockResolvedValue([answer]),
       findByAnswerId: jest.fn().mockResolvedValue(score),
     });
@@ -277,7 +257,7 @@ describe('MypageReportService.getReport', () => {
     );
   });
 
-  it('builds candidateName from the user first/last name and passes through grade/percentile', async () => {
+  it('builds candidateName from the user first/last name and passes through grade/percentile/startedAt', async () => {
     const { service } = buildService();
 
     const result = await service.getReport('r1', '9');
@@ -285,6 +265,6 @@ describe('MypageReportService.getReport', () => {
     expect(result.candidateName).toBe('Yena Back');
     expect(result.finalGrade).toBe('B');
     expect(result.percentile).toBe(70.5);
-    expect(result.roundName).toBe('2026년 1회차');
+    expect(result.startedAt).toEqual(new Date('2026-08-01T00:00:00.000Z'));
   });
 });

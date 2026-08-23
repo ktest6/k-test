@@ -48,9 +48,9 @@ export class EarphoneController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['examId', 'left_ear_image', 'right_ear_image'],
+      required: ['examSessionId', 'left_ear_image', 'right_ear_image'],
       properties: {
-        examId: { type: 'string', example: '1' },
+        examSessionId: { type: 'string', example: '1' },
         left_ear_image: { type: 'string', format: 'binary', description: '왼쪽 귀 이미지' },
         right_ear_image: { type: 'string', format: 'binary', description: '오른쪽 귀 이미지' },
       },
@@ -77,7 +77,7 @@ export class EarphoneController {
 
     return this.earphoneDetectionService.detect(
       user.id,
-      dto.examId,
+      dto.examSessionId,
       {
         buffer: leftEarImage.buffer,
         filename: leftEarImage.originalname,

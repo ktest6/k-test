@@ -4,8 +4,6 @@ import {
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
 import { AnswerService } from '../../../answer/application/services/answer.service';
-import { ExamQuestionService } from '../../../exam-question/application/services/exam-question.service';
-import { ExamService } from '../../../exam/application/services/exam.service';
 import { QuestionSectionType } from '../../../question/domain/enums/question-section-type.enum';
 import {
   PROCTORING_EVENT_REPOSITORY,
@@ -23,6 +21,7 @@ import {
   SKIPPED_QUESTION_REPOSITORY,
   SkippedQuestionRepository,
 } from '../../domain/skipped-question.repository.interface';
+import { ExamSessionQuestionService } from './exam-session-question.service';
 
 export interface ReportTask {
   questionId: string;
@@ -47,7 +46,7 @@ export interface Report {
   examResultId: string;
   examSessionId: string;
   candidateName: string;
-  roundName: string;
+  startedAt: Date;
   finalGrade: string;
   percentile: number | null;
   domainScores: ReportDomainScore[];
@@ -69,8 +68,7 @@ export class MypageReportService {
     private readonly skippedQuestionRepository: SkippedQuestionRepository,
     @Inject(PROCTORING_EVENT_REPOSITORY)
     private readonly proctoringEventRepository: ProctoringEventRepository,
-    private readonly examService: ExamService,
-    private readonly examQuestionService: ExamQuestionService,
+    private readonly examSessionQuestionService: ExamSessionQuestionService,
     private readonly answerService: AnswerService,
     private readonly scoringService: ScoringService,
     private readonly examResultService: ExamResultService,
@@ -93,10 +91,9 @@ export class MypageReportService {
       throw new ForbiddenDomainException('본인의 리포트가 아닙니다.');
     }
 
-    const [user, exam, assignedQuestions, answers, skippedIds, events] = await Promise.all([
+    const [user, assignedQuestions, answers, skippedIds, events] = await Promise.all([
       this.userService.findById(userId),
-      this.examService.findById(session.examId),
-      this.examQuestionService.listAssignedQuestions(session.examId),
+      this.examSessionQuestionService.getAssignedQuestions(session.id),
       this.answerService.listBySession(session.id),
       this.skippedQuestionRepository.listSkippedQuestionIds(session.id),
       this.proctoringEventRepository.findByExamSessionId(session.id),
@@ -169,7 +166,7 @@ export class MypageReportService {
       examResultId: examResult.id,
       examSessionId: session.id,
       candidateName: `${user.firstName} ${user.lastName}`,
-      roundName: exam.roundName,
+      startedAt: session.startedAt,
       finalGrade: examResult.finalGrade,
       percentile: examResult.percentile,
       domainScores,

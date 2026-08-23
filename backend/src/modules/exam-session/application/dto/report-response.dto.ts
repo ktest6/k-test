@@ -69,8 +69,8 @@ export class ReportResponseDto {
   @ApiProperty()
   candidateName: string;
 
-  @ApiProperty()
-  roundName: string;
+  @ApiProperty({ description: '응시 시작 시각' })
+  startedAt: Date;
 
   @ApiProperty({ description: '최종 등급(A~F)' })
   finalGrade: string;

@@ -11,8 +11,6 @@ import {
   SCORING_PROVIDER,
   ScoringProviderPort,
 } from '../../../ai/domain/ports/scoring-provider.port';
-import { ExamService } from '../../../exam/application/services/exam.service';
-import { ExamQuestionService } from '../../../exam-question/application/services/exam-question.service';
 import { QuestionService } from '../../../question/application/services/question.service';
 import { ExamResultService } from '../../../scoring/application/services/exam-result.service';
 import { ScoringService } from '../../../scoring/application/services/scoring.service';
@@ -25,11 +23,12 @@ import {
   SKIPPED_QUESTION_REPOSITORY,
   SkippedQuestionRepository,
 } from '../../domain/skipped-question.repository.interface';
+import { ExamSessionQuestionService } from './exam-session-question.service';
 
 /**
- * 마감 후 이 시간이 지나도록 INPROGRESS로 남아있으면 "방치된 세션"으로 본다
- * (SESSION-01의 START_BUFFER_BEFORE_CLOSE_MS와 별개 — 그건 신규 시작 차단용, 이건
- * 이미 시작한 세션을 강제로 종료 처리하는 유예 시간).
+ * 세션을 시작한 뒤 이 시간이 지나도록 INPROGRESS로 남아있으면 "방치된 세션"으로
+ * 본다. 회차(Exam)의 마감 시각 같은 게 없으므로 세션 자신의 startedAt을 기준으로
+ * 잰다.
  */
 const SESSION_ABANDON_GRACE_MS = 3 * 60 * 60 * 1000;
 
@@ -47,8 +46,7 @@ export class ExamSessionReportService {
     @Inject(EXAM_SESSION_REPOSITORY) private readonly examSessionRepository: ExamSessionRepository,
     @Inject(SKIPPED_QUESTION_REPOSITORY)
     private readonly skippedQuestionRepository: SkippedQuestionRepository,
-    private readonly examService: ExamService,
-    private readonly examQuestionService: ExamQuestionService,
+    private readonly examSessionQuestionService: ExamSessionQuestionService,
     private readonly questionService: QuestionService,
     private readonly answerService: AnswerService,
     private readonly scoringService: ScoringService,
@@ -82,7 +80,7 @@ export class ExamSessionReportService {
     }
 
     const [assignedQuestions, answeredIds, skippedIds] = await Promise.all([
-      this.examQuestionService.listAssignedQuestions(session.examId),
+      this.examSessionQuestionService.getAssignedQuestions(examSessionId),
       this.answerService.listAnsweredQuestionIds(examSessionId),
       this.skippedQuestionRepository.listSkippedQuestionIds(examSessionId),
     ]);
@@ -174,7 +172,7 @@ export class ExamSessionReportService {
   }
 
   /**
-   * 마감 후 SESSION_ABANDON_GRACE_MS(3시간)가 지나도록 INPROGRESS로 남은 세션을 정리한다.
+   * 시작한 지 SESSION_ABANDON_GRACE_MS(3시간)가 지나도록 INPROGRESS로 남은 세션을 정리한다.
    * 답변한 문항이 하나도 없으면(시작만 해놓고 손도 안 댄 경우) EXPIRED로 처리한다 —
    * 채점할 내용이 없으니 assessment를 부를 이유가 없다. 하나라도 답변했으면 그때까지
    * 푼 것만이라도 채점하도록 checkAndFinalize를 force로 강제 실행한다(문항을 다 못
@@ -189,8 +187,7 @@ export class ExamSessionReportService {
 
     await Promise.all(
       inProgressSessions.map(async (session) => {
-        const exam = await this.examService.findById(session.examId);
-        if (Date.now() - exam.closeAt.getTime() < SESSION_ABANDON_GRACE_MS) {
+        if (Date.now() - session.startedAt.getTime() < SESSION_ABANDON_GRACE_MS) {
           return;
         }
 

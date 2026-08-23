@@ -25,7 +25,6 @@ import { MonitoringService } from './monitoring.service';
 function buildSession(): ExamSession {
   return new ExamSession(
     '100',
-    '7',
     '9',
     SessionStatus.INPROGRESS,
     0,
@@ -95,6 +94,7 @@ function buildService(overrides: {
 }) {
   const examSessionService = {
     assertActiveSession: jest.fn().mockResolvedValue(buildSession()),
+    assertVerifiedSession: jest.fn().mockResolvedValue(buildSession()),
     getStatus: jest
       .fn()
       .mockResolvedValue({ session: buildSession(), status: SessionStatus.INPROGRESS }),
@@ -143,11 +143,11 @@ function buildService(overrides: {
 }
 
 describe('MonitoringService.analyze', () => {
-  it('gates on assertActiveSession before calling the provider', async () => {
-    const assertActiveSession = jest.fn().mockResolvedValue(buildSession());
+  it('gates on assertVerifiedSession before calling the provider', async () => {
+    const assertVerifiedSession = jest.fn().mockResolvedValue(buildSession());
     const analyze = jest.fn().mockResolvedValue(buildAnalyzedResult());
     const service = buildService({
-      examSessionService: { assertActiveSession },
+      examSessionService: { assertVerifiedSession },
       monitoringProvider: { analyze },
     });
 
@@ -158,9 +158,10 @@ describe('MonitoringService.analyze', () => {
       buildFrame(),
     );
 
-    expect(assertActiveSession).toHaveBeenCalledWith('100', '9');
+    expect(assertVerifiedSession).toHaveBeenCalledWith('100', '9');
+    // AI팀 외부 계약상 필드명은 examId지만, 회차가 없어져서 세션 id(session.id === '100')를 그대로 싣는다.
     expect(analyze).toHaveBeenCalledWith(
-      expect.objectContaining({ examId: '7', examineeId: '9', runIdentityCheck: false }),
+      expect.objectContaining({ examId: '100', examineeId: '9', runIdentityCheck: false }),
     );
   });
 
@@ -325,7 +326,7 @@ describe('MonitoringService.analyze', () => {
       buildFrame(),
     );
 
-    expect(getVerifiedFacePath).toHaveBeenCalledWith('7', '9');
+    expect(getVerifiedFacePath).toHaveBeenCalledWith('100');
     expect(download).toHaveBeenCalledWith('9/7/face.jpg');
     const calledWith = analyze.mock.calls[0][0];
     expect(calledWith.runIdentityCheck).toBe(true);
@@ -374,7 +375,7 @@ describe('MonitoringService.analyze', () => {
       buildFrame(),
     );
 
-    expect(getLatestCalibration).toHaveBeenCalledWith('7', '9');
+    expect(getLatestCalibration).toHaveBeenCalledWith('100');
     expect(analyze).toHaveBeenCalledWith(
       expect.objectContaining({ eyeYawCenter: -2.1937, eyePitchCenter: -20.7994 }),
     );
@@ -561,7 +562,6 @@ describe('MonitoringService.reportViolation', () => {
       ]);
     const disqualifiedSession = new ExamSession(
       '100',
-      '7',
       '9',
       SessionStatus.DISQUALIFIED,
       0,
@@ -598,7 +598,6 @@ describe('MonitoringService.reportViolation', () => {
       ]);
     const disqualifiedSession = new ExamSession(
       '100',
-      '7',
       '9',
       SessionStatus.DISQUALIFIED,
       0,

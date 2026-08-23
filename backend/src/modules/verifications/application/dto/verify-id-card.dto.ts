@@ -2,10 +2,10 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsDateString, IsString, MinLength } from 'class-validator';
 
 export class VerifyIdCardDto {
-  @ApiProperty({ description: '응시 회차 ID (tb_exam.exam_id)', example: '1' })
+  @ApiProperty({ description: '응시 세션 ID', example: '1' })
   @IsString()
   @MinLength(1)
-  examId: string;
+  examSessionId: string;
 
   @ApiProperty({
     description: '웹캠 이미지를 촬영한 시각 (ISO 8601) — FastAPI 대조 요청에 그대로 전달됨',

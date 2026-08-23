@@ -4,7 +4,6 @@ import { StoragePublicUrlService } from '../../../infrastructure/supabase/storag
 import { Answer } from '../../answer/domain/entities/answer.entity';
 import { AnswerStatus } from '../../answer/domain/enums/answer-status.enum';
 import { AnswerType } from '../../answer/domain/enums/answer-type.enum';
-import { Exam } from '../../exam/domain/entities/exam.entity';
 import { Question } from '../../question/domain/entities/question.entity';
 import { QuestionSectionType } from '../../question/domain/enums/question-section-type.enum';
 import { ExamSession } from '../domain/entities/exam-session.entity';
@@ -23,7 +22,6 @@ function buildUser(): AuthenticatedUser {
 
 function buildSession(overrides: Partial<{ currentQuestionId: string | null }> = {}): ExamSession {
   return new ExamSession(
-    '1',
     '1',
     '1',
     SessionStatus.INPROGRESS,
@@ -82,7 +80,8 @@ function buildController(
   sessionOverrides: Partial<{
     start: jest.Mock;
     getStatus: jest.Mock;
-    listAvailable: jest.Mock;
+    getCurrentInProgress: jest.Mock;
+    isVerified: jest.Mock;
   }> = {},
   questionOverrides: Partial<{
     listQuestions: jest.Mock;
@@ -97,7 +96,8 @@ function buildController(
   const sessionService = {
     start: jest.fn(),
     getStatus: jest.fn(),
-    listAvailable: jest.fn(),
+    getCurrentInProgress: jest.fn(),
+    isVerified: jest.fn().mockResolvedValue(true),
     ...sessionOverrides,
   } as unknown as ExamSessionService;
   const questionService = {
@@ -119,127 +119,69 @@ function buildController(
   );
 }
 
-function buildExam(): Exam {
-  return new Exam(
-    '1',
-    '2026년 1회차',
-    new Date('2026-01-01T00:00:00.000Z'),
-    new Date('2026-12-31T23:59:59.000Z'),
-    new Date('2026-08-01T00:00:00.000Z'),
-    new Date('2026-08-14T23:59:59.000Z'),
-    100,
-    new Date(),
-  );
-}
+describe('ExamSessionController.getCurrent', () => {
+  it('returns null when nothing is in progress', async () => {
+    const getCurrentInProgress = jest.fn().mockResolvedValue(null);
+    const controller = buildController({ getCurrentInProgress });
 
-describe('ExamSessionController.listAvailable', () => {
-  it('passes the caller id to ExamSessionService.listAvailable when logged in', async () => {
-    const exam = buildExam();
-    const listAvailable = jest.fn().mockResolvedValue([
-      {
-        exam,
-        isApplied: true,
-        isCapacityFull: false,
-        session: { id: '11', status: SessionStatus.INPROGRESS },
-      },
-    ]);
-    const controller = buildController({ listAvailable });
+    const result = await controller.getCurrent(buildUser());
 
-    const result = await controller.listAvailable(buildUser());
-
-    expect(listAvailable).toHaveBeenCalledWith('1');
-    expect(result).toEqual([
-      {
-        examId: '1',
-        roundName: '2026년 1회차',
-        openAt: exam.openAt,
-        closeAt: exam.closeAt,
-        applicationOpenAt: exam.applicationOpenAt,
-        applicationCloseAt: exam.applicationCloseAt,
-        isApplied: true,
-        isCapacityFull: false,
-        examSessionId: '11',
-        sessionStatus: SessionStatus.INPROGRESS,
-      },
-    ]);
+    expect(getCurrentInProgress).toHaveBeenCalledWith('1');
+    expect(result).toBeNull();
   });
 
-  it('passes null when there is no logged-in user', async () => {
-    const exam = buildExam();
-    const listAvailable = jest
-      .fn()
-      .mockResolvedValue([{ exam, isApplied: false, isCapacityFull: false, session: null }]);
-    const controller = buildController({ listAvailable });
+  it('maps the in-progress session including the verified flag', async () => {
+    const session = buildSession();
+    const getCurrentInProgress = jest.fn().mockResolvedValue(session);
+    const isVerified = jest.fn().mockResolvedValue(false);
+    const controller = buildController({ getCurrentInProgress, isVerified });
 
-    const result = await controller.listAvailable(undefined);
+    const result = await controller.getCurrent(buildUser());
 
-    expect(listAvailable).toHaveBeenCalledWith(null);
-    expect(result).toEqual([
-      {
-        examId: '1',
-        roundName: '2026년 1회차',
-        openAt: exam.openAt,
-        closeAt: exam.closeAt,
-        applicationOpenAt: exam.applicationOpenAt,
-        applicationCloseAt: exam.applicationCloseAt,
-        isApplied: false,
-        isCapacityFull: false,
-        examSessionId: null,
-        sessionStatus: null,
-      },
-    ]);
-  });
-
-  it('marks isCapacityFull true for an unapplied exam that has reached capacity', async () => {
-    const exam = buildExam();
-    const listAvailable = jest
-      .fn()
-      .mockResolvedValue([{ exam, isApplied: false, isCapacityFull: true, session: null }]);
-    const controller = buildController({ listAvailable });
-
-    const result = await controller.listAvailable(undefined);
-
-    expect(result).toEqual([
-      expect.objectContaining({ isApplied: false, isCapacityFull: true, examSessionId: null }),
-    ]);
+    expect(isVerified).toHaveBeenCalledWith('1');
+    expect(result).toEqual({ id: '1', status: SessionStatus.INPROGRESS, verified: false });
   });
 });
 
 describe('ExamSessionController.start', () => {
-  it('delegates to ExamSessionService.start and maps the response', async () => {
+  it('delegates to ExamSessionService.start and maps the response, including the verified flag', async () => {
     const session = buildSession();
     const start = jest.fn().mockResolvedValue(session);
-    const controller = buildController({ start });
+    const isVerified = jest.fn().mockResolvedValue(false);
+    const controller = buildController({ start, isVerified });
 
-    const result = await controller.start('1', buildUser());
+    const result = await controller.start(buildUser());
 
-    expect(start).toHaveBeenCalledWith('1', '1');
+    expect(start).toHaveBeenCalledWith('1');
+    expect(isVerified).toHaveBeenCalledWith('1');
     expect(result).toEqual({
       id: '1',
       examSessionId: '1',
-      examId: '1',
       status: SessionStatus.INPROGRESS,
       startedAt: session.startedAt,
+      verified: false,
     });
   });
 });
 
 describe('ExamSessionController.getStatus', () => {
-  it('delegates to ExamSessionService.getStatus and maps the response', async () => {
+  it('delegates to ExamSessionService.getStatus and maps the response, including the verified flag', async () => {
     const session = buildSession();
     const getStatus = jest.fn().mockResolvedValue({
       session,
       status: SessionStatus.INPROGRESS,
     });
-    const controller = buildController({ getStatus });
+    const isVerified = jest.fn().mockResolvedValue(true);
+    const controller = buildController({ getStatus, isVerified });
 
     const result = await controller.getStatus('1', buildUser());
 
     expect(getStatus).toHaveBeenCalledWith('1', '1');
+    expect(isVerified).toHaveBeenCalledWith('1');
     expect(result).toEqual({
       id: '1',
-      examId: '1',
       status: SessionStatus.INPROGRESS,
+      verified: true,
     });
   });
 });

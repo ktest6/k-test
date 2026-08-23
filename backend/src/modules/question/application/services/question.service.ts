@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { NotFoundDomainException } from '../../../../common/exceptions/domain.exception';
 import { Question } from '../../domain/entities/question.entity';
+import { QuestionSectionType } from '../../domain/enums/question-section-type.enum';
 import {
   CreateQuestionDraftInput,
   QUESTION_REPOSITORY,
@@ -31,5 +32,9 @@ export class QuestionService {
 
   findByIds(ids: string[]): Promise<Question[]> {
     return this.questionRepository.findByIds(ids);
+  }
+
+  findByPart(part: QuestionSectionType): Promise<Question[]> {
+    return this.questionRepository.findByPart(part);
   }
 }

@@ -6,7 +6,6 @@ import { AdminExamSessionController } from './admin-exam-session.controller';
 function buildSession(status: SessionStatus): ExamSession {
   return new ExamSession(
     '100',
-    '7',
     '9',
     status,
     0,
@@ -34,6 +33,10 @@ describe('AdminExamSessionController.disqualify', () => {
     const result = await controller.disqualify('100');
 
     expect(disqualify).toHaveBeenCalledWith('100');
-    expect(result).toEqual({ id: '100', examId: '7', status: SessionStatus.DISQUALIFIED });
+    expect(result).toEqual({
+      id: '100',
+      status: SessionStatus.DISQUALIFIED,
+      verified: false,
+    });
   });
 });
