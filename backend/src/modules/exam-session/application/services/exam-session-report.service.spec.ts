@@ -4,8 +4,6 @@ import { AnswerStatus } from '../../../answer/domain/enums/answer-status.enum';
 import { AnswerType } from '../../../answer/domain/enums/answer-type.enum';
 import { FinalizeProviderPort } from '../../../ai/domain/ports/finalize-provider.port';
 import { ScoringProviderPort } from '../../../ai/domain/ports/scoring-provider.port';
-import { Exam } from '../../../exam/domain/entities/exam.entity';
-import { ExamService } from '../../../exam/application/services/exam.service';
 import { ExamQuestionService } from '../../../exam-question/application/services/exam-question.service';
 import { QuestionService } from '../../../question/application/services/question.service';
 import { Question } from '../../../question/domain/entities/question.entity';
@@ -21,7 +19,7 @@ import { SkippedQuestionRepository } from '../../domain/skipped-question.reposit
 import { ExamSessionReportService } from './exam-session-report.service';
 
 function buildSession(
-  overrides: Partial<{ id: string; userId: string; status: SessionStatus }> = {},
+  overrides: Partial<{ id: string; userId: string; status: SessionStatus; startedAt: Date }> = {},
 ): ExamSession {
   return new ExamSession(
     overrides.id ?? '100',
@@ -29,24 +27,11 @@ function buildSession(
     overrides.userId ?? '9',
     overrides.status ?? SessionStatus.INPROGRESS,
     0,
-    new Date('2026-08-04T00:00:00.000Z'),
+    overrides.startedAt ?? new Date('2026-08-04T00:00:00.000Z'),
     null,
     null,
     null,
     new Date(),
-  );
-}
-
-function buildExam(overrides: Partial<{ id: string; closeAt: Date }> = {}): Exam {
-  return new Exam(
-    overrides.id ?? '7',
-    '202601',
-    new Date('2026-08-01T00:00:00.000Z'),
-    new Date('2026-08-03T00:00:00.000Z'),
-    new Date('2026-08-04T00:00:00.000Z'),
-    overrides.closeAt ?? new Date('2026-08-05T00:00:00.000Z'),
-    10,
-    new Date('2026-08-01T00:00:00.000Z'),
   );
 }
 
@@ -85,7 +70,6 @@ interface BuildServiceMocks {
   findAllSubmitted: jest.Mock;
   findAllInProgress: jest.Mock;
   updateStatus: jest.Mock;
-  findExamById: jest.Mock;
   listSkippedQuestionIds: jest.Mock;
   listAssignedQuestions: jest.Mock;
   findQuestionById: jest.Mock;
@@ -107,7 +91,6 @@ function buildService(overrides: Partial<BuildServiceMocks> = {}) {
     findAllSubmitted: jest.fn().mockResolvedValue([]),
     findAllInProgress: jest.fn().mockResolvedValue([]),
     updateStatus: jest.fn(),
-    findExamById: jest.fn().mockResolvedValue(buildExam()),
     listSkippedQuestionIds: jest.fn().mockResolvedValue([]),
     listAssignedQuestions: jest.fn().mockResolvedValue([]),
     findQuestionById: jest.fn(),
@@ -133,7 +116,6 @@ function buildService(overrides: Partial<BuildServiceMocks> = {}) {
   const skippedQuestionRepository = {
     listSkippedQuestionIds: mocks.listSkippedQuestionIds,
   } as unknown as SkippedQuestionRepository;
-  const examService = { findById: mocks.findExamById } as unknown as ExamService;
   const examQuestionService = {
     listAssignedQuestions: mocks.listAssignedQuestions,
   } as unknown as ExamQuestionService;
@@ -157,7 +139,6 @@ function buildService(overrides: Partial<BuildServiceMocks> = {}) {
   const service = new ExamSessionReportService(
     examSessionRepository,
     skippedQuestionRepository,
-    examService,
     examQuestionService,
     questionService,
     answerService,
@@ -409,11 +390,10 @@ describe('ExamSessionReportService.syncPendingReports', () => {
 });
 
 describe('ExamSessionReportService.expireAbandonedSessions', () => {
-  it('leaves sessions alone while still within the grace period after close', async () => {
-    const session = buildSession({ id: '100', userId: '9' });
+  it('leaves sessions alone while still within the grace period after starting', async () => {
+    const session = buildSession({ id: '100', userId: '9', startedAt: new Date() });
     const { service, mocks } = buildService({
       findAllInProgress: jest.fn().mockResolvedValue([session]),
-      findExamById: jest.fn().mockResolvedValue(buildExam({ closeAt: new Date() })),
     });
 
     const result = await service.expireAbandonedSessions();
@@ -423,11 +403,10 @@ describe('ExamSessionReportService.expireAbandonedSessions', () => {
   });
 
   it('marks a session EXPIRED when nothing was ever answered', async () => {
-    const session = buildSession({ id: '100', userId: '9' });
-    const longClosed = new Date(Date.now() - 4 * 60 * 60 * 1000);
+    const startedLongAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+    const session = buildSession({ id: '100', userId: '9', startedAt: startedLongAgo });
     const { service, mocks } = buildService({
       findAllInProgress: jest.fn().mockResolvedValue([session]),
-      findExamById: jest.fn().mockResolvedValue(buildExam({ closeAt: longClosed })),
       listAnsweredQuestionIds: jest.fn().mockResolvedValue([]),
     });
 
@@ -438,11 +417,10 @@ describe('ExamSessionReportService.expireAbandonedSessions', () => {
   });
 
   it('force-finalizes a session that answered at least one question', async () => {
-    const session = buildSession({ id: '100', userId: '9' });
-    const longClosed = new Date(Date.now() - 4 * 60 * 60 * 1000);
+    const startedLongAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+    const session = buildSession({ id: '100', userId: '9', startedAt: startedLongAgo });
     const { service, mocks } = buildService({
       findAllInProgress: jest.fn().mockResolvedValue([session]),
-      findExamById: jest.fn().mockResolvedValue(buildExam({ closeAt: longClosed })),
       listAnsweredQuestionIds: jest.fn().mockResolvedValue(['1']),
     });
     const checkAndFinalizeSpy = jest
@@ -457,12 +435,11 @@ describe('ExamSessionReportService.expireAbandonedSessions', () => {
   });
 
   it('keeps processing remaining sessions when a force-finalize fails', async () => {
-    const sessionA = buildSession({ id: '100', userId: '9' });
-    const sessionB = buildSession({ id: '200', userId: '15' });
-    const longClosed = new Date(Date.now() - 4 * 60 * 60 * 1000);
+    const startedLongAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+    const sessionA = buildSession({ id: '100', userId: '9', startedAt: startedLongAgo });
+    const sessionB = buildSession({ id: '200', userId: '15', startedAt: startedLongAgo });
     const { service } = buildService({
       findAllInProgress: jest.fn().mockResolvedValue([sessionA, sessionB]),
-      findExamById: jest.fn().mockResolvedValue(buildExam({ closeAt: longClosed })),
       listAnsweredQuestionIds: jest.fn().mockResolvedValue(['1']),
     });
     jest

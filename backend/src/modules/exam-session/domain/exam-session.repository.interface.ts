@@ -21,4 +21,8 @@ export interface ExamSessionRepository {
   findAllSubmitted(): Promise<ExamSession[]>;
   /** 방치 세션 정리 배치(ExamSessionExpiryScheduler)용 — 전체 회차를 통틀어 INPROGRESS인 세션. */
   findAllInProgress(): Promise<ExamSession[]>;
+  /** 항시 응시 체제의 "한 번에 한 시험만" 게이트용 — 이 사용자의 INPROGRESS 세션(회차 무관). */
+  findInProgressByUser(userId: string): Promise<ExamSession | null>;
+  /** 마이페이지 "내 시험 현황"용 — 이 사용자가 시작한 적 있는 모든 세션(회차 무관, 상태 무관). */
+  findAllByUser(userId: string): Promise<ExamSession[]>;
 }

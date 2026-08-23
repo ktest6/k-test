@@ -13,7 +13,7 @@ import { User } from '../../../user/domain/entities/user.entity';
 import { IdentityDocumentType } from '../../../user/domain/enums/identity-document-type.enum';
 import { UserService } from '../../../user/application/services/user.service';
 import { VerifyIdCardDto } from '../dto/verify-id-card.dto';
-import { ExamAccessService } from './exam-access.service';
+import { ExamService } from '../../../exam/application/services/exam.service';
 import { IdCardVerificationService } from './id-card-verification.service';
 
 function buildUser(
@@ -113,7 +113,7 @@ function buildClient(
 
 function buildService(
   overrides: {
-    examAccessService?: Partial<ExamAccessService>;
+    examService?: Partial<ExamService>;
     userService?: Partial<UserService>;
     identityProvider?: Partial<IdentityProviderPort>;
     client?: {
@@ -124,10 +124,10 @@ function buildService(
     };
   } = {},
 ) {
-  const examAccessService = {
-    assertApplied: jest.fn().mockResolvedValue(undefined),
-    ...overrides.examAccessService,
-  } as unknown as ExamAccessService;
+  const examService = {
+    findById: jest.fn().mockResolvedValue({ id: '7', roundName: '202607', createdAt: new Date() }),
+    ...overrides.examService,
+  } as unknown as ExamService;
   const userService = {
     findById: jest.fn().mockResolvedValue(buildUser()),
     ...overrides.userService,
@@ -146,12 +146,12 @@ function buildService(
   return {
     service: new IdCardVerificationService(
       supabaseService,
-      examAccessService,
+      examService,
       userService,
       identityProvider,
     ),
     client,
-    examAccessService,
+    examService,
     userService,
     identityProvider,
   };
@@ -159,13 +159,13 @@ function buildService(
 
 describe('IdCardVerificationService.verify', () => {
   it('rejects paths outside the caller-owned folder before checking anything else', async () => {
-    const assertApplied = jest.fn().mockResolvedValue(undefined);
-    const { service } = buildService({ examAccessService: { assertApplied } });
+    const findById = jest.fn();
+    const { service } = buildService({ examService: { findById } });
 
     await expect(
       service.verify('9', { ...buildDto(), idCardPath: '999/7/id-card.jpg' }),
     ).rejects.toThrow(ForbiddenDomainException);
-    expect(assertApplied).not.toHaveBeenCalled();
+    expect(findById).not.toHaveBeenCalled();
   });
 
   it("calls the identity provider with the user's passport number and stores the result", async () => {
@@ -175,16 +175,18 @@ describe('IdCardVerificationService.verify', () => {
         .mockResolvedValue(buildResult()),
     };
     const insert = jest.fn().mockResolvedValue({ data: null, error: null });
-    const assertApplied = jest.fn().mockResolvedValue(undefined);
+    const findById = jest
+      .fn()
+      .mockResolvedValue({ id: '7', roundName: '202607', createdAt: new Date() });
     const { service } = buildService({
       identityProvider,
       client: { insert },
-      examAccessService: { assertApplied },
+      examService: { findById },
     });
 
     const result = await service.verify('9', buildDto());
 
-    expect(assertApplied).toHaveBeenCalledWith('9', '7');
+    expect(findById).toHaveBeenCalledWith('7');
     expect(identityProvider.verify).toHaveBeenCalledWith(
       expect.objectContaining({
         examId: '7',

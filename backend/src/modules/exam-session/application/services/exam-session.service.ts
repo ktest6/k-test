@@ -6,11 +6,8 @@ import {
   ForbiddenDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
-import { ExamApplicationService } from '../../../exam/application/services/exam-application.service';
 import { ExamService } from '../../../exam/application/services/exam.service';
 import { Exam } from '../../../exam/domain/entities/exam.entity';
-import { ExamStatus } from '../../../exam/domain/enums/exam-status.enum';
-import { computeExamStatus, isApplicationOpen } from '../../../exam/domain/exam-status.util';
 import { ExamResultService } from '../../../scoring/application/services/exam-result.service';
 import { EarphoneDetectionService } from '../../../verifications/application/services/earphone-detection.service';
 import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
@@ -24,41 +21,37 @@ import {
 /** 재개(재시작) 시도가 이 횟수에 도달하면 세션을 BLOCKED로 전환하고 더 이상 진행을 막는다. */
 const RESUME_ATTEMPT_LIMIT = 3;
 
-/** 마감 임박(1시간 이내)에는 새로 시작할 수 없다 — 응시자가 사실상 완주할 수 없는 시간에 시작하는 걸 막는다. */
-const START_BUFFER_BEFORE_CLOSE_MS = 60 * 60 * 1000;
-
 export interface ExamSessionStatusResult {
   session: ExamSession;
   status: SessionStatus;
 }
 
 /**
- * 마이페이지 "내 시험 현황" 한 줄. 세션을 시작한 적 있으면 그 세션의 id/상태/제출일시.
- * 시작한 적 없고 마감 1시간 전(START_BUFFER_BEFORE_CLOSE_MS) 시작 데드라인도
- * 지났으면 id는 null, status는 EXPIRED — 신청만 하고 응시 기회를 놓친 경우다.
- * 그 외(아직 시작 데드라인 전)엔 session 자체가 null. examResultId/finalGrade는
- * 최종 리포트(/finalize)가 아직 안 나왔으면(채점 중이거나 세션이 없으면) 둘 다 null이다.
+ * 마이페이지 "내 시험 현황" 한 줄 — 이 사용자가 시작한 적 있는 세션 하나에 대응된다.
+ * 항시 응시 체제라 "신청만 하고 시작 안 함" 같은 중간 상태가 없다 — 목록에 있다는
+ * 것 자체가 세션을 시작했다는 뜻이라 session은 항상 값이 있다. examResultId/
+ * finalGrade는 최종 리포트(/finalize)가 아직 안 나왔으면(채점 중이거나 재시도
+ * 대기중이면) 둘 다 null이다.
  */
 export interface MyExamStatus {
   exam: Exam;
-  examStatus: ExamStatus;
-  appliedAt: Date;
-  session: { id: string | null; status: SessionStatus; submittedAt: Date | null } | null;
+  session: { id: string; status: SessionStatus; startedAt: Date; submittedAt: Date | null };
   examResultId: string | null;
   finalGrade: string | null;
 }
 
 /**
- * "오늘 응시 가능한 시험" 한 줄 — 신청해서 아직 안 끝난(응시전/진행중) 시험 +
- * 아직 신청 안 했지만 신청 기간이 열려 있는 시험(정원이 찼어도 포함 — isCapacityFull로
- * 표시만 하고 목록에서 빼지는 않는다). isApplied로 프런트가 "이어서 풀기"/"신청하기"
- * 버튼을 구분한다.
+ * "지금 응시 가능한 시험" 한 줄 — 전체 회차 목록에 이 사용자의 세션 상태를 얹어서
+ * 준다(정원/신청기간 없음, 항시 응시). session이 없으면 아직 시작한 적 없다는
+ * 뜻. canStart는 "지금 이 시험을 새로 시작할 수 있는가"로, 이미 이 시험 세션이
+ * 있거나(재개는 SESSION-01을 그대로 다시 호출하면 되고 이 필드와 무관) 다른
+ * 시험이 이미 INPROGRESS면 false다. userId가 null이면(비로그인) 판단할 수 없어
+ * session/canStart 둘 다 null이다.
  */
 export interface AvailableExam {
   exam: Exam;
-  isApplied: boolean;
-  isCapacityFull: boolean;
   session: { id: string; status: SessionStatus } | null;
+  canStart: boolean | null;
 }
 
 @Injectable()
@@ -66,7 +59,6 @@ export class ExamSessionService {
   constructor(
     @Inject(EXAM_SESSION_REPOSITORY) private readonly examSessionRepository: ExamSessionRepository,
     private readonly examService: ExamService,
-    private readonly examApplicationService: ExamApplicationService,
     private readonly idCardVerificationService: IdCardVerificationService,
     private readonly earphoneDetectionService: EarphoneDetectionService,
     private readonly examResultService: ExamResultService,
@@ -74,16 +66,7 @@ export class ExamSessionService {
   ) {}
 
   async start(examId: string, userId: string): Promise<ExamSession> {
-    const exam = await this.examService.findById(examId);
-
-    if (computeExamStatus(exam.openAt, exam.closeAt) !== ExamStatus.OPEN) {
-      throw new ConflictDomainException('지금은 응시 기간이 아닙니다.');
-    }
-
-    const applied = await this.examApplicationService.hasActiveApplication(examId, userId);
-    if (!applied) {
-      throw new ForbiddenDomainException('신청한 회차가 아닙니다.');
-    }
+    await this.examService.findById(examId);
 
     // AI팀 본인인증 서비스가 아직 배포되지 않은 기간 한정으로 REQUIRE_IDENTITY_VERIFICATION=false
     // 로 이 게이트를 임시 우회할 수 있다. 기본값은 강제(true) — 실제 서비스 배포 전 반드시 되돌릴 것.
@@ -121,8 +104,12 @@ export class ExamSessionService {
       throw new ConflictDomainException('이미 종료된 시험입니다.');
     }
 
-    if (exam.closeAt.getTime() - Date.now() < START_BUFFER_BEFORE_CLOSE_MS) {
-      throw new ConflictDomainException('마감 1시간 전에는 새로 시작할 수 없습니다.');
+    // 항시 응시 체제의 유일한 시작 제약 — 한 번에 한 시험만. 이 회차에 세션이
+    // 없다는 건 위에서 이미 확인했으니, 여기서 걸리는 건 반드시 "다른" 회차의
+    // INPROGRESS 세션이다.
+    const inProgressElsewhere = await this.examSessionRepository.findInProgressByUser(userId);
+    if (inProgressElsewhere) {
+      throw new ConflictDomainException('이미 진행 중인 다른 시험이 있어 새로 시작할 수 없습니다.');
     }
 
     return this.examSessionRepository.create({ examId, userId });
@@ -148,47 +135,25 @@ export class ExamSessionService {
     return { session, status: session.status };
   }
 
-  /**
-   * 마이페이지 "내 시험 현황" — 신청한 회차별로 세션 상태를 함께 내려준다. 세션을
-   * 시작한 적 있으면 그 상태 그대로, 시작한 적 없고 마감 1시간 전 시작 데드라인도
-   * 지났으면 EXPIRED(신청만 하고 응시 기회를 놓친 경우), 그 전이면 null이다.
-   */
+  /** 마이페이지 "내 시험 현황" — 이 사용자가 시작한 적 있는 세션들을 회차 정보와 함께 내려준다. */
   async listMine(userId: string): Promise<MyExamStatus[]> {
-    const applications = await this.examApplicationService.listMine(userId);
+    const sessions = await this.examSessionRepository.findAllByUser(userId);
 
     return Promise.all(
-      applications.map(async (application) => {
-        const [exam, session] = await Promise.all([
-          this.examService.findById(application.examId),
-          this.examSessionRepository.findByUserAndExam(userId, application.examId),
+      sessions.map(async (session) => {
+        const [exam, examResult] = await Promise.all([
+          this.examService.findById(session.examId),
+          this.examResultService.findByExamSessionId(session.id),
         ]);
-
-        let sessionSummary: {
-          id: string | null;
-          status: SessionStatus;
-          submittedAt: Date | null;
-        } | null;
-        if (session) {
-          sessionSummary = {
-            id: session.id,
-            status: session.status,
-            submittedAt: session.submittedAt,
-          };
-        } else if (exam.closeAt.getTime() - Date.now() < START_BUFFER_BEFORE_CLOSE_MS) {
-          sessionSummary = { id: null, status: SessionStatus.EXPIRED, submittedAt: null };
-        } else {
-          sessionSummary = null;
-        }
-
-        const examResult = session
-          ? await this.examResultService.findByExamSessionId(session.id)
-          : null;
 
         return {
           exam,
-          examStatus: computeExamStatus(exam.openAt, exam.closeAt),
-          appliedAt: application.appliedAt,
-          session: sessionSummary,
+          session: {
+            id: session.id,
+            status: session.status,
+            startedAt: session.startedAt,
+            submittedAt: session.submittedAt,
+          },
           examResultId: examResult?.id ?? null,
           finalGrade: examResult?.finalGrade ?? null,
         };
@@ -197,55 +162,32 @@ export class ExamSessionService {
   }
 
   /**
-   * "오늘 응시 가능한 시험" — 신청해서 아직 안 끝난(세션 없음 또는 INPROGRESS) 시험과,
-   * 아직 신청 안 했지만 신청 기간이 열려 있는 시험을 합쳐서 준다. 정원이 찬 시험도
-   * 목록에서 빼지 않고 isCapacityFull:true로 표시만 한다 — 신청 자체는 어차피
-   * POST /exams/:id/apply가 막아준다(409). 이미 SUBMITTED/EXPIRED/DISQUALIFIED/
-   * BLOCKED인, 응시자 입장에서 더 할 게 없는 신청 건은 제외한다.
-   *
-   * userId가 null이면(비로그인) "신청 가능한 시험"만 준다 — 누구 신청 내역인지 알 수
-   * 없으니 isApplied는 항상 false, session은 항상 null이다.
+   * "지금 응시 가능한 시험" — 전체 회차 목록에 이 사용자의 세션 상태를 얹어서 준다.
+   * userId가 null이면(비로그인) 세션/canStart를 판단할 수 없어 전부 null로 준다.
    */
   async listAvailable(userId: string | null): Promise<AvailableExam[]> {
-    const [applications, allExams] = await Promise.all([
-      userId ? this.examApplicationService.listMine(userId) : Promise.resolve([]),
+    const [allExams, inProgressElsewhere] = await Promise.all([
       this.examService.list(),
+      userId ? this.examSessionRepository.findInProgressByUser(userId) : Promise.resolve(null),
     ]);
 
-    const applicationByExamId = new Map(
-      applications.map((application) => [application.examId, application]),
-    );
-
-    const results = await Promise.all(
-      allExams.map(async (exam): Promise<AvailableExam | null> => {
-        const application = userId ? applicationByExamId.get(exam.id) : undefined;
-        if (application && userId) {
-          const session = await this.examSessionRepository.findByUserAndExam(userId, exam.id);
-          if (session && session.status !== SessionStatus.INPROGRESS) {
-            return null;
-          }
-          return {
-            exam,
-            isApplied: true,
-            isCapacityFull: false,
-            session: session ? { id: session.id, status: session.status } : null,
-          };
+    return Promise.all(
+      allExams.map(async (exam): Promise<AvailableExam> => {
+        if (!userId) {
+          return { exam, session: null, canStart: null };
         }
 
-        if (!isApplicationOpen(exam.applicationOpenAt, exam.applicationCloseAt)) {
-          return null;
-        }
-        const activeCount = await this.examApplicationService.countActive(exam.id);
+        const session = await this.examSessionRepository.findByUserAndExam(userId, exam.id);
+        const hasOtherInProgress =
+          inProgressElsewhere !== null && inProgressElsewhere.examId !== exam.id;
+
         return {
           exam,
-          isApplied: false,
-          isCapacityFull: activeCount >= exam.capacity,
-          session: null,
+          session: session ? { id: session.id, status: session.status } : null,
+          canStart: !session && !hasOtherInProgress,
         };
       }),
     );
-
-    return results.filter((result): result is AvailableExam => result !== null);
   }
 
   /** 답안 저장처럼 "지금 실제로 응시 중"이어야만 허용되는 동작들의 공통 게이트. */
