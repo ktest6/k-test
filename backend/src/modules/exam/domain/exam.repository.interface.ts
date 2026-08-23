@@ -2,6 +2,11 @@ import { Exam } from './entities/exam.entity';
 
 export interface CreateExamInput {
   roundName: string;
+  applicationOpenAt: Date;
+  applicationCloseAt: Date;
+  openAt: Date;
+  closeAt: Date;
+  capacity: number;
 }
 
 export const EXAM_REPOSITORY = Symbol('EXAM_REPOSITORY');

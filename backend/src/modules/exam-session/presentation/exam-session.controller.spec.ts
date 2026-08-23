@@ -120,7 +120,16 @@ function buildController(
 }
 
 function buildExam(): Exam {
-  return new Exam('1', '2026년 1회차', new Date('2026-08-01T00:00:00.000Z'));
+  return new Exam(
+    '1',
+    '2026년 1회차',
+    new Date('2026-01-01T00:00:00.000Z'),
+    new Date('2026-12-31T23:59:59.000Z'),
+    new Date('2026-08-01T00:00:00.000Z'),
+    new Date('2026-08-14T23:59:59.000Z'),
+    100,
+    new Date(),
+  );
 }
 
 describe('ExamSessionController.listAvailable', () => {
@@ -129,8 +138,9 @@ describe('ExamSessionController.listAvailable', () => {
     const listAvailable = jest.fn().mockResolvedValue([
       {
         exam,
+        isApplied: true,
+        isCapacityFull: false,
         session: { id: '11', status: SessionStatus.INPROGRESS },
-        canStart: false,
       },
     ]);
     const controller = buildController({ listAvailable });
@@ -142,16 +152,23 @@ describe('ExamSessionController.listAvailable', () => {
       {
         examId: '1',
         roundName: '2026년 1회차',
+        openAt: exam.openAt,
+        closeAt: exam.closeAt,
+        applicationOpenAt: exam.applicationOpenAt,
+        applicationCloseAt: exam.applicationCloseAt,
+        isApplied: true,
+        isCapacityFull: false,
         examSessionId: '11',
         sessionStatus: SessionStatus.INPROGRESS,
-        canStart: false,
       },
     ]);
   });
 
   it('passes null when there is no logged-in user', async () => {
     const exam = buildExam();
-    const listAvailable = jest.fn().mockResolvedValue([{ exam, session: null, canStart: null }]);
+    const listAvailable = jest
+      .fn()
+      .mockResolvedValue([{ exam, isApplied: false, isCapacityFull: false, session: null }]);
     const controller = buildController({ listAvailable });
 
     const result = await controller.listAvailable(undefined);
@@ -161,21 +178,30 @@ describe('ExamSessionController.listAvailable', () => {
       {
         examId: '1',
         roundName: '2026년 1회차',
+        openAt: exam.openAt,
+        closeAt: exam.closeAt,
+        applicationOpenAt: exam.applicationOpenAt,
+        applicationCloseAt: exam.applicationCloseAt,
+        isApplied: false,
+        isCapacityFull: false,
         examSessionId: null,
         sessionStatus: null,
-        canStart: null,
       },
     ]);
   });
 
-  it('marks canStart true for an exam with no session while nothing else is in progress', async () => {
+  it('marks isCapacityFull true for an unapplied exam that has reached capacity', async () => {
     const exam = buildExam();
-    const listAvailable = jest.fn().mockResolvedValue([{ exam, session: null, canStart: true }]);
+    const listAvailable = jest
+      .fn()
+      .mockResolvedValue([{ exam, isApplied: false, isCapacityFull: true, session: null }]);
     const controller = buildController({ listAvailable });
 
-    const result = await controller.listAvailable(buildUser());
+    const result = await controller.listAvailable(undefined);
 
-    expect(result).toEqual([expect.objectContaining({ canStart: true, examSessionId: null })]);
+    expect(result).toEqual([
+      expect.objectContaining({ isApplied: false, isCapacityFull: true, examSessionId: null }),
+    ]);
   });
 });
 
