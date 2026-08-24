@@ -78,10 +78,16 @@ from .port import (
     PronouncedWord,
     PronouncerPort,
     PronunciationAssessment,
+    SttHealth,
     SttPort,
     SttUnavailable,
     Transcription,
 )
+
+#: '열쇠가 정말 유효한가'만 물어볼 때 기다려 줄 시간(초).
+#: lora_stt 의 ping 과 같은 이유로 짧다 — 채점 서버의 /health 가 이 검사를
+#: 그대로 쓰므로, 길게 잡으면 상태 확인 한 번에 그만큼 멈춰 서 있게 된다.
+AZURE_PING_TIMEOUT_S = 2.0
 
 #: 받아쓸 언어. 이 시험은 한국어만 본다
 SPEECH_LANGUAGE = "ko-KR"
@@ -212,8 +218,85 @@ class AzureStt(SttPort, PronouncerPort):
 
     @property
     def available(self) -> bool:
-        """열쇠가 있어서 부를 수 있는 상태인지."""
+        """열쇠가 적혀 있어서 **부를 수는 있는** 상태인지.
+
+        여기서 보는 것은 열쇠·지역 문자열이 있느냐 하나뿐이다. 틀린 열쇠나
+        정지된 구독이어도 참이 되므로, 이 값은 '쓸 수 있다'는 뜻이 아니다.
+        호출 전에 '열쇠도 없이 부르는 일'만 막는 관문으로 쓴다.
+        정말 유효한지 알아야 하면 ping() 을 쓴다(lora_stt 와 같은 구조).
+        """
         return bool(self._key and self._region)
+
+    def ping(self, timeout_s: float = AZURE_PING_TIMEOUT_S) -> SttHealth:
+        """Azure 열쇠가 실제로 유효한지 가볍게 확인한다.
+
+        왜 필요한가:
+        available 은 열쇠가 '적혀 있는지'만 본다. 그래서 틀린 열쇠·정지된 구독·
+        오타 난 지역이어도 참이 되고, /health 가 그대로 내보내면 못 쓰는 Azure 를
+        '정상'이라고 보고한다 — LoRA 서버에서 이미 겪은 것과 같은 거짓 보고다.
+
+        음성 인식을 실제로 돌리는 대신 Azure 의 접속표(토큰) 발급 창구를 한 번
+        두드린다. 유효한 열쇠면 200 과 접속표가 오고, 틀린 열쇠면 401/403 이 온다.
+        인식을 안 돌리므로 돈이 들지 않는 가장 싼 검사다.
+
+        실패해도 예외를 올리지 않는다. 상태를 알려 주는 자리라 '죽었다'도
+        정상적인 대답이기 때문이다. 대신 왜 안 되는지를 열쇠 미설정·열쇠 거절·
+        시간 초과·연결 실패·그 밖 오류로 나눠 한 문장씩 남긴다.
+        """
+        import httpx
+
+        # 열쇠가 아예 없으면 물어볼 것도 없다. 네트워크를 건드리지 않고 바로 답한다
+        if not self.available:
+            return SttHealth(
+                False,
+                "Azure 음성 서비스 열쇠(AZURE_SPEECH_KEY / AZURE_SPEECH_REGION)가 "
+                "설정돼 있지 않다.",
+            )
+
+        # 통신로를 받아 왔으면 우리가 닫지 않는다(테스트가 계속 쓸 수 있어야 한다)
+        owned = self._http_client is None
+        client = self._http_client or httpx.Client(timeout=timeout_s)
+
+        # 접속표 발급 창구. 지역 이름이 주소에 들어가므로 지역 오타도 여기서 걸린다
+        endpoint = f"https://{self._region}.api.cognitive.microsoft.com/sts/v1.0/issueToken"
+        try:
+            try:
+                response = client.post(
+                    endpoint,
+                    headers={"Ocp-Apim-Subscription-Key": self._key},
+                    timeout=timeout_s,
+                )
+            except httpx.TimeoutException:
+                return SttHealth(
+                    False,
+                    f"Azure({self._region})가 {timeout_s:.0f}초 안에 답하지 않았다"
+                    "(네트워크 문제이거나 지역 이름이 틀렸을 수 있다).",
+                )
+            except httpx.HTTPError as exc:
+                return SttHealth(
+                    False,
+                    f"Azure({self._region})에 닿지 못했다. 지역 이름이 틀렸거나 "
+                    f"네트워크가 막혀 있다(원인: {str(exc)[:120]}).",
+                )
+
+            # 401/403 = 열쇠 자체가 거절당한 것. 손볼 곳이 다르므로 따로 알린다
+            if response.status_code in (401, 403):
+                return SttHealth(
+                    False,
+                    f"Azure 가 열쇠를 거절했다({response.status_code}). "
+                    "AZURE_SPEECH_KEY 가 맞는지, 구독이 살아 있는지 확인해야 한다.",
+                )
+            if response.status_code >= 400:
+                return SttHealth(
+                    False,
+                    f"Azure 접속표 발급이 {response.status_code} 로 실패했다.",
+                )
+
+            # 여기까지 왔으면 이 열쇠로 지금 발음 평가를 부탁할 수 있는 상태다
+            return SttHealth(True, None)
+        finally:
+            if owned:
+                client.close()
 
     def transcribe(
         self, audio: AudioInput, item_prompt: str = "", item_type: str = ""

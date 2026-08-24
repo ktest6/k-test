@@ -38,10 +38,29 @@ __all__ = [
     "PronouncedWord",
     "PronunciationAssessment",
     "PronouncerPort",
+    "SttHealth",
     "SttPort",
     "SttUnavailable",
     "Transcription",
 ]
+
+
+@dataclass(frozen=True)
+class SttHealth:
+    """받아쓰기·발음 기계가 **지금 정말 쓸 수 있는 상태인지** 물어본 결과.
+
+    available 이 '설정이 적혀 있다'(서버 주소·열쇠)만 보는 것과 달리,
+    이것은 실제로 한 번 두드려 본(ping) 결과다. 설정만 보고 정상이라고
+    보고했다가 죽은 서버·틀린 열쇠를 못 알아챈 일이 있어서(2026-08-23 QA),
+    LoRA 와 Azure 가 같은 모양으로 이 답을 돌려준다.
+
+    alive 만 있으면 '왜 안 되는지'를 사람이 알 수 없어 사유를 함께 담는다.
+    """
+
+    #: 지금 이 기계에 일을 맡길 수 있는 상태인가
+    alive: bool
+    #: 안 되는 이유(사람이 읽는 한 문장). 정상이면 None
+    detail: str | None = None
 
 
 class SttUnavailable(RuntimeError):

@@ -151,15 +151,16 @@ def health() -> dict:
     # 왜 못 쓰는지. 정상이면 null 로 나간다
     stt_detail = None
 
-    # provider=lora 는 available 이 '주소가 적혀 있다'는 뜻뿐이라, 추론 서버가
-    # 꺼져 있어도 참이 된다. 그대로 내보내면 말하기 채점이 전부 503 인 상태를
-    # '정상'이라고 보고하게 되므로, 이때만 서버에 직접 물어본 결과로 바꿔 적는다.
-    # (azure·gemini 는 열쇠 유무로 판정하는 지금 방식을 그대로 둔다)
+    # available 은 '설정이 적혀 있다'(lora=서버 주소, azure=열쇠)는 뜻뿐이라,
+    # 서버가 꺼져 있거나 열쇠가 틀려도 참이 된다. 그대로 내보내면 말하기 채점이
+    # 전부 실패하는 상태를 '정상'이라고 보고하게 되므로, **직접 두드려 보는
+    # 검사(ping)를 가진 구현이면 그 실결과로 바꿔 적는다.** 지금 ping 이 있는
+    # 것은 lora 와 azure 이고, gemini 는 예전처럼 열쇠 유무로 판정한다.
     ping = getattr(stt, "ping", None)
-    if getattr(stt, "provider_name", "") == "lora" and callable(ping):
-        lora_health = ping()
-        stt_available = lora_health.alive
-        stt_detail = lora_health.detail
+    if callable(ping):
+        stt_health = ping()
+        stt_available = stt_health.alive
+        stt_detail = stt_health.detail
 
     return {
         "status": "ok",

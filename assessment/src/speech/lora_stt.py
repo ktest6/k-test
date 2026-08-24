@@ -31,12 +31,11 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass
 
 from ..scoring.schema import AudioInput
 from .audio import fetch_audio
 from .loudness import is_silent, is_too_quiet_for_speech, silence_message, too_quiet_message
-from .port import SttPort, SttUnavailable, Transcription
+from .port import SttHealth, SttPort, SttUnavailable, Transcription
 
 #: RunPod 추론 서버 주소를 담는 환경변수 이름.
 #: 예: https<...>.proxy.runpod.net (재시작마다 바뀌므로 .env 에 새로 넣는다)
@@ -58,18 +57,10 @@ LORA_TIMEOUT_S = 120.0
 LORA_PING_TIMEOUT_S = 2.0
 
 
-@dataclass(frozen=True)
-class LoraHealth:
-    """LoRA 추론 서버가 지금 살아 있는지 물어본 결과.
-
-    alive 만 있으면 '왜 안 되는지'를 사람이 알 수 없어서 사유를 함께 담는다.
-    detail 은 살아 있을 때 None 이고, 죽었을 때만 한 문장으로 채워진다.
-    """
-
-    #: 지금 이 서버로 받아쓰기를 부탁할 수 있는 상태인가
-    alive: bool
-    #: 안 되는 이유(사람이 읽는 한 문장). 정상이면 None
-    detail: str | None = None
+#: '살아 있는지 물어본 결과'의 모양은 port.py 의 SttHealth 로 옮겼다(2026-08-24).
+#: Azure 도 같은 검사(ping)를 하게 되면서 두 구현이 같은 모양을 써야 하기 때문이다.
+#: 옛 이름으로 부르던 자리가 그대로 돌도록 별칭을 남겨 둔다.
+LoraHealth = SttHealth
 
 
 class LoraStt(SttPort):

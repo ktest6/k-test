@@ -587,8 +587,9 @@ def test_health_는_기존_필드를_하나도_잃지_않는다(monkeypatch):
         assert key in body, f"기존 필드 {key} 가 사라졌다"
 
 
-def test_health_는_LoRA_가_아닌_제공자에서는_예전_그대로다(monkeypatch):
-    """gemini·azure 는 열쇠 유무로 판정하던 방식을 바꾸지 않았다."""
+def test_health_는_ping_이_없는_제공자에서는_예전_그대로다(monkeypatch):
+    """ping 이 없는 구현(gemini 등)은 열쇠 유무로 판정하던 방식 그대로다.
+    (azure 는 2026-08-24 부터 ping 을 갖게 돼 lora 와 같은 실검사 길을 탄다)"""
     monkeypatch.setattr(api, "_active_stt", lambda: FakeLoraStt())
     # FakeLoraStt 는 provider_name 이 lora 지만 ping 이 없다.
     # ping 이 없는 구현에서도 /health 가 터지지 않아야 한다(다른 제공자와 같은 길)
@@ -887,3 +888,92 @@ def test_파일을_못_받는_옛_발음평가기도_그대로_돈다():
         speaking_request(), stt=FetchingLoraStt(), pronouncer=pronouncer
     )
     assert find_area(response, ScoreArea.DELIVERY).status == AreaStatus.SCORED
+
+
+# ---------------------------------------------------------------------------
+# 9. Azure ping — 열쇠가 '정말' 유효한지 (lora 와 같은 거짓 보고 방지)
+#
+# 여기서 막으려는 사고:
+#   AzureStt.available 도 열쇠가 '적혀 있다'만 본다. 틀린 열쇠·정지된 구독이면
+#   /health 가 정상이라고 보고한 채 발음 채점만 조용히 실패한다. lora 에서
+#   고친 것과 같은 계열의 거짓 보고를 azure 에서도 막는다(2026-08-24 QA #3).
+# ---------------------------------------------------------------------------
+
+
+def token_http(responder) -> httpx.Client:
+    """Azure 접속표(토큰) 발급 요청에 원하는 대로 답하는(또는 터지는) 가짜 통신로."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        # azure 의 ping 은 접속표 창구만 부른다. 다른 곳을 부르면 그 자체가 잘못이다
+        assert request.url.path.endswith("/sts/v1.0/issueToken"), (
+            f"엉뚱한 곳을 불렀다: {request.url}"
+        )
+        return responder(request)
+
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_azure_ping_은_열쇠가_유효하면_사유_없이_살았다고_한다():
+    """유효한 열쇠는 접속표(200)를 받아 온다. 정상일 때 사유는 없어야 한다."""
+    with token_http(lambda req: httpx.Response(200, text="token")) as client:
+        health = AzureStt(key="k", region="koreacentral", http_client=client).ping()
+
+    assert health.alive is True
+    assert health.detail is None
+
+
+def test_azure_ping_은_틀린_열쇠를_거절_사유와_함께_알린다():
+    """열쇠가 적혀만 있는 상태. available 은 참이어도 ping 은 거짓이어야 한다."""
+    with token_http(lambda req: httpx.Response(401, text="denied")) as client:
+        stt = AzureStt(key="wrong", region="koreacentral", http_client=client)
+        # 열쇠 문자열은 있으므로 available 은 참(관문 용도라 그대로 둔다)
+        assert stt.available is True
+        health = stt.ping()
+
+    assert health.alive is False
+    # 사람이 읽고 무엇을 확인해야 할지 알 수 있는 문장인지
+    assert health.detail and "거절" in health.detail
+
+
+def test_azure_ping_은_연결_실패를_열쇠_거절과_다른_사유로_알린다():
+    """지역 오타·네트워크 차단은 열쇠 문제와 손볼 곳이 다르므로 뭉뚱그리지 않는다."""
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("연결이 거부되었습니다", request=request)
+
+    with token_http(refuse) as client:
+        health = AzureStt(key="k", region="nowhere", http_client=client).ping()
+
+    assert health.alive is False
+    assert "닿지 못했다" in health.detail
+
+
+def test_azure_ping_은_열쇠가_없으면_네트워크를_건드리지_않는다():
+    """물어볼 자격조차 없는데 통신을 시도하면 그냥 시간만 버린다."""
+
+    def explode(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("열쇠가 없는데 Azure 를 불렀다")
+
+    with httpx.Client(transport=httpx.MockTransport(explode)) as client:
+        health = AzureStt(key="", region="", http_client=client).ping()
+
+    assert health.alive is False
+    assert "AZURE_SPEECH_KEY" in health.detail
+
+
+def test_health_는_azure_제공자에서도_ping_실결과를_쓴다(monkeypatch):
+    """죽은 열쇠를 꽂은 azure 서버도 이제 거짓 정상 보고를 하지 않는다."""
+    client = token_http(lambda req: httpx.Response(401, text="denied"))
+    monkeypatch.setattr(
+        api,
+        "_active_stt",
+        lambda: AzureStt(key="wrong", region="koreacentral", http_client=client),
+    )
+    try:
+        body = TestClient(api.app).get("/health").json()
+    finally:
+        client.close()
+
+    assert body["stt_provider"] == "azure"
+    assert body["stt_available"] is False
+    assert body["stt_detail"] and "거절" in body["stt_detail"]
