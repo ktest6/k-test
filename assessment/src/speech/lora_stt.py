@@ -247,6 +247,10 @@ class LoraStt(SttPort):
             warnings=list(fetched.warnings),
             # 발음은 이 구현이 내지 않는다. Azure 가 따로 붙인다(intake.py)
             pronunciation=None,
+            # 대신 **방금 내려받은 파일을 그대로 딸려 보낸다.** 그래야 뒤이어 도는
+            # Azure 발음 평가가 같은 음성을 또 내려받지 않는다(port.py 참고).
+            # 이 값은 채점 결과로 나가지 않는다
+            fetched_audio=fetched,
         )
 
     def _call_server(self, fetched) -> tuple[str, str, int | None]:
