@@ -135,9 +135,32 @@ def health() -> dict:
     """채점 서버가 살아 있는지, LLM을 쓸 수 있는 상태인지 알려준다.
 
     배포한 뒤 키가 제대로 들어갔는지 확인하는 용도다.
+
+    받아쓰기(stt_available)는 짐작으로 적지 않는다. provider=lora 일 때는
+    추론 서버의 /health 를 짧은 시간(2초) 안에 실제로 두드려 보고 그 결과를 적는다.
+    주소만 보고 '있다'고 적으면 서버가 꺼져 있어 말하기 채점이 전부 503 인 상태를
+    '정상'이라고 보고하게 되기 때문이다. 못 쓰는 이유는 stt_detail 에 한 문장으로 담고,
+    정상이면 null 이다.
     """
     # 키가 없어도 객체는 만들어진다. available 만 False 가 된다
     client = GeminiClient()
+
+    # 받아쓰기 상태를 여기서 한 번만 만들어 쓴다(아래에서 여러 번 물어보므로).
+    stt = _active_stt()
+    stt_available = getattr(stt, "available", False)
+    # 왜 못 쓰는지. 정상이면 null 로 나간다
+    stt_detail = None
+
+    # provider=lora 는 available 이 '주소가 적혀 있다'는 뜻뿐이라, 추론 서버가
+    # 꺼져 있어도 참이 된다. 그대로 내보내면 말하기 채점이 전부 503 인 상태를
+    # '정상'이라고 보고하게 되므로, 이때만 서버에 직접 물어본 결과로 바꿔 적는다.
+    # (azure·gemini 는 열쇠 유무로 판정하는 지금 방식을 그대로 둔다)
+    ping = getattr(stt, "ping", None)
+    if getattr(stt, "provider_name", "") == "lora" and callable(ping):
+        lora_health = ping()
+        stt_available = lora_health.alive
+        stt_detail = lora_health.detail
+
     return {
         "status": "ok",
         "scoring_version": SCORING_VERSION,
@@ -157,9 +180,14 @@ def health() -> dict:
         # lora  : 우리가 학습한 Whisper LoRA(아직 검증 전이라 임시). 글자만 받아쓴다
         # azure : 받아쓰기 + 발음을 한 번에 한다
         # gemini: 글자만 준다
-        "stt_provider": _active_stt().provider_name,
-        "stt_model": _active_stt().model_name,
-        "stt_available": getattr(_active_stt(), "available", False),
+        "stt_provider": stt.provider_name,
+        "stt_model": stt.model_name,
+        # lora 일 때는 추론 서버를 실제로 두드려 본 결과다(주소만 보고 판단하지 않는다).
+        # false 면 말하기 채점이 503 이 된다는 뜻이므로 그대로 믿고 봐도 된다
+        "stt_available": stt_available,
+        # 못 쓰는 이유 한 문장. 정상이면 null 이다.
+        # **새로 추가된 필드다** — 기존 필드의 이름과 뜻은 하나도 바뀌지 않았다
+        "stt_detail": stt_detail,
         # azure 만 '원래 계획하던 것'이라 임시가 아니다. lora·gemini 는 임시로 본다
         # (lora 는 골든셋 검증 전, gemini 는 Azure 자리에 임시로 꽂아 둔 것)
         "stt_provisional": choose_stt_provider() != "azure",

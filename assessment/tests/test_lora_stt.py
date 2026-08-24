@@ -16,7 +16,9 @@ import wave
 
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 
+from src import api
 from src.scoring.pipeline import score_submission
 from src.scoring.schema import (
     AreaStatus,
@@ -30,6 +32,8 @@ from src.scoring.schema import (
     ScoreOptions,
     ScoreRequest,
 )
+from src.speech.audio import FetchedAudio
+from src.speech.azure_stt import AzureStt
 from src.speech.intake import (
     LORA_STT_URL_ENV,
     STT_PROVIDER_ENV,
@@ -40,6 +44,7 @@ from src.speech.intake import (
     resolve_audio_answer,
 )
 from src.speech.lora_stt import DEFAULT_LORA_MODEL, LoraStt
+from src.speech.loudness import measure_wav_loudness
 from src.speech.port import PronouncerPort, SttPort, SttUnavailable, Transcription
 
 # LoRA 가 받아쓸 법한 글. 채점까지 끝까지 가도록 한국어 문장으로 둔다
@@ -426,3 +431,459 @@ def test_기본_모델_이름은_서버가_주기_전까지의_임시값이다()
     """서버가 모델 이름을 주면 그것으로 덮어쓰지만, 부르기 전엔 임시값을 쓴다."""
     stt = LoraStt(url="https://x.proxy.runpod.net")
     assert stt.model_name == DEFAULT_LORA_MODEL
+
+
+# ---------------------------------------------------------------------------
+# 6. ping — 추론 서버가 정말 살아 있는지 물어본다
+#
+# 여기서 막으려는 사고 하나:
+#   available 은 '주소가 적혀 있다'만 본다. 그래서 8100 서버가 꺼져 있어도 참이고,
+#   그 값을 /health 가 그대로 내보내면 **말하기 채점이 전부 503 인 서버를
+#   '정상'이라고 보고한다.** 아래 테스트들이 그 거짓 보고를 막는 자리다.
+# ---------------------------------------------------------------------------
+
+
+def ping_http(responder) -> httpx.Client:
+    """/health 요청에 원하는 대로 답하는(또는 터지는) 가짜 통신로."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        # ping 은 /health 만 부른다. 다른 곳을 부르면 그 자체가 잘못이다
+        assert request.url.path.endswith("/health"), f"엉뚱한 곳을 불렀다: {request.url}"
+        return responder(request)
+
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_ping_은_서버가_살아_있으면_살았다고_한다():
+    """모델까지 올라온 서버는 사유 없이 '살아 있음'만 돌려준다."""
+    body = {"status": "ok", "model_loaded": True, "model": "whisper-small-lora-v2"}
+    with ping_http(lambda req: httpx.Response(200, json=body)) as client:
+        health = LoraStt(url="https://x.proxy.runpod.net", http_client=client).ping()
+
+    assert health.alive is True
+    # 정상일 때 사유를 붙이면 백엔드가 '무슨 문제가 있나' 하고 읽게 된다
+    assert health.detail is None
+
+
+def test_ping_은_서버가_꺼져_있으면_사유와_함께_죽었다고_한다():
+    """8100 이 꺼진 지금 상태. available 은 참이어도 ping 은 거짓이어야 한다."""
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("연결이 거부되었습니다", request=request)
+
+    stt_url = "http://127.0.0.1:8100"
+    with ping_http(refuse) as client:
+        stt = LoraStt(url=stt_url, http_client=client)
+        # 주소는 적혀 있으므로 available 은 여전히 참이다(관문 용도라 그대로 둔다)
+        assert stt.available is True
+        health = stt.ping()
+
+    assert health.alive is False
+    # 사람이 읽고 무엇을 해야 할지 알 수 있는 문장인지
+    assert health.detail and "닿지 못했다" in health.detail
+    assert stt_url in health.detail
+
+
+def test_ping_은_시간_초과와_서버_오류를_다른_사유로_구분한다():
+    """무엇이 문제인지에 따라 손볼 곳이 다르므로 사유를 뭉뚱그리지 않는다."""
+
+    def timeout(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("느리다", request=request)
+
+    with ping_http(timeout) as client:
+        slow = LoraStt(url="https://x.proxy.runpod.net", http_client=client).ping()
+    assert slow.alive is False
+    assert "답하지 않았다" in slow.detail
+
+    with ping_http(lambda req: httpx.Response(500, text="boom")) as client:
+        broken = LoraStt(url="https://x.proxy.runpod.net", http_client=client).ping()
+    assert broken.alive is False
+    assert "500" in broken.detail
+
+
+def test_ping_은_모델을_아직_불러오는_중이면_살았다고_하지_않는다():
+    """서버는 떴는데 모델이 없으면 받아쓰기는 실패한다. 그것도 '못 쓰는 상태'다."""
+    body = {"status": "loading", "model_loaded": False, "model": None}
+    with ping_http(lambda req: httpx.Response(200, json=body)) as client:
+        health = LoraStt(url="https://x.proxy.runpod.net", http_client=client).ping()
+
+    assert health.alive is False
+    assert "불러오는 중" in health.detail
+
+
+def test_ping_은_주소가_없으면_네트워크를_건드리지_않는다():
+    """물어볼 곳이 없는데 통신을 시도하면 그냥 시간만 버린다."""
+
+    def explode(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("주소가 없는데 서버를 불렀다")
+
+    with httpx.Client(transport=httpx.MockTransport(explode)) as client:
+        health = LoraStt(url="", http_client=client).ping()
+
+    assert health.alive is False
+    assert LORA_STT_URL_ENV in health.detail
+
+
+# ---------------------------------------------------------------------------
+# 7. GET /health 가 그 결과를 정직하게 내보내는지
+# ---------------------------------------------------------------------------
+
+
+def health_body(monkeypatch, responder) -> dict:
+    """가짜 LoRA 서버를 꽂은 채로 채점 서버의 /health 를 한 번 부른다."""
+    client = ping_http(responder)
+    # 이 서버에 꽂혀 있는 받아쓰기 자리를 통째로 가짜로 바꾼다.
+    # 이렇게 해야 진짜 8100 을 부르지 않고도 lora 경로를 확인할 수 있다
+    monkeypatch.setattr(
+        api, "_active_stt", lambda: LoraStt(url="http://127.0.0.1:8100", http_client=client)
+    )
+    try:
+        return TestClient(api.app).get("/health").json()
+    finally:
+        client.close()
+
+
+def test_health_는_LoRA_서버가_꺼져_있으면_정상이라고_하지_않는다(monkeypatch):
+    """이 테스트가 지키는 것: 죽은 서버를 '정상'이라고 보고하지 않는다."""
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("연결이 거부되었습니다", request=request)
+
+    body = health_body(monkeypatch, refuse)
+
+    assert body["stt_provider"] == "lora"
+    assert body["stt_available"] is False
+    # 왜 안 되는지가 함께 나와야 운영자가 8100 을 켤 수 있다
+    assert body["stt_detail"] and "닿지 못했다" in body["stt_detail"]
+    # 서버 자체는 살아 있다(쓰기 채점은 LoRA 없이도 된다)
+    assert body["status"] == "ok"
+
+
+def test_health_는_LoRA_서버가_살아_있으면_사유_없이_참이다(monkeypatch):
+    """정상일 때 stt_detail 은 null 이다(백엔드가 있고 없음으로 분기할 수 있게)."""
+    ok_body = {"status": "ok", "model_loaded": True, "model": "whisper-small-lora-v2"}
+    body = health_body(monkeypatch, lambda req: httpx.Response(200, json=ok_body))
+
+    assert body["stt_available"] is True
+    assert body["stt_detail"] is None
+
+
+def test_health_는_기존_필드를_하나도_잃지_않는다(monkeypatch):
+    """백엔드가 보고 있는 응답이라 필드는 '추가'만 허용된다."""
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("연결이 거부되었습니다", request=request)
+
+    body = health_body(monkeypatch, refuse)
+
+    for key in (
+        "status", "scoring_version", "llm_available", "llm_model", "llm_model_errors",
+        "weights_profile", "weights_provisional", "vocab_list_provisional",
+        "generation_version", "llm_model_generation",
+        "stt_provider", "stt_model", "stt_available", "stt_provisional",
+        "pronunciation_scoring", "pronunciation_provider",
+        "auth_enabled", "auth_header", "warmed_up", "warmup_ms",
+    ):
+        assert key in body, f"기존 필드 {key} 가 사라졌다"
+
+
+def test_health_는_LoRA_가_아닌_제공자에서는_예전_그대로다(monkeypatch):
+    """gemini·azure 는 열쇠 유무로 판정하던 방식을 바꾸지 않았다."""
+    monkeypatch.setattr(api, "_active_stt", lambda: FakeLoraStt())
+    # FakeLoraStt 는 provider_name 이 lora 지만 ping 이 없다.
+    # ping 이 없는 구현에서도 /health 가 터지지 않아야 한다(다른 제공자와 같은 길)
+    body = TestClient(api.app).get("/health").json()
+    assert body["stt_available"] is False  # available 속성이 없으면 예전처럼 False
+    assert body["stt_detail"] is None
+
+
+# ---------------------------------------------------------------------------
+# 7. 발음 채점이 넘어져도 채점 전체는 살아남는다 (2026-08-24 수리)
+#
+# 막으려는 사고:
+#   받아쓰기(LoRA)는 이미 성공했는데, 그 뒤에 도는 발음 채점이 음성 파일을
+#   내려받다가 실패하면 그 실패가 창구까지 그대로 올라가 **채점 전체가 400** 이
+#   됐다. 응시자는 말을 제대로 했고 글자도 다 옮겨졌는데 점수가 하나도 안 나온다.
+#   발음을 못 재는 것은 delivery 한 영역만 비울 일이지 채점을 세울 일이 아니다.
+# ---------------------------------------------------------------------------
+
+
+def failing_http(status: int = 404, content: bytes = b"") -> httpx.Client:
+    """음성 파일 내려받기가 실패하는 가짜 통신로.
+
+    404 로 답하게 하면 '주소가 죽었다', 200 + 빈 내용으로 답하게 하면
+    '0바이트 파일이 왔다' 가 된다. 둘 다 AudioRequestError 로 이어지는 길이다.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, content=content, headers={"Content-Type": "audio/wav"})
+
+    return httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
+
+
+def exploding_http() -> httpx.Client:
+    """쓰이는 순간 터지는 가짜 통신로.
+
+    '이미 받아 둔 파일이 있으면 다시 내려받지 않는다'를 말이 아니라 사실로
+    확인하는 장치다. 한 번이라도 내려받으면 여기서 시험이 실패한다.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError(f"이미 받아 둔 파일이 있는데 또 내려받았다: {request.url}")
+
+    return httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
+
+
+def azure_segment(display: str = SPOKEN_TEXT) -> dict:
+    """Azure 가 문장 하나를 인식했을 때 주는 JSON 모양을 흉내 낸다."""
+    return {
+        "Duration": 25_400_000,
+        "DisplayText": display,
+        "NBest": [
+            {
+                "Display": display,
+                "PronunciationAssessment": {
+                    "AccuracyScore": 66.0,
+                    "FluencyScore": 90.0,
+                    "CompletenessScore": 100.0,
+                    "PronScore": 72.0,
+                },
+                "Words": [
+                    {
+                        "Word": "포장기가",
+                        "Offset": 10_000,
+                        "Duration": 20_000,
+                        "PronunciationAssessment": {
+                            "AccuracyScore": 43.0,
+                            "ErrorType": "Mispronunciation",
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def test_발음_평가기는_파일을_못_받아도_예외_대신_None_을_준다():
+    """PronouncerPort 의 약속: 어떤 이유로 실패하든 예외를 올리지 않는다.
+
+    예전에는 '못 알아들었다(SttUnavailable)'만 삼키고 '파일을 못 받았다
+    (AudioRequestError)'는 그대로 올려서 채점 전체를 죽였다.
+    """
+    audio = AudioInput(url="https://storage.example.com/answers/a1.wav", format="wav")
+
+    # 주소가 죽은 경우(404)
+    with failing_http(404) as client:
+        stt = AzureStt(key="시험용", region="koreacentral", http_client=client,
+                       recognize=lambda **kwargs: [])
+        assert stt.assess_pronunciation(audio) is None
+
+    # 0바이트 파일이 온 경우(형식·크기 위반과 같은 갈래다)
+    with failing_http(200, content=b"") as client:
+        stt = AzureStt(key="시험용", region="koreacentral", http_client=client,
+                       recognize=lambda **kwargs: [])
+        assert stt.assess_pronunciation(audio) is None
+
+
+def test_발음_평가가_음성을_못_받아도_채점_전체는_살아남는다():
+    """받아쓰기는 이미 끝났다. delivery 한 영역만 비우고 점수는 나와야 한다."""
+    with failing_http(404) as client:
+        pronouncer = AzureStt(
+            key="시험용", region="koreacentral",
+            http_client=client, recognize=lambda **kwargs: [],
+        )
+        response = score_submission(
+            speaking_request(), stt=FakeLoraStt(), pronouncer=pronouncer
+        )
+
+    # 받아쓴 글과 그 내력은 그대로 살아 있다
+    assert response.meta.stt_provider == "lora"
+    assert response.meta.stt_transcript == SPOKEN_TEXT
+    assert response.overall_score is not None
+
+    # 발음만 못 잰 것이므로 delivery 만 비어 있고, 그 사유가 사람 말로 남는다
+    delivery = find_area(response, ScoreArea.DELIVERY)
+    assert delivery.status == AreaStatus.NOT_EVALUATED
+    assert delivery.weight == 0.0
+    assert any("발음 평가를 하지 못해" in w for w in response.warnings)
+
+    # 나머지 두 영역은 발음이 없을 때의 예전 비율 그대로다
+    assert find_area(response, ScoreArea.CONTENT_TASK).weight == pytest.approx(0.45)
+    assert find_area(response, ScoreArea.LANGUAGE_USE).weight == pytest.approx(0.55)
+
+
+def test_API_발음_평가가_음성을_못_받아도_400_이_아니다(monkeypatch):
+    """창구까지 올라오는지를 확인한다. 예전에는 여기서 400 이 나갔다."""
+    monkeypatch.setattr("src.speech.intake.build_default_stt", lambda: FakeLoraStt())
+    monkeypatch.setattr(
+        "src.speech.intake.build_default_pronouncer",
+        lambda: AzureStt(
+            key="시험용", region="koreacentral",
+            http_client=failing_http(404), recognize=lambda **kwargs: [],
+        ),
+    )
+
+    payload = {
+        "submission_id": "sub-lora-api-1",
+        "mode": "speaking",
+        "answer_text": "",
+        "item": ITEM.model_dump(mode="json"),
+        "audio": {"url": "https://storage.example.com/answers/a1.wav"},
+        "options": {"use_llm": False},
+    }
+    response = TestClient(api.app).post("/score", json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["meta"]["stt_transcript"] == SPOKEN_TEXT
+    # 음성 알맹이는 응답으로 나가지 않는다(speech 폴더 안에서만 쓰는 값이다)
+    assert "fetched_audio" not in response.text
+
+
+# ---------------------------------------------------------------------------
+# 8. 같은 음성을 두 번 내려받지 않는다 (2026-08-24 수리)
+#
+# 막으려는 낭비:
+#   받아쓰기(LoRA)가 음성을 내려받고, 발음 채점(Azure)이 **같은 음성을 또**
+#   내려받고 있었다. 한 답안에 다운로드 두 번은 느리고 데이터도 두 배인 데다,
+#   두 번째가 실패하면 위 7번의 사고로 이어진다.
+# ---------------------------------------------------------------------------
+
+
+def test_받아쓰기와_발음_채점이_음성을_한_번만_내려받는다():
+    """진짜 LoraStt + 진짜 AzureStt 를 한 통신로에 물려 다운로드 횟수를 센다."""
+    wav = make_tone_wav()
+    downloads: list[str] = []
+    recognized: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/transcribe"):
+            # LoRA 추론 서버가 줄 법한 응답(이쪽은 음성 다운로드가 아니다)
+            return httpx.Response(
+                200,
+                json={"text": SPOKEN_TEXT, "model": "whisper-small-lora-v2",
+                      "duration_ms": 1000},
+            )
+        # 그 밖은 전부 음성 파일 내려받기다. 여기가 몇 번 불리는지가 이 시험의 전부다
+        downloads.append(str(request.url))
+        return httpx.Response(200, content=wav, headers={"Content-Type": "audio/wav"})
+
+    def fake_recognize(pcm: bytes, reference_text: str, timeout_s: float) -> list[dict]:
+        # 발음 평가가 실제로 돌았다는 것과, 넘겨받은 파일이 규격까지 제대로
+        # 맞춰졌다는 것을 함께 확인한다(16000칸 * 2바이트 = 32000바이트)
+        recognized.append(len(pcm))
+        return [azure_segment()]
+
+    with httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True) as client:
+        response = score_submission(
+            speaking_request(),
+            stt=LoraStt(url="https://x.proxy.runpod.net", http_client=client),
+            pronouncer=AzureStt(
+                key="시험용", region="koreacentral",
+                http_client=client, recognize=fake_recognize,
+            ),
+        )
+
+    # 핵심: 받아쓰기 한 번 + 발음 채점 한 번인데 다운로드는 딱 한 번이다
+    assert len(downloads) == 1, f"음성을 {len(downloads)}번 내려받았다: {downloads}"
+
+    # 그러면서도 두 가지 일이 모두 제대로 끝났다
+    assert recognized == [32_000]
+    assert response.meta.stt_provider == "lora"
+    assert response.meta.stt_transcript == SPOKEN_TEXT
+    delivery = find_area(response, ScoreArea.DELIVERY)
+    assert delivery.status == AreaStatus.SCORED
+    assert any(ev.quote == "포장기가" for ev in delivery.evidence)
+
+
+def test_받아쓰기가_준_파일이_있으면_다시_내려받지_않는다():
+    """통로 자체를 좁게 확인한다. 파일을 건네주면 통신로를 건드리지도 않는다."""
+    wav = make_tone_wav()
+    fetched = FetchedAudio(
+        data=wav, audio_format="wav", mime_type="audio/wav",
+        duration_ms=1000, loudness=measure_wav_loudness(wav),
+    )
+    recognized: list[int] = []
+
+    def fake_recognize(pcm: bytes, reference_text: str, timeout_s: float) -> list[dict]:
+        recognized.append(len(pcm))
+        return [azure_segment()]
+
+    # 통신로는 쓰이는 순간 터지는 것을 꽂는다
+    with exploding_http() as client:
+        stt = AzureStt(key="시험용", region="koreacentral",
+                       http_client=client, recognize=fake_recognize)
+        assessment = stt.assess_pronunciation(
+            AudioInput(url="https://storage.example.com/answers/a1.wav", format="wav"),
+            item_prompt=ITEM.prompt,
+            item_type="incident_report",
+            fetched=fetched,
+        )
+
+    assert recognized == [32_000]
+    assert assessment is not None
+    assert assessment.accuracy == 66.0
+
+
+def test_건네받은_파일도_무음_관문을_그대로_지난다():
+    """1번(내려받기)만 건너뛴다. 소리를 검사하는 관문까지 면제하면 안 된다.
+
+    면제하면 아무 말도 안 한 녹음이 발음 점수를 받는 구멍이 생긴다.
+    """
+    silent = make_tone_wav(amplitude=0)
+    fetched = FetchedAudio(
+        data=silent, audio_format="wav", mime_type="audio/wav",
+        duration_ms=1000, loudness=measure_wav_loudness(silent),
+    )
+    called: list[int] = []
+
+    def fake_recognize(**kwargs) -> list[dict]:
+        called.append(1)
+        return [azure_segment()]
+
+    with exploding_http() as client:
+        stt = AzureStt(key="시험용", region="koreacentral",
+                       http_client=client, recognize=fake_recognize)
+        assessment = stt.assess_pronunciation(
+            AudioInput(url="https://storage.example.com/answers/a1.wav", format="wav"),
+            fetched=fetched,
+        )
+
+    # 무음 관문에 걸려 Azure 를 부르지도 않았고, 발음 점수도 만들지 않았다
+    assert called == []
+    assert assessment is None
+
+
+def test_받아쓰기_결과가_내려받은_파일을_실어_나른다():
+    """LoraStt 가 파일을 담아 주지 않으면 위의 절약이 성립하지 않는다."""
+    with lora_http(make_tone_wav()) as client:
+        stt = LoraStt(url="https://x.proxy.runpod.net", http_client=client)
+        result = stt.transcribe(AudioInput(url="https://storage.example.com/a.wav"))
+
+    assert result.fetched_audio is not None
+    assert result.fetched_audio.audio_format == "wav"
+    assert result.fetched_audio.size_bytes == result.audio_bytes
+
+
+def test_파일을_못_받는_옛_발음평가기도_그대로_돈다():
+    """fetched 인자를 안 받는 구현에 억지로 넘기지 않는다(갈아 끼우기 보장)."""
+    pronouncer = FakeAzurePronouncer(sample_assessment())
+
+    class FetchingLoraStt(FakeLoraStt):
+        """파일까지 담아 주는 받아쓰기(요즘 구현)."""
+
+        def transcribe(self, audio, item_prompt=""):
+            result = super().transcribe(audio, item_prompt)
+            wav = make_tone_wav()
+            result.fetched_audio = FetchedAudio(
+                data=wav, audio_format="wav", mime_type="audio/wav",
+                duration_ms=1000, loudness=measure_wav_loudness(wav),
+            )
+            return result
+
+    # FakeAzurePronouncer 의 assess_pronunciation 은 fetched 를 받지 않는다.
+    # 그래도 오류 없이 발음 채점이 끝나야 한다
+    response = score_submission(
+        speaking_request(), stt=FetchingLoraStt(), pronouncer=pronouncer
+    )
+    assert find_area(response, ScoreArea.DELIVERY).status == AreaStatus.SCORED
