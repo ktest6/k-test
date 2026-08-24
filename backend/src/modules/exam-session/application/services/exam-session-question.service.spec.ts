@@ -42,7 +42,7 @@ function buildQuestion(id: string, part = QuestionSectionType.SITUATION_DESCRIPT
   );
 }
 
-/** 파트별로 넉넉한 풀(각 5개)을 만든다 — 세션마다 2개씩 결정적으로 뽑힌다. */
+/** 파트별로 넉넉한 풀(각 5개)을 만든다 — 세션마다 3개씩 결정적으로 뽑힌다. */
 function buildQuestionPools(): Record<QuestionSectionType, Question[]> {
   return {
     [QuestionSectionType.SITUATION_DESCRIPTION]: Array.from({ length: 5 }, (_, i) =>
@@ -111,7 +111,7 @@ describe('ExamSessionQuestionService.listQuestions', () => {
     await expect(service.listQuestions('1', '1')).rejects.toThrow(ForbiddenDomainException);
   });
 
-  it('returns 2 questions per part, stable across repeated calls for the same session', async () => {
+  it('returns 3 questions per part, stable across repeated calls for the same session', async () => {
     const examSessionService = buildExamSessionService();
     const service = new ExamSessionQuestionService(
       examSessionService,
@@ -123,9 +123,9 @@ describe('ExamSessionQuestionService.listQuestions', () => {
     const resultA1 = await service.listQuestions('session-a', '1');
     const resultA2 = await service.listQuestions('session-a', '1');
 
-    expect(resultA1).toHaveLength(6);
+    expect(resultA1).toHaveLength(9);
     expect(resultA1.map((r) => r.question.id)).toEqual(resultA2.map((r) => r.question.id));
-    expect(new Set(resultA1.map((r) => r.question.id)).size).toBe(6);
+    expect(new Set(resultA1.map((r) => r.question.id)).size).toBe(9);
   });
 
   it('produces a different selection for a different session id', async () => {
@@ -143,7 +143,7 @@ describe('ExamSessionQuestionService.listQuestions', () => {
     expect(orderA).not.toEqual(orderB);
   });
 
-  it('groups questions by section in a fixed order (상황묘사 → 읽고설명 → 질문답변), 2 per section', async () => {
+  it('groups questions by section in a fixed order (상황묘사 → 읽고설명 → 질문답변), 3 per section', async () => {
     const examSessionService = buildExamSessionService();
     const service = new ExamSessionQuestionService(
       examSessionService,
@@ -157,8 +157,11 @@ describe('ExamSessionQuestionService.listQuestions', () => {
     expect(result.map((r) => r.question.part)).toEqual([
       QuestionSectionType.SITUATION_DESCRIPTION,
       QuestionSectionType.SITUATION_DESCRIPTION,
+      QuestionSectionType.SITUATION_DESCRIPTION,
       QuestionSectionType.READ_AND_EXPLAIN,
       QuestionSectionType.READ_AND_EXPLAIN,
+      QuestionSectionType.READ_AND_EXPLAIN,
+      QuestionSectionType.ANSWER_QUESTION,
       QuestionSectionType.ANSWER_QUESTION,
       QuestionSectionType.ANSWER_QUESTION,
     ]);
