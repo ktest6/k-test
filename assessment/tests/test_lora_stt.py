@@ -16,7 +16,9 @@ import wave
 
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 
+from src import api
 from src.scoring.pipeline import score_submission
 from src.scoring.schema import (
     AreaStatus,
@@ -426,3 +428,167 @@ def test_기본_모델_이름은_서버가_주기_전까지의_임시값이다()
     """서버가 모델 이름을 주면 그것으로 덮어쓰지만, 부르기 전엔 임시값을 쓴다."""
     stt = LoraStt(url="https://x.proxy.runpod.net")
     assert stt.model_name == DEFAULT_LORA_MODEL
+
+
+# ---------------------------------------------------------------------------
+# 6. ping — 추론 서버가 정말 살아 있는지 물어본다
+#
+# 여기서 막으려는 사고 하나:
+#   available 은 '주소가 적혀 있다'만 본다. 그래서 8100 서버가 꺼져 있어도 참이고,
+#   그 값을 /health 가 그대로 내보내면 **말하기 채점이 전부 503 인 서버를
+#   '정상'이라고 보고한다.** 아래 테스트들이 그 거짓 보고를 막는 자리다.
+# ---------------------------------------------------------------------------
+
+
+def ping_http(responder) -> httpx.Client:
+    """/health 요청에 원하는 대로 답하는(또는 터지는) 가짜 통신로."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        # ping 은 /health 만 부른다. 다른 곳을 부르면 그 자체가 잘못이다
+        assert request.url.path.endswith("/health"), f"엉뚱한 곳을 불렀다: {request.url}"
+        return responder(request)
+
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_ping_은_서버가_살아_있으면_살았다고_한다():
+    """모델까지 올라온 서버는 사유 없이 '살아 있음'만 돌려준다."""
+    body = {"status": "ok", "model_loaded": True, "model": "whisper-small-lora-v2"}
+    with ping_http(lambda req: httpx.Response(200, json=body)) as client:
+        health = LoraStt(url="https://x.proxy.runpod.net", http_client=client).ping()
+
+    assert health.alive is True
+    # 정상일 때 사유를 붙이면 백엔드가 '무슨 문제가 있나' 하고 읽게 된다
+    assert health.detail is None
+
+
+def test_ping_은_서버가_꺼져_있으면_사유와_함께_죽었다고_한다():
+    """8100 이 꺼진 지금 상태. available 은 참이어도 ping 은 거짓이어야 한다."""
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("연결이 거부되었습니다", request=request)
+
+    stt_url = "http://127.0.0.1:8100"
+    with ping_http(refuse) as client:
+        stt = LoraStt(url=stt_url, http_client=client)
+        # 주소는 적혀 있으므로 available 은 여전히 참이다(관문 용도라 그대로 둔다)
+        assert stt.available is True
+        health = stt.ping()
+
+    assert health.alive is False
+    # 사람이 읽고 무엇을 해야 할지 알 수 있는 문장인지
+    assert health.detail and "닿지 못했다" in health.detail
+    assert stt_url in health.detail
+
+
+def test_ping_은_시간_초과와_서버_오류를_다른_사유로_구분한다():
+    """무엇이 문제인지에 따라 손볼 곳이 다르므로 사유를 뭉뚱그리지 않는다."""
+
+    def timeout(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("느리다", request=request)
+
+    with ping_http(timeout) as client:
+        slow = LoraStt(url="https://x.proxy.runpod.net", http_client=client).ping()
+    assert slow.alive is False
+    assert "답하지 않았다" in slow.detail
+
+    with ping_http(lambda req: httpx.Response(500, text="boom")) as client:
+        broken = LoraStt(url="https://x.proxy.runpod.net", http_client=client).ping()
+    assert broken.alive is False
+    assert "500" in broken.detail
+
+
+def test_ping_은_모델을_아직_불러오는_중이면_살았다고_하지_않는다():
+    """서버는 떴는데 모델이 없으면 받아쓰기는 실패한다. 그것도 '못 쓰는 상태'다."""
+    body = {"status": "loading", "model_loaded": False, "model": None}
+    with ping_http(lambda req: httpx.Response(200, json=body)) as client:
+        health = LoraStt(url="https://x.proxy.runpod.net", http_client=client).ping()
+
+    assert health.alive is False
+    assert "불러오는 중" in health.detail
+
+
+def test_ping_은_주소가_없으면_네트워크를_건드리지_않는다():
+    """물어볼 곳이 없는데 통신을 시도하면 그냥 시간만 버린다."""
+
+    def explode(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("주소가 없는데 서버를 불렀다")
+
+    with httpx.Client(transport=httpx.MockTransport(explode)) as client:
+        health = LoraStt(url="", http_client=client).ping()
+
+    assert health.alive is False
+    assert LORA_STT_URL_ENV in health.detail
+
+
+# ---------------------------------------------------------------------------
+# 7. GET /health 가 그 결과를 정직하게 내보내는지
+# ---------------------------------------------------------------------------
+
+
+def health_body(monkeypatch, responder) -> dict:
+    """가짜 LoRA 서버를 꽂은 채로 채점 서버의 /health 를 한 번 부른다."""
+    client = ping_http(responder)
+    # 이 서버에 꽂혀 있는 받아쓰기 자리를 통째로 가짜로 바꾼다.
+    # 이렇게 해야 진짜 8100 을 부르지 않고도 lora 경로를 확인할 수 있다
+    monkeypatch.setattr(
+        api, "_active_stt", lambda: LoraStt(url="http://127.0.0.1:8100", http_client=client)
+    )
+    try:
+        return TestClient(api.app).get("/health").json()
+    finally:
+        client.close()
+
+
+def test_health_는_LoRA_서버가_꺼져_있으면_정상이라고_하지_않는다(monkeypatch):
+    """이 테스트가 지키는 것: 죽은 서버를 '정상'이라고 보고하지 않는다."""
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("연결이 거부되었습니다", request=request)
+
+    body = health_body(monkeypatch, refuse)
+
+    assert body["stt_provider"] == "lora"
+    assert body["stt_available"] is False
+    # 왜 안 되는지가 함께 나와야 운영자가 8100 을 켤 수 있다
+    assert body["stt_detail"] and "닿지 못했다" in body["stt_detail"]
+    # 서버 자체는 살아 있다(쓰기 채점은 LoRA 없이도 된다)
+    assert body["status"] == "ok"
+
+
+def test_health_는_LoRA_서버가_살아_있으면_사유_없이_참이다(monkeypatch):
+    """정상일 때 stt_detail 은 null 이다(백엔드가 있고 없음으로 분기할 수 있게)."""
+    ok_body = {"status": "ok", "model_loaded": True, "model": "whisper-small-lora-v2"}
+    body = health_body(monkeypatch, lambda req: httpx.Response(200, json=ok_body))
+
+    assert body["stt_available"] is True
+    assert body["stt_detail"] is None
+
+
+def test_health_는_기존_필드를_하나도_잃지_않는다(monkeypatch):
+    """백엔드가 보고 있는 응답이라 필드는 '추가'만 허용된다."""
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("연결이 거부되었습니다", request=request)
+
+    body = health_body(monkeypatch, refuse)
+
+    for key in (
+        "status", "scoring_version", "llm_available", "llm_model", "llm_model_errors",
+        "weights_profile", "weights_provisional", "vocab_list_provisional",
+        "generation_version", "llm_model_generation",
+        "stt_provider", "stt_model", "stt_available", "stt_provisional",
+        "pronunciation_scoring", "pronunciation_provider",
+        "auth_enabled", "auth_header", "warmed_up", "warmup_ms",
+    ):
+        assert key in body, f"기존 필드 {key} 가 사라졌다"
+
+
+def test_health_는_LoRA_가_아닌_제공자에서는_예전_그대로다(monkeypatch):
+    """gemini·azure 는 열쇠 유무로 판정하던 방식을 바꾸지 않았다."""
+    monkeypatch.setattr(api, "_active_stt", lambda: FakeLoraStt())
+    # FakeLoraStt 는 provider_name 이 lora 지만 ping 이 없다.
+    # ping 이 없는 구현에서도 /health 가 터지지 않아야 한다(다른 제공자와 같은 길)
+    body = TestClient(api.app).get("/health").json()
+    assert body["stt_available"] is False  # available 속성이 없으면 예전처럼 False
+    assert body["stt_detail"] is None

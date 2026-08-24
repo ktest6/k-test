@@ -27,7 +27,7 @@
 ## 트랙 A 잔여 (연동 마무리)
 
 - [ ] **A-1 서버 재기동** — 세션 재시작으로 죽어 있음. `서버시작.bat` → 새 터널 주소를 백엔드에 전달
-- [ ] **A-2 백엔드 연동 E2E** — 백엔드 stub 교체 후 쓰기 채점 왕복. 선행: 재조립 공식·reference_keywords 숨김·Score jsonb 메시지 전달
+- [x] **A-2 백엔드 연동 E2E** (8/22 완료) — 백엔드 ai 모듈이 채점·최종산출을 실어댑터로 배선(`backend/src/modules/ai/ai.module.ts`: AssessmentScoringAdapter·AssessmentFinalizeAdapter), `/score`·`/finalize` 실연동 확인(말하기 3문항 세트 채점 성공, HISTORY 8/22). 문항 생성 쪽(QUESTION_GENERATOR)은 아직 Mock
 - [x] **A-3 API 키 인증** (8/1 완료) — `KTEST_API_KEY` 를 넣으면 모든 POST 가 `X-API-Key` 를 요구한다. 안 넣으면 지금처럼 열려 있어 연동 테스트가 막히지 않는다
 - [ ] A-4 시연 직전 Cloud Run 이전 판단 (8/8) — 집 PC 리스크(윈도우 업데이트 재부팅·인터넷 장애) 제거
 - [ ] A-5 (사소) 재현성 R08 1건 재측정
@@ -52,7 +52,7 @@
 **완료 기준**: 테스트 통과 + 같은 문서 3회 생성 비교 + `/docs`에 엔드포인트 노출.
 
 ### 8/4 — 연동의 날 (A와 B 합류)
-- [ ] A-2 쓰기 E2E (백엔드 준비되는 대로)
+- [x] A-2 쓰기 E2E → 8/22 완료 (위 트랙 A 잔여 참고)
 - [x] A-3 API 키 인증 추가 (8/1 에 먼저 끝냄)
 - [ ] 생성 API 계약을 백엔드에 전달 (업로드→생성→승인 흐름 합의)
 
@@ -98,7 +98,7 @@
   쌍대비교는 라벨러 일치율이 낮을 때만 예비 투입 — XGBoost 는 rank:pairwise 로 둘 다 지원)
 - [ ] 계단 6 (2단계): 인간-인간 일치율을 같은 데이터에서 측정 → **기계-인간 QWK ≥ 인간-인간 QWK** — 이 니치의 SOTA 주장 근거 (통계 설계는 `RESEARCH.md`)
 - [ ] (선택·조건부) Whisper LoRA: AI Hub 외국인 발화(음성+정답 전사)로 받아쓰기 학습 → 기본 Whisper·Gemini 와 CER 3자 비교. **착수 조건**: AI Hub 데이터 승인·품질 확인 + 계단 5·6 이 8/13까지 궤도에 오름. 채점 LLM 파인튜닝은 하지 않는다(재현성 무기 훼손)
-- [~] **LoRA 받아쓰기 채점 서버 배선 완료 (8/22)** — 전사=LoRA / 발음=Azure 분리. 채점 서버 쪽 `src/speech/lora_stt.py`(http 클라이언트, torch 없음) + `AzureStt.assess_pronunciation`(발음 전용) + `intake.py` 발음·전사 분리. RunPod 추론 서버 `scripts/speech_lab/lora_stt_server.py` 신규. 테스트 479개(신규 15). **남은 것(배포 후 스모크, 아직 미실행)**: ① 어댑터(v2_adapter.tar.gz) RunPod 업로드 → `LORA_ADAPTER_DIR` 지정 → 서버 실행 → 포트/터널 → 나온 주소를 채점 서버 `.env` 의 `LORA_STT_URL` + `KTEST_STT_PROVIDER=lora`. ② `/health` 확인 후 짧은 wav 로 `/transcribe` 실호출. ③ 채점 서버 `/health` 의 stt_provider=="lora" 확인. **주의: v2 어댑터 골든셋 미검증 — 데모용, 품질 보증 아님.**
+- [~] **LoRA 받아쓰기 채점 서버 배선 완료 (8/22)** — 전사=LoRA / 발음=Azure 분리. 채점 서버 쪽 `src/speech/lora_stt.py`(http 클라이언트, torch 없음) + `AzureStt.assess_pronunciation`(발음 전용) + `intake.py` 발음·전사 분리. RunPod 추론 서버 `scripts/speech_lab/lora_stt_server.py` 신규. 테스트 479개(신규 15). **로컬 GPU(RTX 4060) 스모크는 8/22 완료** — 음성→LoRA 받아쓰기→채점까지 `/score` HTTP 200, 오류 보존 실작동 확인(HISTORY 8/22). **남은 것(RunPod/GCP 배포판 스모크, 아직 미실행 — GCP 쿼터 검토 중)**: ① 어댑터(v2_adapter.tar.gz) RunPod 업로드 → `LORA_ADAPTER_DIR` 지정 → 서버 실행 → 포트/터널 → 나온 주소를 채점 서버 `.env` 의 `LORA_STT_URL` + `KTEST_STT_PROVIDER=lora`. ② `/health` 확인 후 짧은 wav 로 `/transcribe` 실호출. ③ 채점 서버 `/health` 의 stt_provider=="lora" 확인. **주의: v2 어댑터 골든셋 미검증 — 데모용, 품질 보증 아님.**
 
 ## 기술 스택 통합 계획 (8/3 확정) — STT · 채점 · XGBoost 3층
 
