@@ -67,7 +67,7 @@ import time
 import wave
 
 from ..scoring.schema import AudioInput
-from .audio import FetchedAudio, fetch_audio
+from .audio import AudioRequestError, FetchedAudio, fetch_audio
 from .loudness import (
     is_silent,
     is_too_quiet_for_speech,
@@ -259,16 +259,26 @@ class AzureStt(SttPort, PronouncerPort):
             elapsed_ms=elapsed_ms,
             warnings=warnings,
             pronunciation=assessment,
+            # 내려받은 파일을 그대로 딸려 보낸다. 발음 평가가 뒤에서 또 부를 때
+            # 같은 파일을 두 번 내려받지 않게 하려는 통로다(port.py 참고)
+            fetched_audio=fetched,
         )
 
     def assess_pronunciation(
-        self, audio: AudioInput, item_prompt: str = "", item_type: str = ""
+        self,
+        audio: AudioInput,
+        item_prompt: str = "",
+        item_type: str = "",
+        fetched: FetchedAudio | None = None,
     ) -> PronunciationAssessment | None:
         """음성 원본을 직접 들어 **발음 점수만** 낸다(받아쓴 글은 버린다).
 
         LoRA 로 받아쓰는 서버에서 발화 전달력(delivery)만 Azure 로 채점할 때
         불리는 자리다. transcribe 와 같은 인식(_recognize_core)을 쓰지만,
         여기서는 그중 발음(PronunciationAssessment)만 꺼내 돌려준다.
+
+        fetched 를 주면 **그 파일을 그대로 쓰고 다시 내려받지 않는다.** 받아쓰기가
+        이미 손에 넣은 파일을 건네받는 자리다(같은 음성을 두 번 받지 않으려는 것).
 
         **이쪽은 실패해도 예외를 올리지 않고 None 을 돌려준다.**
         받아쓰기는 이미 다른 기계(LoRA)가 끝냈으므로, 발음을 못 재는 것은
@@ -281,18 +291,28 @@ class AzureStt(SttPort, PronouncerPort):
             return None
         try:
             _text, assessment, _warnings, _fetched = self._recognize_core(
-                audio, item_prompt, item_type
+                audio, item_prompt, item_type, fetched=fetched
             )
-        except SttUnavailable:
-            # 무음·wav 아님·거절 등. 발음만 못 잰 것이므로 전사는 살아 있다.
-            # 여기서 막지 않고 None 으로 돌려 delivery 만 비운다
+        except (SttUnavailable, AudioRequestError):
+            # 두 갈래 다 여기서 삼킨다. 발음만 못 잰 것이지 전사는 살아 있기 때문이다.
+            #   SttUnavailable    : 무음·wav 아님·Azure 가 거절함
+            #   AudioRequestError : 음성 파일을 못 받아 옴(주소 404·형식·크기 위반 등)
+            #
+            # 2026-08-24 수리: 예전에는 SttUnavailable 만 잡았다. 그래서 파일을
+            # 내려받다가 난 AudioRequestError 가 그대로 창구까지 올라가 **받아쓰기는
+            # 이미 성공했는데 채점 전체가 400 으로 죽는** 사고가 났다.
+            # 이 함수의 약속은 '실패해도 None' 이므로 두 갈래를 똑같이 다룬다
             return None
         return assessment
 
     # -- 안쪽 일 ------------------------------------------------------------
 
     def _recognize_core(
-        self, audio: AudioInput, item_prompt: str, item_type: str
+        self,
+        audio: AudioInput,
+        item_prompt: str,
+        item_type: str,
+        fetched: FetchedAudio | None = None,
     ) -> tuple[str, PronunciationAssessment | None, list[str], FetchedAudio]:
         """받아쓰기와 발음 평가를 함께 얻는 공통 심장부.
 
@@ -301,13 +321,18 @@ class AzureStt(SttPort, PronouncerPort):
         똑같이 걸려야 하는데, 복사해 두면 한쪽만 고쳐져 어긋난다.
 
         순서는 다섯이다.
-          1) 내려받는다 (크기·형식·주소 관문을 여기서 지난다)
+          1) 파일을 손에 넣는다 (크기·형식·주소 관문을 여기서 지난다)
+             **이미 받아 둔 파일(fetched)을 건네받았으면 내려받지 않고 그것을 쓴다.**
           2) **무음 관문** 소리가 없으면 Azure 를 부르지 않고 끝낸다
           3) Azure 가 받아 주는 규격으로 소리를 맞춘다 (16kHz 모노)
           4) 받아쓰기와 발음 평가를 한 번에 받아 온다
           5) **거의 무음 관문** 글은 나왔는데 소리가 너무 작았으면 그 글을 버린다
 
-        돌려주는 것: (받아쓴 글, 발음 평가 또는 None, 사람이 알아야 할 것, 내려받은 파일).
+        1번만 건너뛰고 **나머지 관문(형식·무음·거의 무음)은 그대로 지난다.**
+        건네받은 파일이라고 해서 검사를 면제하면, 무음 녹음이 발음 점수를 받는
+        구멍이 생긴다.
+
+        돌려주는 것: (받아쓴 글, 발음 평가 또는 None, 사람이 알아야 할 것, 쓴 파일).
         빈 글은 여기서 막지 않는다 — 전사는 실패로 보고 발음은 살려도 되는 경우가
         있어서, '빈 글을 어떻게 다룰지'는 부르는 쪽이 정한다.
         """
@@ -318,8 +343,11 @@ class AzureStt(SttPort, PronouncerPort):
                 "(AZURE_SPEECH_KEY / AZURE_SPEECH_REGION)가 설정돼 있지 않다."
             )
 
-        # 1) 파일을 손에 넣는다
-        fetched = fetch_audio(audio, http_client=self._http_client)
+        # 1) 파일을 손에 넣는다.
+        #    받아쓰기가 이미 받아 둔 것을 건네줬으면 그것을 쓴다 — 한 답안을 채점하면서
+        #    같은 음성을 두 번 내려받지 않기 위해서다(2026-08-24)
+        if fetched is None:
+            fetched = fetch_audio(audio, http_client=self._http_client)
 
         # 지금은 wav 만 Azure 로 보낼 수 있다. 압축 형식을 풀어 줄 도구가 서버에 없다.
         # 잘못 읽어서 엉뚱한 발음 점수를 내느니 못 한다고 말하는 편이 맞다

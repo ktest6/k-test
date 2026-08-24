@@ -206,6 +206,10 @@ class GeminiStt(SttPort):
             output_tokens=usage.get("output"),
             elapsed_ms=elapsed_ms,
             warnings=list(fetched.warnings),
+            # 방금 내려받은 파일을 그대로 딸려 보낸다. 이 구현은 발음을 못 재므로
+            # 발음은 뒤에서 Azure 가 따로 재는데, 그때 같은 음성을 또 내려받지
+            # 않게 하려는 통로다(port.py 참고). 채점 결과로는 나가지 않는다
+            fetched_audio=fetched,
         )
 
     def _call_gemini(

@@ -192,6 +192,34 @@ def _transcribe_kwargs(engine: SttPort, request: ScoreRequest) -> dict:
     return kwargs
 
 
+def _pronounce_kwargs(pronouncer, result: Transcription) -> dict:
+    """발음 평가기에 **더 얹어 줄 수 있는** 값만 골라 돌려준다.
+
+    문항 지시문·유형은 처음부터 있던 값이라 부르는 쪽이 늘 직접 넘긴다.
+    여기서 고르는 것은 나중에 생긴 값 하나, fetched 뿐이다.
+
+    fetched(이미 받아 둔 음성 파일)는 2026-08-24 에 더한 값이다. 이것을 넘기면
+    발음 평가기가 같은 음성을 또 내려받지 않는다. 다만 예전 구현은 이 인자를
+    받지 않고, 안 받는 구현에 억지로 넘기면 그 자리에서 오류가 난다.
+    그래서 **받을 수 있는 구현에만, 그리고 실제로 받아 둔 파일이 있을 때만** 넘긴다.
+    (받아쓰기 구현에 참고 값을 넘길 때 쓰는 _transcribe_kwargs 와 같은 방식이다)
+    """
+    kwargs: dict = {}
+
+    # 받아 둔 파일이 없으면 넘길 것도 없다(발음 평가기가 직접 내려받는다)
+    if result.fetched_audio is None:
+        return kwargs
+    try:
+        parameters = inspect.signature(pronouncer.assess_pronunciation).parameters
+    except (TypeError, ValueError):
+        # 서명을 읽을 수 없는 구현이면 예전 방식대로만 부른다
+        return kwargs
+    accepts_any = any(p.kind == p.VAR_KEYWORD for p in parameters.values())
+    if "fetched" in parameters or accepts_any:
+        kwargs["fetched"] = result.fetched_audio
+    return kwargs
+
+
 def _resolve_pronunciation(
     request: ScoreRequest,
     result: Transcription,
@@ -202,11 +230,19 @@ def _resolve_pronunciation(
 
     세 갈래다.
       1) 받아쓰기가 이미 발음까지 준 경우(provider=azure) → 그것을 그대로 쓴다.
-         한 음성을 두 번 인식하지 않으려는 것이다.
+         Azure 하나가 받아쓰기와 발음을 한 번에 했으므로 더 할 일이 없다.
       2) 아직 발음이 없고(예: LoRA·Gemini 로 받아씀) 발음 평가기가 있는 경우 →
-         **음성 원본을 Azure 로 따로 들어** 발음만 잰다. 여기가 '전사는 LoRA·
+         **음성을 Azure 에게 따로 들려** 발음만 잰다. 여기가 '전사는 LoRA·
          발음은 Azure' 분리가 실제로 일어나는 자리다.
+         이때 **받아쓰기가 이미 내려받아 둔 파일을 그대로 건네준다.** 예전에는
+         Azure 가 같은 음성을 처음부터 다시 내려받았는데(한 채점에 두 번),
+         느릴 뿐 아니라 그 두 번째 내려받기가 실패하면 이미 끝난 받아쓰기까지
+         헛일이 됐다(2026-08-24 수리).
       3) 발음 평가기가 없으면(열쇠 없음) → None. delivery 는 비워 둔다.
+
+    2번에서 발음을 못 재도 **채점은 멈추지 않는다.** 발음 평가기는 실패해도 예외를
+    올리지 않고 None 을 돌려주기로 약속돼 있고(PronouncerPort), 그러면 여기서
+    delivery 만 비운 채 사유를 한 줄 남기고 지나간다.
 
     발음 평가기 인자(pronouncer)의 규칙:
       - _UNSET  : 아무 말 없음. 서버 기본값을 만들되, **테스트가 가짜 stt 를 꽂은
@@ -231,13 +267,15 @@ def _resolve_pronunciation(
     if not getattr(pronouncer, "available", False):
         return None, warnings
 
-    # 2) 음성 원본을 Azure 로 따로 들어 발음만 잰다.
+    # 2) 음성을 Azure 에게 따로 들려 발음만 잰다.
     #    받아쓴 글을 정답지로 넘기지 않는다(발음은 원음 기준이어야 한다).
-    #    낭독형이면 제시문(item_prompt)을 정답지로 주는 판단은 평가기 안에서 한다
+    #    낭독형이면 제시문(item_prompt)을 정답지로 주는 판단은 평가기 안에서 한다.
+    #    받아쓰기가 내려받아 둔 파일이 있으면 함께 넘겨 두 번 받는 일을 없앤다
     assessment = pronouncer.assess_pronunciation(
         request.audio,
         item_prompt=request.item.prompt,
         item_type=request.item.item_type,
+        **_pronounce_kwargs(pronouncer, result),
     )
     if assessment is None:
         # 발음만 못 잰 것이다. 전사는 살아 있으므로 채점은 이어 가고,
