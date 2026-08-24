@@ -34,6 +34,10 @@ from pathlib import Path
 
 import pytest
 
+
+# 이 실험 테스트는 scripts/checklist_lab 의 학습 코드(sklearn/xgboost)를 임포트한다.
+# 운영 requirements 에는 그 라이브러리가 없으므로, 없으면 이 파일 전체를 건너뛴다.
+pytest.importorskip("sklearn", reason="checklist_lab 실험 전용 자질/학습 라이브러리 — 운영 CI에는 미설치, 여기서 통째로 건너뛴다")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "checklist_lab"))
 
 from _lab_common import N_FOLDS, assign_folds, human_score, prompt_key  # noqa: E402
