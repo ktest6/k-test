@@ -34,6 +34,8 @@ import math
 import wave
 from dataclasses import dataclass
 
+from ..scoring.messages import Notice, notice
+
 #: 소리 크기를 재는 눈금. 16비트 녹음의 최대값이며, 다른 비트수의 파일도
 #: 이 눈금으로 환산해서 비교한다(그래야 기준값 하나로 다 볼 수 있다).
 FULL_SCALE = 32767.0
@@ -84,10 +86,19 @@ class Loudness:
 
     def describe(self) -> str:
         """사람이 읽는 한 줄 근거. 예외 메시지에 그대로 들어간다."""
-        return (
-            f"가장 큰 0.1초 구간 {self.peak_window_rms:.1f}, "
-            f"전체 평균 {self.overall_rms:.1f} "
-            f"(0~{int(FULL_SCALE)} 눈금, 실측한 사람 발화는 8,500 이상)"
+        return self.describe_notice().message
+
+    def describe_notice(self) -> Notice:
+        """위 한 줄을 '코드 + 잰 값' 으로도 담아 둔다.
+
+        백엔드가 이 줄까지 영어로 바꿔야 하는데, 숫자가 끼어 있어서 문장을 통째로
+        번역할 수가 없다. 그래서 잰 값을 따로 떼어 코드와 함께 넘긴다.
+        """
+        return notice(
+            "AUDIO_LOUDNESS_DESCRIBE",
+            peak=round(self.peak_window_rms, 1),
+            mean=round(self.overall_rms, 1),
+            scaleMax=int(FULL_SCALE),
         )
 
 
@@ -207,18 +218,36 @@ def silence_message(loudness: Loudness) -> str:
     잰 값을 문장 안에 넣는 이유: 이 프로젝트에서 근거 없는 판정은 결함이다.
     나중에 "왜 내 답안이 채점되지 않았나"에 이 숫자로 답할 수 있어야 한다.
     """
-    return (
-        "음성에서 소리를 찾지 못했다(녹음이 무음이다). "
-        "마이크가 꺼져 있었거나 녹음이 실패했는지 확인해야 한다. "
-        f"측정값: {loudness.describe()}"
-    )
+    return silence_notice(loudness).message
+
+
+def silence_notice(loudness: Loudness) -> Notice:
+    """위 한 문장을 '코드 + 값' 으로 담은 것.
+
+    잰 값 부분(measurements)은 그 자체가 또 하나의 문장이라, 안쪽 Notice 를 통째로
+    넣어 백엔드가 겉과 속을 둘 다 영어로 바꿀 수 있게 했다.
+    """
+    inner = loudness.describe_notice()
+    return notice("STT_SILENT_AUDIO", loudness=inner.message, loudnessNotice=inner)
 
 
 def too_quiet_message(loudness: Loudness, transcript: str) -> str:
     """받아쓴 글이 나왔지만 소리가 너무 작아 지어낸 글로 볼 때의 한 문장."""
+    return too_quiet_notice(loudness, transcript).message
+
+
+def too_quiet_notice(loudness: Loudness, transcript: str) -> Notice:
+    """위 한 문장을 '코드 + 값' 으로 담은 것.
+
+    **`preview` 는 번역하지 않는다.** 응시자가 실제로 한국어로 말한 것을 받아쓴
+    조각이라서, 영어로 바꿔 보여 주면 "나는 그렇게 말하지 않았다"는 이의를 확인할
+    길이 사라진다. 백엔드는 이 값을 그대로 문장에 끼워야 한다.
+    """
     preview = transcript.strip()[:40]
-    return (
-        "받아쓴 글이 나왔지만 녹음의 소리가 사람이 말한 것이라기에는 너무 작아서 "
-        "채점하지 않는다(받아쓰기가 지어낸 글일 수 있다). "
-        f"측정값: {loudness.describe()} / 받아쓴 글 앞부분: \"{preview}\""
+    inner = loudness.describe_notice()
+    return notice(
+        "STT_TOO_QUIET",
+        loudness=inner.message,
+        preview=preview,
+        loudnessNotice=inner,
     )

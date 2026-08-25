@@ -443,20 +443,23 @@ def post_generate(**overrides) -> tuple[int, dict]:
 def test_너무_짧은_문서는_거부된다():
     status, body = post_generate(document_text="안전모를 씁니다. " * 5)
     assert status == 400
-    assert "짧" in body["detail"]
+    assert body["detail"]["code"] == "GEN_DOCUMENT_TOO_SHORT"
+    assert "짧" in body["detail"]["message"]
 
 
 def test_너무_긴_문서는_자르지_않고_거부된다():
     """조용히 자르면 관리자가 보낸 문서와 문항이 나온 문서가 달라진다."""
     status, body = post_generate(document_text="지게차는 통로에서 천천히 운행한다. " * 3000)
     assert status == 400
-    assert "길" in body["detail"]
+    assert body["detail"]["code"] == "GEN_DOCUMENT_TOO_LONG"
+    assert "길" in body["detail"]["message"]
 
 
 def test_말하기_문항_생성은_거부된다():
     status, body = post_generate(mode="speaking")
     assert status == 400
-    assert "쓰기" in body["detail"]
+    assert body["detail"]["code"] == "GEN_SPEAKING_NOT_SUPPORTED"
+    assert "쓰기" in body["detail"]["message"]
 
 
 def test_LLM_키가_없으면_503_이고_대체_경로로_넘어가지_않는다(monkeypatch):
@@ -550,6 +553,35 @@ def test_재검증은_두_번_돌려도_같은_답을_준다():
 SRC = Path(__file__).resolve().parents[1] / "src"
 
 
+def _imported_packages(path) -> set[str]:
+    """이 파일이 실제로 **불러다 쓰는** 모듈 이름을 모은다.
+
+    왜 글자 찾기(substring)가 아니라 import 문을 보는가:
+    예전에는 파일 안에 'speech' 라는 글자가 있기만 해도 위반으로 봤다. 그런데
+    사용자에게 보여줄 문구를 모아 둔 카탈로그(scoring/messages.py)에는
+    'AZURE_SPEECH_KEY 가 설정돼 있지 않다' 같은 **문장**이 들어 있다. 이건 남의
+    모듈을 부르는 것이 아니라 그냥 글자다. 글자만 보면 이런 것까지 위반으로 잡혀서
+    정작 지키려던 규칙(부르는 방향)이 흐려진다.
+
+    그래서 파이썬에게 파일 구조를 직접 물어보고(ast), `import` 로 적힌 모듈 이름만
+    본다. 주석이나 문장 속 글자에는 속지 않고, 진짜로 부르는 자리만 잡아낸다.
+    """
+    import ast
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        # import a.b.c
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                found.update(alias.name.split("."))
+        # from ..a.b import c  (상대 경로도 모듈 이름만 떼어 본다)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                found.update(node.module.split("."))
+    return found
+
+
 def test_채점_코드는_생성_모듈을_불러다_쓰지_않는다():
     """단방향 의존을 코드로 못 박는다.
 
@@ -559,8 +591,7 @@ def test_채점_코드는_생성_모듈을_불러다_쓰지_않는다():
     offenders = []
     for folder in ("scoring", "features", "llm"):
         for path in (SRC / folder).glob("**/*.py"):
-            text = path.read_text(encoding="utf-8")
-            if "generation" in text:
+            if "generation" in _imported_packages(path):
                 offenders.append(str(path))
     assert offenders == [], f"채점 쪽 파일이 생성 모듈을 참조한다: {offenders}"
 

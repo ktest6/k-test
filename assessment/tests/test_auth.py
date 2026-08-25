@@ -85,13 +85,18 @@ def test_키를_넣으면_인증이_켜진다(locked):
 def test_헤더가_없으면_401_이고_한국어로_이유를_알려준다(locked):
     response = client.post("/score", json=SCORE_BODY)
     assert response.status_code == 401
-    assert "헤더가 없습니다" in response.json()["detail"]
+    # detail 은 글자 하나가 아니라 {code, params, message} 묶음으로 나간다
+    detail = response.json()["detail"]
+    assert detail["code"] == "AUTH_API_KEY_MISSING"
+    assert "헤더가 없습니다" in detail["message"]
 
 
 def test_키가_틀리면_401(locked):
     response = client.post("/score", json=SCORE_BODY, headers={API_KEY_HEADER: "wrong-key"})
     assert response.status_code == 401
-    assert "올바르지 않습니다" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert detail["code"] == "AUTH_API_KEY_INVALID"
+    assert "올바르지 않습니다" in detail["message"]
 
 
 def test_키가_맞으면_통과한다(locked):

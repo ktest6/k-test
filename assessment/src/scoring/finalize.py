@@ -20,6 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .combine import DEFAULT_WEIGHTS, ScoringWeights, get_weights, grade_rank, to_grade
+from .messages import Notice, emit, notice
 from .schema import (
     SCORING_VERSION,
     AreaStatus,
@@ -43,6 +44,15 @@ from .schema import (
     SubScore,
 )
 
+# 값이 끼지 않는 고정 문구는 한 번만 만들어 두고 돌려 쓴다
+_AREA_DELIVERY_NOT_INTRODUCED = notice("FINALIZE_AREA_DELIVERY_NOT_INTRODUCED")
+_AREA_NO_ITEMS = notice("FINALIZE_AREA_NO_ITEMS")
+_AREA_WEIGHTED_MEAN = notice("FINALIZE_AREA_WEIGHTED_MEAN")
+_AREA_PARTIAL = notice("FINALIZE_AREA_PARTIAL")
+_CROSS_ONE_MODE_MISSING = notice("FINALIZE_CROSS_CHECK_ONE_MODE_MISSING")
+_CROSS_UNKNOWN_GRADE = notice("FINALIZE_CROSS_CHECK_UNKNOWN_GRADE")
+_CROSS_TOO_FEW_ITEMS = notice("FINALIZE_CROSS_CHECK_TOO_FEW_ITEMS")
+
 # 영역 이름을 사람이 읽는 말로 바꾸는 표.
 AREA_LABELS: dict[ScoreArea, str] = {
     ScoreArea.CONTENT_TASK: "내용 및 과제 수행",
@@ -53,7 +63,7 @@ AREA_LABELS: dict[ScoreArea, str] = {
 
 def _worst_reliability(
     items: list[FinalizeItem],
-) -> tuple[Reliability, str, list[str]]:
+) -> tuple[Reliability, str, "Notice | None", list[str]]:
     """문항들 중 가장 낮은 신뢰 수준을 시험 전체의 신뢰 수준으로 삼는다.
 
     왜 평균이 아니라 '가장 나쁜 것'인가:
@@ -82,14 +92,23 @@ def _worst_reliability(
             worst_reason = item.meta.reliability_reason
 
     if worst == Reliability.FULL:
-        return worst, "", unreliable_ids
+        return worst, "", None, unreliable_ids
 
-    # 어느 문항 때문인지 밝힌다. 그래야 어느 문항을 다시 채점할지 알 수 있다
+    # 어느 문항 때문인지 밝힌다. 그래야 어느 문항을 다시 채점할지 알 수 있다.
+    # 문항 쪽 사유가 비어 있으면 뒤에 붙일 것이 없으므로 다른 코드를 쓴다
     ids = ", ".join(unreliable_ids)
-    reason = f"문항 {len(unreliable_ids)}개({ids})의 채점이 온전하지 않다"
-    if worst_reason:
-        reason += f" — {worst_reason}"
-    return worst, reason, unreliable_ids
+    made = (
+        notice(
+            "FINALIZE_RELIABILITY_REASON",
+            count=len(unreliable_ids), itemIds=ids, worstReason=worst_reason,
+        )
+        if worst_reason
+        else notice(
+            "FINALIZE_RELIABILITY_REASON_PLAIN",
+            count=len(unreliable_ids), itemIds=ids,
+        )
+    )
+    return worst, made.message, made, unreliable_ids
 
 
 # ---------------------------------------------------------------------------
@@ -274,23 +293,31 @@ def _aggregate_area(area: ScoreArea, items: list[FinalizeItem]) -> SubScore:
         )
         # 문항별 근거를 하나씩만 끌어올린다(최종 결과가 근거로 뒤덮이지 않게)
         for ev in area_score.evidence[:1]:
+            # 겉 문구([문항 X] ...)와 안쪽 설명을 둘 다 코드로 담는다
+            wrapped = notice(
+                "FINALIZE_EVIDENCE_WRAP",
+                itemId=item.item_id,
+                comment=ev.comment,
+                commentNotice=ev.notice,
+            )
             evidence.append(
                 Evidence(
                     source=ev.source,
                     quote=ev.quote,
                     start=ev.start,
                     end=ev.end,
-                    comment=f"[문항 {item.item_id}] {ev.comment}",
+                    comment=wrapped.message,
+                    notice=wrapped,
                     detail={"item_id": item.item_id},
                 )
             )
 
     # 이 영역을 채점한 문항이 하나도 없으면 점수를 지어내지 않는다
     if total_weight <= 0:
-        note = (
-            "Azure 발음평가 미도입으로 이번 범위에서 채점하지 않는다(종합 점수에서 제외)."
+        empty_note = (
+            _AREA_DELIVERY_NOT_INTRODUCED
             if area == ScoreArea.DELIVERY
-            else "이 영역을 채점한 문항이 없어 최종 점수를 내지 못했다."
+            else _AREA_NO_ITEMS
         )
         return SubScore(
             area=area,
@@ -298,8 +325,12 @@ def _aggregate_area(area: ScoreArea, items: list[FinalizeItem]) -> SubScore:
             score=None,
             weight=0.0,
             status=AreaStatus.NOT_EVALUATED,
-            note=note,
+            note=empty_note.message,
+            notice=empty_note,
         )
+
+    # 정상 평균인지 부분 결과인지에 따라 영역 note 가 갈린다
+    area_note = _AREA_PARTIAL if partial_seen else _AREA_WEIGHTED_MEAN
 
     # 문항 비중을 다시 나눠 합이 1이 되게 맞추고, 각 문항이 보탠 점수를 채운다
     score = 0.0
@@ -318,8 +349,8 @@ def _aggregate_area(area: ScoreArea, items: list[FinalizeItem]) -> SubScore:
         status=AreaStatus.PARTIAL if partial_seen else AreaStatus.SCORED,
         contributions=contributions,
         evidence=evidence[:10],
-        note="문항별 채점 결과를 문항 비중으로 평균했다." if not partial_seen else
-             "일부 문항이 자질 누락 상태로 채점되어 최종 점수도 부분 결과다.",
+        note=area_note.message,
+        notice=area_note,
     )
 
 
@@ -377,7 +408,8 @@ def _cross_mode_check(
             writing_grade=writing.grade if writing else None,
             threshold=threshold,
             flagged=False,
-            note="말하기와 쓰기 중 한쪽이 채점되지 않아 교차검증을 할 수 없었다.",
+            note=_CROSS_ONE_MODE_MISSING.message,
+            notice=_CROSS_ONE_MODE_MISSING,
         )
 
     # 등급이 위에서 몇 번째인지로 바꿔 칸 수를 센다
@@ -390,7 +422,8 @@ def _cross_mode_check(
             writing_grade=writing.grade,
             threshold=threshold,
             flagged=False,
-            note="등급 표에 없는 값이 들어와 교차검증을 할 수 없었다.",
+            note=_CROSS_UNKNOWN_GRADE.message,
+            notice=_CROSS_UNKNOWN_GRADE,
         )
 
     gap = abs(speaking_rank - writing_rank)
@@ -398,17 +431,18 @@ def _cross_mode_check(
 
     if flagged:
         higher = "쓰기" if writing_rank < speaking_rank else "말하기"
-        note = (
-            f"말하기 {speaking.grade} / 쓰기 {writing.grade} 로 {gap}등급 차이가 난다"
-            f"({higher} 쪽이 높음). 사람이 한 번 확인해 볼 것을 권한다. "
-            "※ 이것은 검토 권장 신호일 뿐이며 부정행위 판정이 아니다. "
-            f"기준값 {threshold}등급은 임시값이다."
+        note_notice = notice(
+            "FINALIZE_CROSS_CHECK_GAP",
+            speaking=speaking.grade, writing=writing.grade,
+            gap=gap, higher=higher, threshold=threshold,
         )
     else:
-        note = (
-            f"말하기 {speaking.grade} / 쓰기 {writing.grade}, {gap}등급 차이로 "
-            f"기준값({threshold}등급) 안에 있다."
+        note_notice = notice(
+            "FINALIZE_CROSS_CHECK_OK",
+            speaking=speaking.grade, writing=writing.grade,
+            gap=gap, threshold=threshold,
         )
+    note = note_notice.message
 
     return CrossModeCheck(
         comparable=True,
@@ -436,6 +470,8 @@ def finalize_session(request: FinalizeRequest) -> FinalizeResponse:
     options: FinalizeOptions = request.options
     weights = get_weights(options.weights_profile)
     warnings: list[str] = []
+    # warnings 와 짝을 이루는 '코드 + 값' 목록. 두 목록의 길이와 차례는 항상 같다
+    notices: list[Notice] = []
 
     # 1단계: 어떤 문항이 쓸 수 있고 어떤 문항이 빠졌는지 정리한다
     coverage = _collect_coverage(request.items, request.expected_items)
@@ -447,20 +483,14 @@ def finalize_session(request: FinalizeRequest) -> FinalizeResponse:
 
     # 빠진 문항이 있으면 무엇이 왜 빠졌는지 남긴다
     if coverage.pending_ids:
-        warnings.append(
-            f"채점이 끝나지 않은 문항 {len(coverage.pending_ids)}개를 빼고 계산했다: "
-            f"{', '.join(coverage.pending_ids)}"
-        )
+        emit(warnings, notices, "FINALIZE_EXCLUDED_PENDING",
+             count=len(coverage.pending_ids), itemIds=", ".join(coverage.pending_ids))
     if coverage.missing_ids:
-        warnings.append(
-            f"결과가 넘어오지 않은 문항 {len(coverage.missing_ids)}개를 빼고 계산했다: "
-            f"{', '.join(coverage.missing_ids)}"
-        )
+        emit(warnings, notices, "FINALIZE_EXCLUDED_MISSING",
+             count=len(coverage.missing_ids), itemIds=", ".join(coverage.missing_ids))
     if coverage.failed_ids:
-        warnings.append(
-            f"채점에 실패한 문항 {len(coverage.failed_ids)}개를 빼고 계산했다: "
-            f"{', '.join(coverage.failed_ids)}"
-        )
+        emit(warnings, notices, "FINALIZE_EXCLUDED_FAILED",
+             count=len(coverage.failed_ids), itemIds=", ".join(coverage.failed_ids))
 
     item_coverage = ItemCoverage(
         expected_count=coverage.expected_count,
@@ -484,9 +514,13 @@ def finalize_session(request: FinalizeRequest) -> FinalizeResponse:
 
     # 문항별 신뢰도를 모아 시험 전체의 신뢰도를 정한다.
     # 평균이 아니라 '가장 나쁜 문항'을 따르는 이유는 아래 함수 설명에 적어 두었다
-    reliability, reliability_reason, unreliable_ids = _worst_reliability(request.items)
+    reliability, reliability_reason, reliability_notice, unreliable_ids = (
+        _worst_reliability(request.items)
+    )
     if reliability != Reliability.FULL and reliability_reason:
-        warnings.append(f"[신뢰도 {reliability.value}] {reliability_reason}")
+        emit(warnings, notices, "RELIABILITY_WRAP",
+             level=reliability.value, reason=reliability_reason,
+             reasonNotice=reliability_notice)
 
     meta = FinalizeMeta(
         scoring_version=SCORING_VERSION,
@@ -503,12 +537,13 @@ def finalize_session(request: FinalizeRequest) -> FinalizeResponse:
 
     if not coverage.usable or not (enough_items and enough_ratio):
         # 등급을 확정하지 않는다. 부족한 결과에 등급을 붙이면 그대로 통보되기 때문이다
-        warnings.append(
-            f"채점된 문항이 부족해 최종 등급을 확정하지 않았다 "
-            f"(채점 {len(coverage.usable)}/{coverage.expected_count}문항, "
-            f"비중 {scored_ratio:.0%}). "
-            f"기준: 최소 {options.min_scored_items}문항 이상이며 비중 "
-            f"{options.min_scored_ratio:.0%} 이상. ※ 이 기준값은 임시값이다."
+        emit(
+            warnings, notices, "FINALIZE_GRADE_WITHHELD",
+            scored=len(coverage.usable),
+            total=coverage.expected_count,
+            weight=f"{scored_ratio:.0%}",
+            minItems=options.min_scored_items,
+            minWeight=f"{options.min_scored_ratio:.0%}",
         )
         return FinalizeResponse(
             session_id=request.session_id,
@@ -529,10 +564,12 @@ def finalize_session(request: FinalizeRequest) -> FinalizeResponse:
                 comparable=False,
                 threshold=options.cross_mode_gap_threshold,
                 flagged=False,
-                note="채점된 문항이 부족해 교차검증을 하지 않았다.",
+                note=_CROSS_TOO_FEW_ITEMS.message,
+                notice=_CROSS_TOO_FEW_ITEMS,
             ),
             item_coverage=item_coverage,
             warnings=warnings,
+            notices=notices,
             meta=meta,
         )
 
@@ -572,7 +609,8 @@ def finalize_session(request: FinalizeRequest) -> FinalizeResponse:
     ]
     cross = _cross_mode_check(mode_results, options.cross_mode_gap_threshold, weights)
     if cross.flagged:
-        warnings.append(f"교차검증 신호: {cross.note}")
+        emit(warnings, notices, "FINALIZE_CROSS_CHECK_WRAP",
+             note=cross.note, noteNotice=cross.notice)
 
     # 빠진 문항이 하나라도 있으면 '부분 결과'로 표시한다
     status = (
@@ -583,11 +621,7 @@ def finalize_session(request: FinalizeRequest) -> FinalizeResponse:
 
     # 임시값이라는 사실은 등급이 나올 때마다 반드시 함께 나간다
     if weights.provisional:
-        warnings.append(
-            "※ 임시 ※ 결합 가중치는 학습된 값이 아니고, 등급 커트라인도 전문가가 확정한 "
-            "앵커 답안에서 나온 값이 아니다. 백분위 역시 실제 응시자 분포가 아니라 "
-            "임시 환산표에서 나온 값이다. 확정 등급으로 통보하지 말 것."
-        )
+        emit(warnings, notices, "FINALIZE_PROVISIONAL_WEIGHTS")
 
     return FinalizeResponse(
         session_id=request.session_id,
@@ -601,5 +635,6 @@ def finalize_session(request: FinalizeRequest) -> FinalizeResponse:
         cross_mode_check=cross,
         item_coverage=item_coverage,
         warnings=warnings,
+        notices=notices,
         meta=meta,
     )

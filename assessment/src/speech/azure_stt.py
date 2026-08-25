@@ -68,11 +68,12 @@ import wave
 
 from ..scoring.schema import AudioInput
 from .audio import AudioRequestError, FetchedAudio, fetch_audio
+from ..scoring.messages import Notice, emit
 from .loudness import (
     is_silent,
     is_too_quiet_for_speech,
-    silence_message,
-    too_quiet_message,
+    silence_notice,
+    too_quiet_notice,
 )
 from .port import (
     PronouncedWord,
@@ -136,18 +137,12 @@ def _to_pcm16k(data: bytes) -> bytes:
             rate = handle.getframerate()
             frames = handle.readframes(handle.getnframes())
     except Exception as exc:
-        raise SttUnavailable(
-            "음성 파일을 열지 못했다. wav 파일이 맞는지 확인해야 한다.",
-            detail=str(exc),
-        ) from exc
+        raise SttUnavailable.of("STT_AZURE_WAV_OPEN_FAILED", detail=str(exc)) from exc
 
     # 16비트가 아닌 wav 는 아직 다루지 않는다. 잘못 읽으면 소리가 조용히 망가지고
     # 그 결과가 발음 점수로 나타나므로, 추측해서 읽지 않고 실패로 알린다
     if width != 2:
-        raise SttUnavailable(
-            f"이 음성은 {width * 8}비트 wav 라서 발음 평가로 보낼 수 없다"
-            "(16비트 wav 로 녹음해야 한다)."
-        )
+        raise SttUnavailable.of("STT_AZURE_WAV_NOT_16BIT", bits=width * 8)
 
     # 소리 값을 숫자 배열로 편다. 스테레오면 칸이 채널 수만큼 번갈아 들어 있다
     samples = np.frombuffer(frames, dtype="<i2").astype(np.float32)
@@ -233,17 +228,14 @@ class AzureStt(SttPort, PronouncerPort):
         started = time.perf_counter()
 
         # 받아쓰기와 발음 평가를 한 번에 받아 온다(관문·규격 맞추기는 _recognize_core 안에서).
-        text, assessment, warnings, fetched = self._recognize_core(
+        text, assessment, warnings, notices, fetched = self._recognize_core(
             audio, item_prompt, item_type
         )
 
         # 받아쓴 것이 없으면 실패로 다룬다. 빈 글을 넘기면 뒤 단계가
         # '말을 안 한 답안'으로 채점해 버려서 받아쓰기 실패와 뒤섞인다
         if not text.strip():
-            raise SttUnavailable(
-                "음성에서 말을 하나도 옮겨 적지 못했다. "
-                "녹음이 비어 있거나 소리가 너무 작은지 확인해야 한다."
-            )
+            raise SttUnavailable.of("STT_EMPTY_TRANSCRIPT", provider=self.provider_name)
 
         elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
         return Transcription(
@@ -258,6 +250,7 @@ class AzureStt(SttPort, PronouncerPort):
             output_tokens=None,
             elapsed_ms=elapsed_ms,
             warnings=warnings,
+            notices=notices,
             pronunciation=assessment,
             # 내려받은 파일을 그대로 딸려 보낸다. 발음 평가가 뒤에서 또 부를 때
             # 같은 파일을 두 번 내려받지 않게 하려는 통로다(port.py 참고)
@@ -290,7 +283,7 @@ class AzureStt(SttPort, PronouncerPort):
         if not self.available:
             return None
         try:
-            _text, assessment, _warnings, _fetched = self._recognize_core(
+            _text, assessment, _warnings, _notices, _fetched = self._recognize_core(
                 audio, item_prompt, item_type, fetched=fetched
             )
         except (SttUnavailable, AudioRequestError):
@@ -338,10 +331,7 @@ class AzureStt(SttPort, PronouncerPort):
         """
         # 열쇠가 없으면 부를 수 없다. 여기서 분명히 알린다
         if not self.available:
-            raise SttUnavailable(
-                "음성을 글자로 옮길 수 없다. Azure 음성 서비스 열쇠"
-                "(AZURE_SPEECH_KEY / AZURE_SPEECH_REGION)가 설정돼 있지 않다."
-            )
+            raise SttUnavailable.of("STT_AZURE_KEY_NOT_SET")
 
         # 1) 파일을 손에 넣는다.
         #    받아쓰기가 이미 받아 둔 것을 건네줬으면 그것을 쓴다 — 한 답안을 채점하면서
@@ -352,16 +342,15 @@ class AzureStt(SttPort, PronouncerPort):
         # 지금은 wav 만 Azure 로 보낼 수 있다. 압축 형식을 풀어 줄 도구가 서버에 없다.
         # 잘못 읽어서 엉뚱한 발음 점수를 내느니 못 한다고 말하는 편이 맞다
         if fetched.audio_format != "wav":
-            raise SttUnavailable(
-                f"'{fetched.audio_format}' 형식은 Azure 발음 평가로 보낼 수 없다"
-                "(지금은 wav 만 처리한다)."
+            raise SttUnavailable.of(
+                "STT_AZURE_FORMAT_NOT_WAV", format=fetched.audio_format
             )
 
         # 2) 무음 관문 — 소리가 없는 녹음은 부르지 않는다.
         #    Gemini 와 같은 관문을 그대로 쓴다. 이 판단은 파일 안의 숫자만 보므로
         #    어느 회사 기계를 쓰든 결과가 같다
         if is_silent(fetched.loudness):
-            raise SttUnavailable(silence_message(fetched.loudness))
+            raise SttUnavailable.from_notice(silence_notice(fetched.loudness))
 
         # 3) Azure 가 받아 주는 규격으로 맞춘다
         pcm = _to_pcm16k(fetched.data)
@@ -381,19 +370,18 @@ class AzureStt(SttPort, PronouncerPort):
         # 5) 거의 무음 관문 — 글은 나왔는데 소리가 사람 말이라기에 너무 작았던 경우.
         #    소리와 글이 어긋나면 글이 아니라 소리를 믿는다
         if text.strip() and is_too_quiet_for_speech(fetched.loudness):
-            raise SttUnavailable(too_quiet_message(fetched.loudness, text))
+            raise SttUnavailable.from_notice(too_quiet_notice(fetched.loudness, text))
 
         warnings = list(fetched.warnings)
+        notices = list(fetched.notices)
         if scripted:
             # 낭독형은 정답지에 맞춰 인식되므로, 받아쓴 글이 응시자가 실제로 낸 소리보다
             # 제시문 쪽으로 당겨져 있을 수 있다. 문법 채점에서 이 점을 알아야 한다
-            warnings.append(
-                "낭독형 문항이라 제시문을 정답지로 주고 발음을 평가했다. "
-                "받아쓴 글이 제시문 쪽으로 맞춰졌을 수 있으므로 문법 채점의 근거로 쓸 때 확인이 필요하다."
-            )
+            emit(warnings, notices, "AZURE_READALOUD_REFERENCE_USED")
         warnings.extend(assessment.warnings if assessment else [])
+        notices.extend(assessment.notices if assessment else [])
 
-        return text, assessment, warnings, fetched
+        return text, assessment, warnings, notices, fetched
 
     # -- 이하 옛 안쪽 일 -----------------------------------------------------
 
@@ -427,11 +415,7 @@ class AzureStt(SttPort, PronouncerPort):
         try:
             import azure.cognitiveservices.speech as speechsdk
         except ImportError as exc:
-            raise SttUnavailable(
-                "발음 평가에 필요한 Azure 음성 SDK 가 설치돼 있지 않다"
-                "(pip install azure-cognitiveservices-speech).",
-                detail=str(exc),
-            ) from exc
+            raise SttUnavailable.of("STT_AZURE_SDK_MISSING", detail=str(exc)) from exc
 
         speech_config = speechsdk.SpeechConfig(subscription=self._key, region=self._region)
         speech_config.speech_recognition_language = SPEECH_LANGUAGE
@@ -498,10 +482,7 @@ class AzureStt(SttPort, PronouncerPort):
             push_stream.close()
             completed = finished.wait(timeout_s)
         except Exception as exc:
-            raise SttUnavailable(
-                "음성을 글자로 옮기지 못했다. Azure 음성 서비스 호출이 실패했다.",
-                detail=str(exc),
-            ) from exc
+            raise SttUnavailable.of("STT_AZURE_CALL_FAILED", detail=str(exc)) from exc
         finally:
             try:
                 recognizer.stop_continuous_recognition()
@@ -511,13 +492,10 @@ class AzureStt(SttPort, PronouncerPort):
         # 시간 안에 안 끝났으면 실패다. 반쪽 결과로 발음 점수를 내면
         # 뒷부분을 말하지 않은 것처럼 보여서 응시자가 손해를 본다
         if not completed:
-            raise SttUnavailable(
-                f"발음 평가가 제한 시간({timeout_s:.0f}초) 안에 끝나지 않았다."
-            )
+            raise SttUnavailable.of("STT_AZURE_TIMEOUT", timeoutSec=round(timeout_s))
         if failure and not segments:
-            raise SttUnavailable(
-                "음성을 글자로 옮기지 못했다. Azure 음성 서비스가 요청을 거절했다.",
-                detail=failure.get("reason", ""),
+            raise SttUnavailable.of(
+                "STT_AZURE_REQUEST_CANCELED", detail=failure.get("reason", "")
             )
         return segments
 
@@ -541,6 +519,7 @@ class AzureStt(SttPort, PronouncerPort):
         texts: list[str] = []
         words: list[PronouncedWord] = []
         warnings: list[str] = []
+        notices: list[Notice] = []
 
         # (점수, 무게) 짝을 모아 둔다. 마지막에 무게 평균을 낸다
         by_words: dict[str, list[tuple[float, float]]] = {
@@ -612,15 +591,11 @@ class AzureStt(SttPort, PronouncerPort):
 
         if prosody is None:
             # 한국어는 억양 점수가 오지 않는다(실측). 못 받았다는 사실만 남긴다
-            warnings.append(
-                "억양·강세 점수(ProsodyScore)를 받지 못해 발화 전달력에서 억양은 채점하지 않았다."
-            )
+            emit(warnings, notices, "AZURE_NO_PROSODY_SCORE")
         if not scripted:
             # 정답지가 없으면 '얼마나 읽었는가'의 기준이 없다.
             # 값이 와도 점수로 쓰지 않는다는 사실을 여기서 밝힌다
-            warnings.append(
-                "자유 발화라서 읽을 원문이 없다. 발화 완전성(completeness)은 채점에 쓰지 않았다."
-            )
+            emit(warnings, notices, "AZURE_COMPLETENESS_UNUSED")
 
         return text, PronunciationAssessment(
             accuracy=accuracy,
@@ -633,6 +608,7 @@ class AzureStt(SttPort, PronouncerPort):
             words=words,
             provider="azure",
             warnings=warnings,
+            notices=notices,
         )
 
 

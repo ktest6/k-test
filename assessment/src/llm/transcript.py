@@ -35,6 +35,7 @@ import difflib
 import re
 from dataclasses import dataclass, field
 
+from ..scoring.messages import Notice, emit, notice
 from ..scoring.schema import Evidence, FeatureSource
 from .citation import verify_citation
 from .client import GeminiClient, LLMUnavailable
@@ -169,6 +170,8 @@ class TranscriptCorrection:
     nationality: str | None = None
     llm_used: bool = False
     warnings: list[str] = field(default_factory=list)
+    #: 위 warnings 와 같은 내용을 '코드 + 값' 으로 담은 것. 백엔드가 영어로 바꿔 쓴다
+    notices: list[Notice] = field(default_factory=list)
     dropped_citations: int = 0
 
     @property
@@ -195,10 +198,10 @@ class TranscriptCorrection:
                     quote=quote,
                     start=d.span_start,
                     end=d.span_end,
-                    comment=(
-                        f"STT 전사 보정: {d.describe()}"
-                        + (f" — {d.reason}" if d.reason else "")
-                    ),
+                    # 무엇을 어떻게 고쳤는지(change)와 왜 고쳤는지(reason)를 값으로 떼어
+                    # 담는다. change 는 응시자 발화 조각이라 번역하지 않고 그대로 둔다
+                    comment=_diff_comment(d).message,
+                    notice=_diff_comment(d),
                     detail={
                         "kind": d.kind,
                         "original": d.original,
@@ -208,6 +211,19 @@ class TranscriptCorrection:
                 )
             )
         return evidence
+
+
+def _diff_comment(d: "TranscriptDiff") -> Notice:
+    """보정 한 군데를 설명하는 근거 문구를 만든다.
+
+    무엇을 어떻게 고쳤는지(change)는 응시자가 실제로 말한 조각이라 **번역하지 않고
+    그대로** 둔다. 왜 고쳤는지(reason)는 LLM 이 그때그때 쓰는 자유문이라 고정 문구가
+    없고, 없으면 빈 값으로 둔다.
+    """
+    # 사유가 없으면 " — " 뒤가 빈 채로 남으므로 아예 다른 코드를 쓴다
+    if not d.reason:
+        return notice("TRANSCRIPT_EVIDENCE_NO_REASON", change=d.describe())
+    return notice("TRANSCRIPT_EVIDENCE_WRAP", change=d.describe(), reason=d.reason)
 
 
 def _strip_spaces(text: str) -> str:
@@ -313,7 +329,7 @@ def _change_ratio(diffs: list[TranscriptDiff], original_text: str) -> float:
 def _collect_reasons(
     original_text: str,
     raw_changes: object,
-) -> tuple[dict[str, str], int, list[str]]:
+) -> tuple[dict[str, str], int, list[str], list[Notice]]:
     """LLM이 밝힌 수정 사유를 모은다. 원문에 없는 것은 버린다.
 
     LLM이 "'회사'를 고쳤다"고 했는데 원문에 '회사'가 없으면 그 설명은 지어낸 것이다.
@@ -323,10 +339,11 @@ def _collect_reasons(
     reasons: dict[str, str] = {}
     dropped = 0
     warnings: list[str] = []
+    notices: list[Notice] = []
 
     # 형식이 깨진 응답이 와도 넘어갈 수 있게, 목록이 아니면 없는 것으로 본다
     if not isinstance(raw_changes, list):
-        return reasons, dropped, warnings
+        return reasons, dropped, warnings, notices
 
     for change in raw_changes:
         if not isinstance(change, dict):
@@ -340,15 +357,20 @@ def _collect_reasons(
         check = verify_citation(original_text, claimed)
         if not check.ok:
             dropped += 1
-            warnings.append(
-                f"전사 보정 사유 폐기: '{claimed[:40]}' — {check.reason}"
+            emit(
+                warnings,
+                notices,
+                "TRANSCRIPT_REASON_DISCARDED",
+                claimed=claimed[:40],
+                reason=check.reason,
+                reasonNotice=check.notice,
             )
             continue
 
         # 띄어쓰기가 조금 달라도 찾을 수 있도록 공백을 뗀 형태를 열쇠로 쓴다
         reasons[_strip_spaces(claimed)] = reason
 
-    return reasons, dropped, warnings
+    return reasons, dropped, warnings, notices
 
 
 def _attach_reasons(diffs: list[TranscriptDiff], reasons: dict[str, str]) -> None:
@@ -392,19 +414,18 @@ def build_correction(
     # 보정본이 아예 안 왔거나 빈 문자열이면 보정을 하지 않은 것으로 본다.
     # 빈 값을 그대로 받아 쓰면 내용 채점이 '아무 말도 안 한 답안'을 보게 된다
     if not isinstance(corrected_text, str) or not corrected_text.strip():
-        result.warnings.append(
-            "전사 보정 응답에 corrected_text 가 없어 원문을 그대로 쓴다."
-        )
+        emit(result.warnings, result.notices, "TRANSCRIPT_NO_CORRECTED_TEXT")
         return result
 
     corrected_text = corrected_text.strip()
 
     # LLM이 밝힌 사유를 먼저 모아 둔다(원문에 없는 주장은 여기서 버려진다)
-    reasons, dropped, reason_warnings = _collect_reasons(
+    reasons, dropped, reason_warnings, reason_notices = _collect_reasons(
         original_text, payload.get("changes")
     )
     result.dropped_citations = dropped
     result.warnings.extend(reason_warnings)
+    result.notices.extend(reason_notices)
 
     # 좌표는 LLM 말이 아니라 여기서 직접 센다
     diffs, spans = diff_transcript(original_text, corrected_text)
@@ -412,16 +433,19 @@ def build_correction(
     # 고친 곳이 없으면 보정하지 않은 것과 같다(띄어쓰기만 바뀐 경우도 여기로 온다)
     if not diffs:
         result.corrected_text = original_text
-        result.warnings.append("전사 보정에서 고칠 곳을 찾지 못해 원문을 그대로 쓴다.")
+        emit(result.warnings, result.notices, "TRANSCRIPT_NOTHING_TO_FIX")
         return result
 
     # 과보정 차단: 원문을 통째로 다시 써 온 응답은 통으로 물린다.
     # 이것을 받아들이면 응시자가 하지 않은 말로 내용 점수를 주게 된다
     ratio = _change_ratio(diffs, original_text)
     if ratio > MAX_CHANGE_RATIO:
-        result.warnings.append(
-            f"※ 전사 보정 폐기 ※ 원문의 {ratio:.0%}가 바뀌어 과보정으로 판단했다"
-            f"(허용 한도 {MAX_CHANGE_RATIO:.0%}). 보정 없이 원문으로 채점한다."
+        emit(
+            result.warnings,
+            result.notices,
+            "TRANSCRIPT_OVERCORRECTION_DISCARDED",
+            changedRatio=f"{ratio:.0%}",
+            maxRatio=f"{MAX_CHANGE_RATIO:.0%}",
         )
         return result
 
@@ -470,24 +494,18 @@ def correct_transcript(
 
     # 빈 답안은 보정할 것이 없다. 호출을 아껴서 그냥 돌려준다
     if not original_text.strip():
-        no_correction.warnings.append("전사 원문이 비어 있어 보정하지 않았다.")
+        emit(no_correction.warnings, no_correction.notices, "TRANSCRIPT_SOURCE_EMPTY")
         return no_correction
 
     # 호출하는 쪽이 LLM을 껐다면 시도하지 않는다
     if not use_llm:
-        no_correction.warnings.append(
-            "LLM 사용이 꺼져 있어 STT 전사 보정을 하지 않았다. "
-            "내용·과제 수행도 전사 원문 그대로 채점된다."
-        )
+        emit(no_correction.warnings, no_correction.notices, "TRANSCRIPT_LLM_DISABLED")
         return no_correction
 
     # 키가 없으면 호출을 시도조차 하지 않고 원문으로 넘어간다(멈추지 않는다)
     client = client or GeminiClient()
     if not client.available:
-        no_correction.warnings.append(
-            "GEMINI_API_KEY 가 없어 STT 전사 보정을 하지 못했다. "
-            "내용·과제 수행이 전사 오류의 영향을 그대로 받는다."
-        )
+        emit(no_correction.warnings, no_correction.notices, "TRANSCRIPT_API_KEY_MISSING")
         return no_correction
 
     prompt = build_prompt(original_text, nationality, item_prompt)
@@ -499,7 +517,13 @@ def correct_transcript(
         )
     except LLMUnavailable as exc:
         # 네트워크가 끊기거나 사용량을 넘겨도 채점 전체를 멈추지 않는다
-        no_correction.warnings.append(f"STT 전사 보정 실패(원문으로 채점 진행): {exc}")
+        emit(
+            no_correction.warnings,
+            no_correction.notices,
+            "TRANSCRIPT_FAILED",
+            reason=str(exc),
+            reasonNotice=exc.notice,
+        )
         return no_correction
 
     # 받은 답을 그대로 믿지 않고 좌표 계산과 과보정 검사를 거친다

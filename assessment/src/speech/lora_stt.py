@@ -35,7 +35,7 @@ from dataclasses import dataclass
 
 from ..scoring.schema import AudioInput
 from .audio import fetch_audio
-from .loudness import is_silent, is_too_quiet_for_speech, silence_message, too_quiet_message
+from .loudness import is_silent, is_too_quiet_for_speech, silence_notice, too_quiet_notice
 from .port import SttPort, SttUnavailable, Transcription
 
 #: RunPod 추론 서버 주소를 담는 환경변수 이름.
@@ -198,10 +198,7 @@ class LoraStt(SttPort):
 
         # 주소가 없으면 부를 수 없다. 여기서 분명히 알린다(빈 글을 지어내지 않는다)
         if not self.available:
-            raise SttUnavailable(
-                "음성을 글자로 옮길 수 없다. LoRA 받아쓰기 서버 주소"
-                f"({LORA_STT_URL_ENV})가 설정돼 있지 않다."
-            )
+            raise SttUnavailable.of("STT_LORA_URL_NOT_SET", envVar=LORA_STT_URL_ENV)
 
         # 1) 파일을 손에 넣는다(크기·형식·주소 관문을 여기서 지난다).
         #    무음 관문을 채점 PC 쪽에서 미리 걸어 두면 그래픽카드 호출을 아끼고,
@@ -210,7 +207,7 @@ class LoraStt(SttPort):
 
         # 2) 무음 관문 — 소리가 없는 녹음은 서버를 부르지 않는다(wav 만 잴 수 있다)
         if is_silent(fetched.loudness):
-            raise SttUnavailable(silence_message(fetched.loudness))
+            raise SttUnavailable.from_notice(silence_notice(fetched.loudness))
 
         # 3) 서버로 음성을 보내 받아쓴 글을 받아 온다
         text, model, server_duration_ms = self._call_server(fetched)
@@ -218,14 +215,11 @@ class LoraStt(SttPort):
         # 4) 빈 글이 오면 실패로 다룬다. '말을 안 한 답안'과 '받아쓰기 실패'를
         #    뒤섞지 않기 위해서다
         if not text.strip():
-            raise SttUnavailable(
-                "음성에서 말을 하나도 옮겨 적지 못했다. "
-                "녹음이 비어 있거나 소리가 너무 작은지 확인해야 한다."
-            )
+            raise SttUnavailable.of("STT_EMPTY_TRANSCRIPT", provider=self.provider_name)
 
         # 5) 거의 무음 관문 — 글은 나왔는데 소리가 사람 말이라기에 너무 작았던 경우
         if is_too_quiet_for_speech(fetched.loudness):
-            raise SttUnavailable(too_quiet_message(fetched.loudness, text))
+            raise SttUnavailable.from_notice(too_quiet_notice(fetched.loudness, text))
 
         # 서버가 모델 이름을 알려 줬으면 그것으로 덮어쓴다(채점 결과에 남는다)
         if model:
@@ -275,31 +269,29 @@ class LoraStt(SttPort):
                     timeout=self._timeout_s,
                 )
             except httpx.TimeoutException as exc:
-                raise SttUnavailable(
-                    f"음성을 글자로 옮기지 못했다. LoRA 서버가 제한 시간"
-                    f"({self._timeout_s:.0f}초) 안에 답하지 않았다.",
+                raise SttUnavailable.of(
+                    "STT_LORA_TIMEOUT",
                     detail=str(exc),
+                    timeoutSec=round(self._timeout_s),
                 ) from exc
             except httpx.HTTPError as exc:
-                raise SttUnavailable(
-                    "음성을 글자로 옮기지 못했다. LoRA 받아쓰기 서버에 닿지 못했다"
-                    "(주소가 맞는지, 서버가 떠 있는지 확인해야 한다).",
-                    detail=str(exc),
+                raise SttUnavailable.of(
+                    "STT_LORA_UNREACHABLE", detail=str(exc)
                 ) from exc
 
             # 서버가 오류(4xx·5xx)로 답하면 받아쓰기 실패로 다룬다
             if response.status_code >= 400:
-                raise SttUnavailable(
-                    f"음성을 글자로 옮기지 못했다. LoRA 서버가 {response.status_code} 로 응답했다.",
+                raise SttUnavailable.of(
+                    "STT_LORA_HTTP_ERROR",
                     detail=response.text[:500],
+                    statusCode=response.status_code,
                 )
 
             try:
                 payload = response.json()
             except ValueError as exc:
-                raise SttUnavailable(
-                    "LoRA 서버의 응답을 읽지 못했다(JSON 이 아니다).",
-                    detail=response.text[:500],
+                raise SttUnavailable.of(
+                    "STT_LORA_BAD_JSON", detail=response.text[:500]
                 ) from exc
         finally:
             if owned:

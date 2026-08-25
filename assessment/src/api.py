@@ -361,6 +361,27 @@ def feature_catalog() -> dict:
     }
 
 
+def _detail(exc: Exception) -> dict:
+    """오류 하나를 백엔드가 영어로 바꿀 수 있는 모양으로 만든다.
+
+    지금까지는 `detail` 에 한국어 문장 하나만 담아 보냈다. 그런데 응시자 화면에는
+    영어가 떠야 하므로, 백엔드가 영어 문장을 고를 열쇠(`code`)와 그 문장에 끼울
+    값(`params`)이 필요하다. 그래서 셋을 함께 담는다.
+
+        {"code": "AUDIO_FILE_TOO_LARGE",
+         "params": {"actualMb": 25.3, "maxMb": 20},
+         "message": "음성 파일이 25.3MB 로 너무 크다(최대 20MB)."}
+
+    `message` 는 지금까지 나가던 그 한국어 문장 그대로다. 백엔드가 아직 영어 문장을
+    안 만든 코드가 있어도 화면이 비지 않게 하려고 함께 보낸다.
+    코드를 안 달고 올라온 옛 예외는 code 가 빈 글자가 된다.
+    """
+    made = getattr(exc, "notice", None)
+    if made is not None:
+        return made.model_dump()
+    return {"code": "", "params": {}, "message": str(exc)}
+
+
 @app.post(
     "/score",
     response_model=ScoreResponse,
@@ -400,10 +421,10 @@ def score(request: ScoreRequest) -> ScoreResponse:
         return score_submission(request)
     except AudioRequestError as exc:
         # 요청 자체가 성립하지 않는다. 다시 보내도 같은 결과이므로 400 이다
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=_detail(exc)) from exc
     except SttUnavailable as exc:
         # 받아쓰기에는 대체 경로가 없다. 잘못된 글로 채점하느니 못 했다고 알린다
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail=_detail(exc)) from exc
 
 
 @app.post(
@@ -463,10 +484,10 @@ def generate_items_endpoint(request: GenerateItemsRequest) -> GenerateItemsRespo
         return generate_items(request)
     except GenerationRequestError as exc:
         # 요청 자체가 성립하지 않는 경우. 문항을 하나도 만들지 않고 즉시 막는다
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=_detail(exc)) from exc
     except LLMUnavailable as exc:
         # 생성에는 대체 경로가 없다. 잘못된 문항을 내놓느니 못 만들었다고 알린다
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail=_detail(exc)) from exc
 
 
 @app.post(

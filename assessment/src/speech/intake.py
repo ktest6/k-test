@@ -23,6 +23,7 @@ import inspect
 import os
 from dataclasses import dataclass, field
 
+from ..scoring.messages import Notice, emit
 from ..scoring.schema import Mode, ScoreRequest
 from .audio import AudioRequestError
 from .port import (
@@ -64,6 +65,8 @@ class AudioResolution:
     audio_duration_ms: int | None = None
     elapsed_ms: float = 0.0
     warnings: list[str] = field(default_factory=list)
+    #: 위 warnings 와 같은 내용을 '코드 + 값' 으로 담은 것. 백엔드가 영어로 바꿔 쓴다
+    notices: list[Notice] = field(default_factory=list)
     #: 발음 평가 결과. 발음을 잴 수 있는 제공자(Azure)만 채운다.
     #: 이 값이 있으면 발화 전달력(delivery) 영역이 채점되고, 없으면 지금까지처럼 비워 둔다
     pronunciation: PronunciationAssessment | None = None
@@ -75,10 +78,13 @@ class AudioResolution:
         # 이 문구가 있어야 결과를 보는 사람이 '이 점수는 기계가 받아쓴 글에 매겨졌다'는
         # 사실을 알게 된다. 받아쓰기가 틀리면 점수도 틀리기 때문이다
         warnings = list(result.warnings)
-        warnings.append(
-            f"음성을 {result.provider}({result.model})로 받아쓴 글을 채점했다. "
-            "받아쓰기가 응시자의 말과 다를 수 있으므로 이의가 있으면 "
-            "meta.stt_transcript 와 원본 녹음을 함께 확인해야 한다."
+        notices = list(result.notices)
+        emit(
+            warnings,
+            notices,
+            "STT_SCORED_FROM_TRANSCRIPT",
+            provider=result.provider,
+            model=result.model,
         )
         return cls(
             text=result.text,
@@ -87,6 +93,7 @@ class AudioResolution:
             audio_duration_ms=result.audio_duration_ms,
             elapsed_ms=result.elapsed_ms,
             warnings=warnings,
+            notices=notices,
             # 발음 점수를 여기서 채점 쪽으로 넘긴다. 없으면 None 이고,
             # 그러면 발화 전달력은 지금까지처럼 채점되지 않는다
             pronunciation=result.pronunciation,
@@ -225,7 +232,7 @@ def _resolve_pronunciation(
     result: Transcription,
     stt: SttPort | None,
     pronouncer,
-) -> tuple[PronunciationAssessment | None, list[str]]:
+) -> tuple[PronunciationAssessment | None, list[str], list[Notice]]:
     """이 답안의 발음(발화 전달력) 점수를 어디서 얻을지 정해 돌려준다.
 
     세 갈래다.
@@ -252,20 +259,21 @@ def _resolve_pronunciation(
       - 그 밖    : 그 평가기로 잰다(테스트가 가짜 Azure 를 꽂는 자리).
     """
     warnings: list[str] = []
+    notices: list[Notice] = []
 
     # 1) 받아쓰기가 발음까지 준 경우: 그대로 쓴다(두 번 인식하지 않는다)
     if result.pronunciation is not None:
-        return result.pronunciation, warnings
+        return result.pronunciation, warnings, notices
 
     # 발음 평가기를 정한다(위 규칙대로)
     if pronouncer is _UNSET:
         pronouncer = build_default_pronouncer() if stt is None else None
     if pronouncer is None:
-        return None, warnings
+        return None, warnings, notices
 
     # 열쇠가 없는 평가기면 부르지 않는다(available 로 미리 거른다)
     if not getattr(pronouncer, "available", False):
-        return None, warnings
+        return None, warnings, notices
 
     # 2) 음성을 Azure 에게 따로 들려 발음만 잰다.
     #    받아쓴 글을 정답지로 넘기지 않는다(발음은 원음 기준이어야 한다).
@@ -280,21 +288,21 @@ def _resolve_pronunciation(
     if assessment is None:
         # 발음만 못 잰 것이다. 전사는 살아 있으므로 채점은 이어 가고,
         # delivery 만 비워 둔다는 사실을 사람이 알 수 있게 남긴다
-        warnings.append(
-            f"발음 평가를 하지 못해 발화 전달력(delivery)은 채점하지 않았다"
-            f"(전사는 {result.provider} 로 정상 처리됨)."
-        )
-        return None, warnings
+        emit(warnings, notices, "STT_PRONUNCIATION_UNAVAILABLE", provider=result.provider)
+        return None, warnings, notices
 
     # 전사와 발음을 서로 다른 기계가 맡았다는 사실을 결과에 남긴다.
     # 근거 없는 점수는 결함이므로, 발음 점수가 어디서 왔는지가 보여야 한다
     provider = getattr(pronouncer, "provider_name", "azure")
     if provider != result.provider:
-        warnings.append(
-            f"발화 전달력(delivery)은 {provider} 발음평가로 따로 채점했다"
-            f"(받아쓰기는 {result.provider})."
+        emit(
+            warnings,
+            notices,
+            "STT_PRONUNCIATION_SEPARATE",
+            pronouncer=provider,
+            sttProvider=result.provider,
         )
-    return assessment, warnings
+    return assessment, warnings, notices
 
 
 def resolve_audio_answer(
@@ -326,18 +334,12 @@ def resolve_audio_answer(
     # 쓰기는 응시자가 직접 친 글의 맞춤법·띄어쓰기까지 보는 채점이라
     # 받아쓴 글로는 그 영역을 채점하는 의미가 없어진다
     if request.mode != Mode.SPEAKING:
-        raise AudioRequestError(
-            "쓰기 답안에는 음성 파일을 붙일 수 없다. "
-            "음성 채점은 mode 를 speaking 으로 보내야 한다."
-        )
+        raise AudioRequestError.of("AUDIO_NOT_ALLOWED_FOR_WRITING")
 
     # 규칙 2: 글과 음성이 둘 다 오면 채점하지 않고 되돌려 보낸다.
     # 하나를 골라 쓰면 나머지 하나가 조용히 버려지는데 응답만 봐서는 알 수 없다
     if request.answer_text.strip():
-        raise AudioRequestError(
-            "answer_text 와 audio 가 함께 왔다. 어느 것을 채점해야 할지 알 수 없다. "
-            "음성으로 채점하려면 answer_text 를 비워서 보내야 한다."
-        )
+        raise AudioRequestError.of("AUDIO_TEXT_AND_AUDIO_BOTH")
 
     # 규칙 3: 여기서부터가 새 길이다. 받아쓴 뒤 그 글로 채점한다
     engine = stt or build_default_stt()
@@ -346,16 +348,17 @@ def resolve_audio_answer(
     # 구현체가 규칙을 어기고 빈 글을 돌려준 경우를 여기서 한 번 더 막는다.
     # 빈 글이 채점으로 흘러가면 '말을 안 한 답안'과 '받아쓰기 실패'가 뒤섞인다
     if not result.text.strip():
-        raise SttUnavailable(
-            "음성에서 말을 하나도 옮겨 적지 못했다. 녹음 상태를 확인해야 한다."
-        )
+        raise SttUnavailable.of("STT_EMPTY_TRANSCRIPT_FINAL")
 
     # 발음(발화 전달력)을 전사와 따로 정한다. 받아쓰기가 이미 준 경우가 아니면
     # 음성 원본을 Azure 로 따로 들어 발음만 잰다
-    pronunciation, pron_warnings = _resolve_pronunciation(request, result, stt, pronouncer)
+    pronunciation, pron_warnings, pron_notices = _resolve_pronunciation(
+        request, result, stt, pronouncer
+    )
 
     resolution = AudioResolution.from_transcription(result)
     # 따로 잰 발음을 채점 쪽으로 넘기고, 그 과정에서 생긴 안내문을 덧붙인다
     resolution.pronunciation = pronunciation
     resolution.warnings.extend(pron_warnings)
+    resolution.notices.extend(pron_notices)
     return resolution

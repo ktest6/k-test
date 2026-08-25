@@ -19,6 +19,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from ..scoring.messages import Notice
+
 from ..scoring.schema import ChecklistItem, ItemInfo, Mode
 
 # 생성 모듈 버전. 관문이나 조립 방식이 바뀌면 올린다.
@@ -178,6 +180,10 @@ class DroppedItem(BaseModel):
     index: int = Field(description="모델 응답에서 몇 번째 문항이었는지(0부터)")
     reason: DropReason = Field(description="폐기 사유 코드. 화면 분기는 이 값으로 한다")
     detail: str = Field(description="사람이 읽는 한 문장")
+    notice: Notice | None = Field(
+        default=None,
+        description="위 detail 을 '코드 + 값' 으로 담은 것. 백엔드가 영어로 바꿔 쓴다",
+    )
     rejected_preview: str = Field(default="", description="지시문 앞 40자")
     quote_preview: str = Field(default="", description="문제가 된 인용 앞 40자")
 
@@ -256,6 +262,13 @@ class GenerateItemsResponse(BaseModel):
     warnings: list[str] = Field(
         default_factory=list, description="폐기는 아니지만 사람이 알아야 할 사항",
     )
+    notices: list[Notice] = Field(
+        default_factory=list,
+        description=(
+            "위 warnings 와 같은 내용을 '코드 + 값' 으로 담은 것. "
+            "두 목록의 길이와 차례는 언제나 같다"
+        ),
+    )
     meta: GenerationMeta
 
 
@@ -298,3 +311,7 @@ class VerifyItemsResponse(BaseModel):
     all_ok: bool
     results: list[ItemVerification] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    notices: list[Notice] = Field(
+        default_factory=list,
+        description="위 warnings 와 같은 내용을 '코드 + 값' 으로 담은 것",
+    )

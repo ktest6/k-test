@@ -300,7 +300,7 @@ def judge_binary(client, row: dict, items: list[dict], throttle,
         return {"status": result["status"], "reason": result.get("reason", ""),
                 "attempts": result.get("attempts")}
 
-    judged, warnings, dropped = results_from_llm_payload(
+    judged, warnings, _notices, dropped = results_from_llm_payload(
         answer_text, item.checklist, result["value"])
 
     # 항목마다 판정과 **근거 위치**를 함께 남긴다. 점수만 남기면 나중에 따질 수가 없다

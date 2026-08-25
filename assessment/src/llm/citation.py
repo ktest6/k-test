@@ -17,6 +17,8 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Sequence
 
+from ..scoring.messages import Notice, notice
+
 # 비교할 때 무시할 문자들: 공백류와 흔한 문장부호·따옴표.
 _IGNORED_CHARS = set(" \t\r\n ​.,!?~…·:;\"'“”‘’()[]{}<>「」『』-–—/\\")
 
@@ -67,6 +69,8 @@ class CitationCheck:
     end: int | None = None     # 원문에서 인용이 끝나는 글자 위치(파이썬 슬라이스 기준)
     matched_text: str = ""     # 원문에서 실제로 찾아낸 구간 (LLM이 적은 문자열이 아니라)
     reason: str = ""           # 통과하지 못했다면 그 이유
+    #: 위 reason 을 '코드 + 값' 으로 담은 것. 백엔드가 이 코드로 영어 문구를 고른다
+    notice: Notice | None = None
 
 
 def verify_citation(
@@ -80,7 +84,10 @@ def verify_citation(
     """
     # 빈 인용은 볼 것도 없이 탈락이다. LLM이 근거를 안 대고 판정만 한 경우가 여기 걸린다
     if quote is None or not str(quote).strip():
-        return CitationCheck(quote=quote or "", ok=False, reason="인용이 비어 있음")
+        empty = notice("CITATION_EMPTY")
+        return CitationCheck(
+            quote=quote or "", ok=False, reason=empty.message, notice=empty
+        )
 
     # 원문과 인용을 둘 다 '비교용 형태'로 바꾼다
     # (띄어쓰기·문장부호를 떼어내서 사소한 차이는 무시하려는 것)
@@ -91,19 +98,15 @@ def verify_citation(
     # 너무 짧은 인용은 우연히 겹칠 수 있어 근거로 인정하지 않는다
     # ('요' 한 글자가 답안 어딘가에 있다고 근거가 될 수는 없다)
     if len(norm_quote) < min_length:
-        return CitationCheck(
-            quote=quote,
-            ok=False,
-            reason=f"인용이 너무 짧아 근거로 인정하지 않음(최소 {min_length}자)",
-        )
+        short = notice("CITATION_TOO_SHORT", minLength=min_length)
+        return CitationCheck(quote=quote, ok=False, reason=short.message, notice=short)
 
     # 다듬은 원문 안에서 다듬은 인용을 찾는다. 못 찾으면 지어낸 인용이므로 폐기한다
     found = norm_source.find(norm_quote)
     if found == -1:
+        missing = notice("CITATION_NOT_FOUND")
         return CitationCheck(
-            quote=quote,
-            ok=False,
-            reason="답안 원문에서 찾을 수 없는 인용(폐기)",
+            quote=quote, ok=False, reason=missing.message, notice=missing
         )
 
     # 찾은 자리를 아까 만들어 둔 위치 지도로 되짚어 '원문에서의 위치'로 바꾼다
@@ -136,14 +139,34 @@ class CitationFilterResult:
     @property
     def drop_messages(self) -> list[str]:
         """보고용 경고 문구. 무엇이 왜 버려졌는지 사람이 읽을 수 있게 만든다."""
-        messages = []
+        return [made.message for made in self.drop_notices]
+
+    @property
+    def drop_notices(self) -> list["Notice"]:
+        """위 경고 문구를 '코드 + 값' 으로 담은 것.
+
+        겉 문구(인용 폐기: ...)와 안쪽 사유(원문에 없음 등)를 둘 다 코드로 담는다.
+        그래야 백엔드가 한 문장을 통째로 번역하는 대신, 겉과 속을 각각 영어로 바꿔
+        조립할 수 있다.
+        """
+        made: list[Notice] = []
         # 버려진 항목마다 "무엇을 왜 버렸는지" 한 줄로 만든다
         # 인용이 길면 앞부분만 잘라 보여 준다(경고 문구가 답안 전문으로 뒤덮이지 않게)
         for item in self.dropped:
             quote = str(item.get("quote", ""))[:40]
+            inner = item.get("_citation_notice")
             reason = item.get("_citation_reason", "사유 불명")
-            messages.append(f"인용 폐기: '{quote}' — {reason}")
-        return messages
+            made.append(
+                notice(
+                    "CITATION_DISCARDED_WRAP",
+                    quote=quote,
+                    reason=reason,
+                    reasonNotice=inner,
+                )
+                if inner is not None
+                else notice("CITATION_DISCARDED_WRAP", quote=quote, reason=reason)
+            )
+        return made
 
 
 def filter_by_citation(
@@ -164,9 +187,12 @@ def filter_by_citation(
     for item in items:
         # 모델이 형식을 깨서 사전(dict)이 아닌 값을 섞어 보낼 때가 있다. 그런 항목은 그냥 버린다
         if not isinstance(item, dict):
-            result.dropped.append(
-                {"quote": str(item), "_citation_reason": "형식이 올바르지 않은 항목"}
-            )
+            malformed = notice("CITATION_ITEM_MALFORMED")
+            result.dropped.append({
+                "quote": str(item),
+                "_citation_reason": malformed.message,
+                "_citation_notice": malformed,
+            })
             continue
 
         # 인용이 들어 있을 만한 필드를 차례로 시도해서, 하나라도 통과하면 그것을 쓴다
@@ -185,7 +211,9 @@ def filter_by_citation(
 
         # 인용 필드 자체가 아예 없었던 경우
         if check is None:
-            enriched["_citation_reason"] = "인용 필드가 없음"
+            no_field = notice("CITATION_FIELD_MISSING")
+            enriched["_citation_reason"] = no_field.message
+            enriched["_citation_notice"] = no_field
             result.dropped.append(enriched)
             continue
 
@@ -199,6 +227,7 @@ def filter_by_citation(
         else:
             # 통과 못 한 항목은 사유를 붙여 버림 목록으로 보낸다(점수에 반영되지 않는다)
             enriched["_citation_reason"] = check.reason
+            enriched["_citation_notice"] = check.notice
             result.dropped.append(enriched)
 
     return result
