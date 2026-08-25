@@ -5,6 +5,7 @@ import {
   ConflictDomainException,
   ForbiddenDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import { NOT_AVAILABLE_IN_PRODUCTION } from '../../../../common/exceptions/error-messages';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import { AuthService } from '../../../auth/application/services/auth.service';
 import { ExamSessionService } from '../../../exam-session/application/services/exam-session.service';
@@ -36,7 +37,7 @@ export class TestQuickStartService {
 
   async quickStart(): Promise<QuickStartResponseDto> {
     if (this.config.env === 'production') {
-      throw new ForbiddenDomainException('프로덕션 환경에서는 사용할 수 없습니다.');
+      throw new ForbiddenDomainException(NOT_AVAILABLE_IN_PRODUCTION);
     }
 
     const now = new Date();
@@ -86,7 +87,9 @@ export class TestQuickStartService {
       verified_at: now.toISOString(),
     });
     if (identityError) {
-      throw new ConflictDomainException(`본인인증 우회 기록 생성 실패: ${identityError.message}`);
+      throw new ConflictDomainException(
+        `Failed to create identity verification bypass record: ${identityError.message}`,
+      );
     }
 
     const { error: earphoneError } = await client.from('tb_earphone_logs').insert({
@@ -95,7 +98,9 @@ export class TestQuickStartService {
       checked_at: now.toISOString(),
     });
     if (earphoneError) {
-      throw new ConflictDomainException(`이어폰체크 우회 기록 생성 실패: ${earphoneError.message}`);
+      throw new ConflictDomainException(
+        `Failed to create earphone check bypass record: ${earphoneError.message}`,
+      );
     }
   }
 }

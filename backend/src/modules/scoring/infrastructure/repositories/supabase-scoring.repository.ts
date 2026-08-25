@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
+import { operationFailed } from '../../../../common/exceptions/error-messages';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import { Score } from '../../domain/entities/score.entity';
 import { RecordScoreInput, ScoringRepository } from '../../domain/scoring.repository.interface';
@@ -38,7 +39,7 @@ export class SupabaseScoringRepository implements ScoringRepository {
       .single<ScoreRow>();
 
     if (error || !data) {
-      throw new ConflictDomainException(error?.message ?? '채점 결과 등록에 실패했습니다.');
+      throw new ConflictDomainException(error?.message ?? operationFailed('record the score'));
     }
     return toDomain(data);
   }

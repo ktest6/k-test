@@ -68,7 +68,7 @@ export class GazeCalibrationController {
     @UploadedFiles() files: Express.Multer.File[],
   ): Promise<GazeCalibrationResponseDto> {
     if (!files || files.length === 0) {
-      throw new BadRequestException('calibration_images 파일이 최소 1개 필요합니다.');
+      throw new BadRequestException('At least one calibration_images file is required.');
     }
 
     return this.gazeCalibrationService.calibrate(

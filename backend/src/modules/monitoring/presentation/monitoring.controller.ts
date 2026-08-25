@@ -64,7 +64,7 @@ export class MonitoringController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<MonitoringAnalyzeResponseDto> {
     if (!currentImage) {
-      throw new BadRequestException('current_image 파일이 필요합니다.');
+      throw new BadRequestException('The current_image file is required.');
     }
 
     const result = await this.monitoringService.analyze(examSessionId, user.id, dto, {

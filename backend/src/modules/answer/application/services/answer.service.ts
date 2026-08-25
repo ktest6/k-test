@@ -19,10 +19,10 @@ export class AnswerService {
 
   async save(input: SaveAnswerInput, durationMs: number | null = null): Promise<Answer> {
     if (input.type === AnswerType.TEXT && !input.contentText) {
-      throw new ConflictDomainException('텍스트 답안은 내용이 필요합니다.');
+      throw new ConflictDomainException('A text answer requires content.');
     }
     if (input.type === AnswerType.AUDIO && !input.audioFileUrl) {
-      throw new ConflictDomainException('음성 답안은 파일 경로가 필요합니다.');
+      throw new ConflictDomainException('An audio answer requires a file path.');
     }
 
     const answer = await this.answerRepository.save(input);

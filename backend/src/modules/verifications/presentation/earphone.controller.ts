@@ -72,7 +72,7 @@ export class EarphoneController {
     const leftEarImage = files.left_ear_image?.[0];
     const rightEarImage = files.right_ear_image?.[0];
     if (!leftEarImage || !rightEarImage) {
-      throw new BadRequestException('left_ear_image, right_ear_image 파일이 모두 필요합니다.');
+      throw new BadRequestException('Both left_ear_image and right_ear_image files are required.');
     }
 
     return this.earphoneDetectionService.detect(

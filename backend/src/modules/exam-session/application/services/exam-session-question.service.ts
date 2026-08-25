@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { NotFoundDomainException } from '../../../../common/exceptions/domain.exception';
+import { notFound } from '../../../../common/exceptions/error-messages';
 import { AnswerService } from '../../../answer/application/services/answer.service';
 import { QuestionService } from '../../../question/application/services/question.service';
 import { Question } from '../../../question/domain/entities/question.entity';
@@ -99,7 +100,7 @@ export class ExamSessionQuestionService {
     const questions = await this.getAssignedQuestions(examSessionId);
     const question = questions.find((q) => q.id === questionId);
     if (!question) {
-      throw new NotFoundDomainException(`문항(${questionId})을 찾을 수 없습니다.`);
+      throw new NotFoundDomainException(notFound('Question', questionId));
     }
 
     const [answeredIds, skippedIds] = await Promise.all([

@@ -6,6 +6,7 @@ import {
   ForbiddenDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import { notFound, notOwnedByUser } from '../../../../common/exceptions/error-messages';
 import { ExamResultService } from '../../../scoring/application/services/exam-result.service';
 import { EarphoneDetectionService } from '../../../verifications/application/services/earphone-detection.service';
 import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
@@ -62,7 +63,9 @@ export class ExamSessionService {
       const nextResumeCount = existing.resumeCount + 1;
       if (nextResumeCount >= RESUME_ATTEMPT_LIMIT) {
         await this.examSessionRepository.updateStatus(existing.id, SessionStatus.BLOCKED);
-        throw new ForbiddenDomainException('반복적인 재접속으로 시험 응시가 제한되었습니다.');
+        throw new ForbiddenDomainException(
+          'Your exam access has been restricted due to repeated reconnection attempts.',
+        );
       }
       return this.examSessionRepository.updateResumeCount(existing.id, nextResumeCount);
     }
@@ -78,10 +81,10 @@ export class ExamSessionService {
   async getStatus(examSessionId: string, userId: string): Promise<ExamSessionStatusResult> {
     const session = await this.examSessionRepository.findById(examSessionId);
     if (!session) {
-      throw new NotFoundDomainException(`응시 세션(${examSessionId})을 찾을 수 없습니다.`);
+      throw new NotFoundDomainException(notFound('Exam session', examSessionId));
     }
     if (session.userId !== userId) {
-      throw new ForbiddenDomainException('세션 소유자가 아닙니다.');
+      throw new ForbiddenDomainException(notOwnedByUser('session'));
     }
 
     // 세션이 더 이상 진행중이 아니게 된 시점에 본인인증용 얼굴 이미지를 정리한다.
@@ -127,14 +130,14 @@ export class ExamSessionService {
     if (this.config.requireIdentityVerification) {
       const verified = await this.idCardVerificationService.hasVerifiedSession(examSessionId);
       if (!verified) {
-        return '본인인증을 먼저 완료해야 합니다.';
+        return 'You must complete identity verification first.';
       }
     }
 
     if (this.config.requireEarphoneCheck) {
       const earphoneCheckPassed = await this.earphoneDetectionService.hasPassedCheck(examSessionId);
       if (!earphoneCheckPassed) {
-        return '이어폰 미착용 확인을 먼저 완료해야 합니다.';
+        return 'You must complete the earphone check first.';
       }
     }
 
@@ -150,7 +153,7 @@ export class ExamSessionService {
   async getSessionOrThrow(examSessionId: string): Promise<ExamSession> {
     const session = await this.examSessionRepository.findById(examSessionId);
     if (!session) {
-      throw new NotFoundDomainException(`응시 세션(${examSessionId})을 찾을 수 없습니다.`);
+      throw new NotFoundDomainException(notFound('Exam session', examSessionId));
     }
     return session;
   }
@@ -188,14 +191,14 @@ export class ExamSessionService {
   async disqualify(examSessionId: string): Promise<ExamSession> {
     const session = await this.examSessionRepository.findById(examSessionId);
     if (!session) {
-      throw new NotFoundDomainException(`응시 세션(${examSessionId})을 찾을 수 없습니다.`);
+      throw new NotFoundDomainException(notFound('Exam session', examSessionId));
     }
     if (session.status === SessionStatus.DISQUALIFIED) {
       return session;
     }
     if (session.status === SessionStatus.SUBMITTED) {
       throw new ConflictDomainException(
-        `응시 세션(${examSessionId})은 이미 종료되어 실격시킬 수 없습니다.`,
+        `Exam session (${examSessionId}) has already ended and cannot be disqualified.`,
       );
     }
 

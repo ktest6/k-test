@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
+import { operationFailed } from '../../../../common/exceptions/error-messages';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import {
   Question,
@@ -76,7 +77,7 @@ export class SupabaseQuestionRepository implements QuestionRepository {
       .returns<QuestionRow[]>();
 
     if (error || !questionRows) {
-      throw new ConflictDomainException(error?.message ?? '문항 생성에 실패했습니다.');
+      throw new ConflictDomainException(error?.message ?? operationFailed('create the questions'));
     }
 
     const checklistPayload = questionRows.flatMap((row, index) =>
@@ -97,7 +98,7 @@ export class SupabaseQuestionRepository implements QuestionRepository {
 
     if (checklistError || !checklistRows) {
       throw new ConflictDomainException(
-        checklistError?.message ?? '문항 체크리스트 생성에 실패했습니다.',
+        checklistError?.message ?? operationFailed('create the question checklist'),
       );
     }
 

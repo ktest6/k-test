@@ -4,6 +4,7 @@ import {
   ForbiddenDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import { notFound, notOwnedByUser } from '../../../../common/exceptions/error-messages';
 import { ExamSession } from '../../domain/entities/exam-session.entity';
 import { SessionStatus } from '../../domain/enums/session-status.enum';
 import {
@@ -28,13 +29,13 @@ export class ExamSessionAccessService {
   async assertOwnedInProgress(examSessionId: string, userId: string): Promise<ExamSession> {
     const session = await this.examSessionRepository.findById(examSessionId);
     if (!session) {
-      throw new NotFoundDomainException(`응시 세션(${examSessionId})을 찾을 수 없습니다.`);
+      throw new NotFoundDomainException(notFound('Exam session', examSessionId));
     }
     if (session.userId !== userId) {
-      throw new ForbiddenDomainException('세션 소유자가 아닙니다.');
+      throw new ForbiddenDomainException(notOwnedByUser('session'));
     }
     if (session.status !== SessionStatus.INPROGRESS) {
-      throw new ConflictDomainException('이미 종료된 시험입니다.');
+      throw new ConflictDomainException('This exam has already ended.');
     }
     return session;
   }

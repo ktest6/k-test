@@ -101,7 +101,9 @@ export class ExamSessionAnswerService {
       userId,
     );
     if (answered) {
-      throw new ConflictDomainException('이미 답안을 저장한 문항은 건너뛸 수 없습니다.');
+      throw new ConflictDomainException(
+        'A question that already has a saved answer cannot be skipped.',
+      );
     }
 
     await this.skippedQuestionRepository.create(examSessionId, questionId);
@@ -119,7 +121,7 @@ export class ExamSessionAnswerService {
 
     const answer = await this.answerService.findBySessionAndQuestion(examSessionId, questionId);
     if (!answer) {
-      throw new NotFoundDomainException('아직 저장된 답안이 없습니다.');
+      throw new NotFoundDomainException('No answer has been saved yet.');
     }
 
     return this.withScore(answer);

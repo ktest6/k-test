@@ -8,6 +8,7 @@ import {
   ConflictDomainException,
   UnauthorizedDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import { operationFailed } from '../../../../common/exceptions/error-messages';
 import { describeError } from '../../../../common/utils/describe-error.util';
 import { MailService } from '../../../../infrastructure/mail/mail.service';
 import { AdminService } from '../../../admin/application/services/admin.service';
@@ -62,9 +63,7 @@ export class AuthService {
       await this.mailService.sendVerificationCode(dto.email, code);
     } catch (err) {
       this.logger.warn(`인증 메일 발송 실패 (email=${dto.email}): ${describeError(err)}`);
-      throw new ConflictDomainException(
-        '인증 메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요.',
-      );
+      throw new ConflictDomainException(operationFailed('send the verification email'));
     }
   }
 
@@ -108,7 +107,7 @@ export class AuthService {
    */
   async adminSignUp(dto: AdminSignUpDto): Promise<AuthResponseDto> {
     if (!this.isValidAdminSecret(dto.adminSecret)) {
-      throw new UnauthorizedDomainException('관리자 계정 생성 비밀값이 올바르지 않습니다.');
+      throw new UnauthorizedDomainException('The admin account creation secret is incorrect.');
     }
 
     const admin = await this.adminService.register({
@@ -145,10 +144,10 @@ export class AuthService {
         secret: this.config.jwt.refreshSecret,
       });
     } catch {
-      throw new UnauthorizedDomainException('유효하지 않거나 만료된 리프레시 토큰입니다.');
+      throw new UnauthorizedDomainException('Invalid or expired refresh token.');
     }
     if (payload.type !== 'refresh') {
-      throw new UnauthorizedDomainException('리프레시 토큰이 아닙니다.');
+      throw new UnauthorizedDomainException('This is not a refresh token.');
     }
 
     if (payload.role === Role.ADMIN) {
