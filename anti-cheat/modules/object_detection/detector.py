@@ -47,7 +47,8 @@ def detect_objects(
 
     except (BotoCoreError, ClientError) as error:
         raise RekognitionAPIError(
-            "AWS Rekognition 객체 탐지에 실패했습니다."
+            "AWS Rekognition 객체 탐지에 실패했습니다.",
+            code="REKOGNITION_OBJECT_DETECTION_FAILED",
         ) from error
 
     labels = response.get("Labels", [])

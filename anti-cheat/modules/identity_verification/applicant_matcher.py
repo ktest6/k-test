@@ -12,6 +12,8 @@ applicant_matcher.py
 
 from typing import Any
 
+from modules.common.exceptions import ApplicantVerificationError
+
 from modules.identity_verification.field_normalizer import (
     normalize_birth_date,
     normalize_document_number,
@@ -35,16 +37,20 @@ def match_applicant_info(
     # 필수 비교 필드가 모두 존재하는지 확인한다.
     missing_applicant_fields = _REQUIRED_FIELDS - applicant_info.keys()
     if missing_applicant_fields:
-        raise ValueError(
+        raise ApplicantVerificationError(
             "신청 정보에 필수 필드가 없습니다: "
-            f"{sorted(missing_applicant_fields)}"
+            f"{sorted(missing_applicant_fields)}",
+            code="APPLICANT_REQUIRED_FIELDS_MISSING",
+            params={"fields": sorted(missing_applicant_fields)},
         )
 
     missing_document_fields = _REQUIRED_FIELDS - document_fields.keys()
     if missing_document_fields:
-        raise ValueError(
+        raise ApplicantVerificationError(
             "신분증 추출 정보에 필수 필드가 없습니다: "
-            f"{sorted(missing_document_fields)}"
+            f"{sorted(missing_document_fields)}",
+            code="EXTRACTED_DOCUMENT_FIELDS_MISSING",
+            params={"fields": sorted(missing_document_fields)},
         )
 
     # 이름, 생년월일, 여권번호를 정규화한 뒤 필드별로 비교한다.

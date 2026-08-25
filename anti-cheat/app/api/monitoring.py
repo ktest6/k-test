@@ -20,10 +20,11 @@ from fastapi import (
     APIRouter,
     File,
     Form,
-    HTTPException,
     UploadFile,
     status,
 )
+
+from app.core.error_handlers import CodedHTTPException, from_proctoring_error
 
 from app.schemas.monitoring import (
     GazeCalibrationResponse,
@@ -61,9 +62,10 @@ def parse_previous_gaze_state(
             previous_gaze_state,
         )
     except ValidationError as error:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="previous_gaze_state JSON 형식이 올바르지 않습니다.",
+            code="PREVIOUS_GAZE_STATE_INVALID",
         ) from error
 
     return state.model_dump()
@@ -82,9 +84,11 @@ async def calibrate_gaze(
     """화면 중앙 응시 이미지로 응시자별 시선 기준값을 계산한다."""
 
     if not calibration_images:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Calibration 이미지를 하나 이상 전달해야 합니다.",
+            code="CALIBRATION_IMAGE_REQUIRED",
+            params={"minCount": 1},
         )
 
     try:
@@ -105,14 +109,14 @@ async def calibrate_gaze(
             **calibration,
         )
     except (GazeCalibrationError, InvalidImageError) as error:
-        raise HTTPException(
+        raise from_proctoring_error(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error),
+            error=error,
         ) from error
     except RekognitionAPIError as error:
-        raise HTTPException(
+        raise from_proctoring_error(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(error),
+            error=error,
         ) from error
 
 
@@ -146,24 +150,30 @@ async def analyze_frame(
     """
 
     if elapsed_ms < 0:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="elapsed_ms는 0 이상이어야 합니다.",
+            code="ELAPSED_MS_OUT_OF_RANGE",
+            params={"actual": elapsed_ms, "min": 0},
         )
 
     if capture_sequence < 1:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="capture_sequence는 1 이상이어야 합니다.",
+            code="CAPTURE_SEQUENCE_OUT_OF_RANGE",
+            params={"actual": capture_sequence, "min": 1},
         )
 
     if captured_at.tzinfo is None:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 "captured_at에는 타임존 정보가 포함되어야 합니다. "
                 "예: 2026-07-26T15:30:00+09:00"
             ),
+            code="CAPTURED_AT_TIMEZONE_REQUIRED",
+            params={"example": "2026-07-26T15:30:00+09:00"},
         )
 
     try:
@@ -196,29 +206,30 @@ async def analyze_frame(
             **monitoring_result,
         )
 
-    except HTTPException:
+    except CodedHTTPException:
         raise
 
     except InvalidImageError as error:
-        raise HTTPException(
+        raise from_proctoring_error(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error),
+            error=error,
         ) from error
 
     except RekognitionAPIError as error:
-        raise HTTPException(
+        raise from_proctoring_error(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(error),
+            error=error,
         ) from error
 
     except MonitoringError as error:
-        raise HTTPException(
+        raise from_proctoring_error(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error),
+            error=error,
         ) from error
 
     except Exception as error:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="시험 모니터링 처리 중 오류가 발생했습니다.",
+            code="MONITORING_INTERNAL_ERROR",
         ) from error

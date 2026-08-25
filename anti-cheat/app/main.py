@@ -15,6 +15,7 @@ from app.api.earphone_detection import (
 )
 from app.api.identity import router as identity_router
 from app.api.monitoring import router as monitoring_router
+from app.core.error_handlers import register_error_handlers
 
 
 app = FastAPI(
@@ -25,6 +26,8 @@ app = FastAPI(
     ),
     version="0.1.0",
 )
+
+register_error_handlers(app)
 
 
 @app.get("/")

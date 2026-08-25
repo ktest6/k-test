@@ -13,15 +13,20 @@ from modules.common.exceptions import InvalidImageError
 def validate_image_bytes(
     image_bytes: bytes,
     image_name: str,
+    image_key: str,
 ) -> None:
     """이미지 데이터가 유효한지 확인한다."""
 
     if not isinstance(image_bytes, bytes):
         raise InvalidImageError(
-            f"{image_name} 이미지 데이터는 bytes 타입이어야 합니다."
+            f"{image_name} 이미지 데이터는 bytes 타입이어야 합니다.",
+            code="IMAGE_DATA_TYPE_INVALID",
+            params={"imageName": image_key, "expectedType": "bytes"},
         )
 
     if not image_bytes:
         raise InvalidImageError(
-            f"{image_name} 이미지 데이터가 비어 있습니다."
+            f"{image_name} 이미지 데이터가 비어 있습니다.",
+            code="IMAGE_DATA_EMPTY",
+            params={"imageName": image_key},
         )

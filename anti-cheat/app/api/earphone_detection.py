@@ -15,12 +15,12 @@ from fastapi import (
     APIRouter,
     File,
     Form,
-    HTTPException,
     UploadFile,
     status,
 )
 
 from app.schemas.earphone_detection import EarphoneDetectionResponse
+from app.core.error_handlers import CodedHTTPException, from_proctoring_error
 from modules.common.exceptions import (
     EarphoneDetectionError,
     InvalidImageError,
@@ -67,11 +67,13 @@ async def detect_earphone_api(
         left_result = analyze_earphone_image(
             image_bytes=left_image_bytes,
             image_name="왼쪽 귀 이미지",
+            image_key="leftEarImage",
         )
 
         right_result = analyze_earphone_image(
             image_bytes=right_image_bytes,
             image_name="오른쪽 귀 이미지",
+            image_key="rightEarImage",
         )
 
         earphone_detected = (
@@ -99,27 +101,28 @@ async def detect_earphone_api(
         )
 
     except InvalidImageError as error:
-        raise HTTPException(
+        raise from_proctoring_error(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error),
+            error=error,
         ) from error
 
     except RekognitionAPIError as error:
-        raise HTTPException(
+        raise from_proctoring_error(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(error),
+            error=error,
         ) from error
 
     except EarphoneDetectionError as error:
-        raise HTTPException(
+        raise from_proctoring_error(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            error=error,
         ) from error
 
     except Exception as error:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="이어폰 탐지 처리 중 예상하지 못한 오류가 발생했습니다.",
+            code="EARPHONE_DETECTION_INTERNAL_ERROR",
         ) from error
 
     finally:

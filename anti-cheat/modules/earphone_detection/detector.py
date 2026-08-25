@@ -67,7 +67,8 @@ def detect_earphone(
 
     except (BotoCoreError, ClientError) as error:
         raise RekognitionAPIError(
-            "AWS Rekognition 이어폰 탐지에 실패했습니다."
+            "AWS Rekognition 이어폰 탐지에 실패했습니다.",
+            code="REKOGNITION_EARPHONE_DETECTION_FAILED",
         ) from error
 
     labels = response.get("Labels", [])

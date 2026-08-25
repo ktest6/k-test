@@ -25,6 +25,7 @@ def detect_faces(
     validate_image_bytes(
         image_bytes=image_bytes,
         image_name="시험 모니터링 프레임",
+        image_key="currentImage",
     )
 
     try:
@@ -39,7 +40,8 @@ def detect_faces(
 
     except (BotoCoreError, ClientError) as error:
         raise RekognitionAPIError(
-            "AWS Rekognition DetectFaces API 호출에 실패했습니다."
+            "AWS Rekognition DetectFaces API 호출에 실패했습니다.",
+            code="REKOGNITION_DETECT_FACES_FAILED",
         ) from error
 
     return response
