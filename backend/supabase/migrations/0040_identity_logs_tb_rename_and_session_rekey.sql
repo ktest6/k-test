@@ -31,8 +31,8 @@ alter table tb_identity_logs
   add column exam_session_id integer references tb_exam_session (exam_session_id) on delete cascade;
 
 comment on column tb_identity_logs.exam_session_id is
-  '이 본인인증이 속한 응시 시도(세션). 같은 시험을 여러 번 볼 수 있어 회차가 아니라 ' ||
-  '세션 기준. 0039 이전(rename 전) 레코드는 NULL — 당시엔 (exam_id, user_id) 기준이라 ' ||
+  '이 본인인증이 속한 응시 시도(세션). 같은 시험을 여러 번 볼 수 있어 회차가 아니라 '
+  '세션 기준. 0039 이전(rename 전) 레코드는 NULL — 당시엔 (exam_id, user_id) 기준이라 '
   '세션에 매핑할 방법이 없다.';
 
 create index idx_tb_identity_logs_session on tb_identity_logs (exam_session_id, created_at desc);
