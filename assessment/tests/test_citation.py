@@ -92,7 +92,7 @@ def test_근거를_지어낸_충족판정은_0으로_내려간다():
             {"id": "c2", "met": 1, "quote": "안전 교육을 이수했습니다", "reason": "지어낸 근거"},
         ]
     }
-    results, warnings, dropped = results_from_llm_payload(SOURCE, checklist, payload)
+    results, warnings, _notices, dropped = results_from_llm_payload(SOURCE, checklist, payload)
 
     by_id = {r.id: r for r in results}
     assert by_id["c1"].met == 1          # 진짜 근거가 있는 항목은 유지
@@ -103,6 +103,6 @@ def test_근거를_지어낸_충족판정은_0으로_내려간다():
 
 def test_LLM이_빠뜨린_항목은_미충족으로_처리된다():
     checklist = [ChecklistItem(id="c1", description="조치를 말했는가")]
-    results, warnings, _ = results_from_llm_payload(SOURCE, checklist, {"results": []})
+    results, warnings, _notices, _ = results_from_llm_payload(SOURCE, checklist, {"results": []})
     assert results[0].met == 0
     assert any("판정이 없어" in w for w in warnings)

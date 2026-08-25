@@ -79,14 +79,14 @@ from __future__ import annotations
 import os
 import time
 
-from ..llm.client import GeminiClient, LLMUnavailable, classify_failure
+from ..llm.client import GeminiClient, LLMUnavailable, classify_failure_notice
 from ..scoring.schema import AudioInput
 from .audio import FetchedAudio, fetch_audio
 from .loudness import (
     is_silent,
     is_too_quiet_for_speech,
-    silence_message,
-    too_quiet_message,
+    silence_notice,
+    too_quiet_notice,
 )
 from .port import SttPort, SttUnavailable, Transcription
 
@@ -174,7 +174,7 @@ class GeminiStt(SttPort):
         #    여기는 파일 안의 숫자만 보는 계산이라 모델이 무엇을 하든 결과가 같다.
         #    (wav 만 잴 수 있다. 압축 형식은 loudness 가 None 이라 그냥 지나간다)
         if is_silent(fetched.loudness):
-            raise SttUnavailable(silence_message(fetched.loudness))
+            raise SttUnavailable.from_notice(silence_notice(fetched.loudness))
 
         # 3) 받아쓴다
         text, has_speech, usage = self._call_gemini(fetched, item_prompt)
@@ -183,16 +183,13 @@ class GeminiStt(SttPort):
         #    빈 글을 그대로 넘기면 뒤 단계가 '아무 말도 안 한 답안'으로 채점해 버리는데,
         #    그것은 응시자가 말을 안 한 것과 받아쓰기가 실패한 것을 뒤섞는 일이다
         if not has_speech or not text.strip():
-            raise SttUnavailable(
-                "음성에서 말을 하나도 옮겨 적지 못했다. "
-                "녹음이 비어 있거나 소리가 너무 작은지 확인해야 한다."
-            )
+            raise SttUnavailable.of("STT_EMPTY_TRANSCRIPT", provider=self.provider_name)
 
         # 5) 관문 3 — 글은 나왔는데 소리는 사람 말이라기에 너무 작았던 경우.
         #    관문 1을 아슬아슬하게 넘긴 '거의 무음'에서 모범답안이 나오는 길을 막는다.
         #    소리와 글이 서로 어긋나면 글이 아니라 소리를 믿는다
         if is_too_quiet_for_speech(fetched.loudness):
-            raise SttUnavailable(too_quiet_message(fetched.loudness, text))
+            raise SttUnavailable.from_notice(too_quiet_notice(fetched.loudness, text))
 
         elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
         return Transcription(
@@ -227,8 +224,14 @@ class GeminiStt(SttPort):
         try:
             raw_client = self._client._ensure_client()
         except LLMUnavailable as exc:
-            raise SttUnavailable(
-                f"음성을 글자로 옮길 수 없다. {exc}", detail=getattr(exc, "detail", "")
+            # 안쪽 사유(LLM 이 왜 안 되는지)를 코드째로 함께 담는다.
+            # 그래야 백엔드가 겉 문장과 속 사유를 둘 다 영어로 바꿀 수 있다
+            raise SttUnavailable.of(
+                "STT_CLIENT_UNAVAILABLE",
+                detail=getattr(exc, "detail", ""),
+                provider=self.provider_name,
+                reason=str(exc),
+                reasonNotice=exc.notice,
             ) from exc
 
         from google.genai import types
@@ -259,8 +262,13 @@ class GeminiStt(SttPort):
             )
         except Exception as exc:
             # 실패 사유를 한국어 한 문장으로 바꾸는 일은 채점 쪽에 이미 있다. 그것을 쓴다
-            raise SttUnavailable(
-                f"음성을 글자로 옮기지 못했다. {classify_failure(exc)}", detail=str(exc)
+            inner = classify_failure_notice(exc)
+            raise SttUnavailable.of(
+                "STT_CALL_FAILED",
+                detail=str(exc),
+                provider=self.provider_name,
+                reason=inner.message,
+                reasonNotice=inner,
             ) from exc
 
         text, has_speech = self._read_transcript(response)

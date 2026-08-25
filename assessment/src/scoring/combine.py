@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .messages import Notice, emit, join_notices, notice, notice_or_free_text
 from .schema import (
     AreaStatus,
     ChecklistResult,
@@ -27,6 +28,11 @@ from .schema import (
     ScoreContribution,
     SubScore,
 )
+
+# 값이 끼지 않는 고정 문구는 한 번만 만들어 두고 돌려 쓴다
+_MET_MARK = notice("CHECKLIST_MET")
+_UNMET_MARK = notice("CHECKLIST_UNMET")
+_DELIVERY_NOT_SCORED = notice("SUBSCORE_DELIVERY_NO_PRONUNCIATION")
 
 # ---------------------------------------------------------------------------
 # 자질 값을 0~1로 펴는 기준선 (전부 임시값)
@@ -214,6 +220,8 @@ class CombineResult:
     overall_grade: str | None
     subscores: list[SubScore]
     warnings: list[str] = field(default_factory=list)
+    #: 위 warnings 와 같은 내용을 '코드 + 값' 으로 담은 것. 백엔드가 영어로 바꿔 쓴다
+    notices: list[Notice] = field(default_factory=list)
 
 
 def _usable(f: FeatureValue | None) -> bool:
@@ -223,7 +231,7 @@ def _usable(f: FeatureValue | None) -> bool:
 
 def _weighted_average(
     parts: list[tuple[str, str, float | None, float, float]],
-) -> tuple[float | None, list[ScoreContribution], list[str]]:
+) -> tuple[float | None, list[ScoreContribution], list[Notice]]:
     """(자질id, 이름, 원래값, 0~1값, 가중치) 목록을 받아 가중 평균 점수를 낸다.
 
     빠진 자질이 있으면 남은 것들의 가중치 합으로 다시 나눠(재정규화) 계산한다.
@@ -231,11 +239,11 @@ def _weighted_average(
     """
     # 실제로 쓸 수 있었던 자질들의 가중치만 더한다. 이것이 재정규화의 기준이 된다
     total_weight = sum(w for *_, w in parts)
-    notes: list[str] = []
+    notes: list[Notice] = []
 
     # 쓸 자질이 하나도 없으면 점수를 지어내지 않고 '없음'을 돌려준다
     if total_weight <= 0:
-        return None, [], ["점수를 낼 수 있는 자질이 하나도 없다."]
+        return None, [], [notice("SUBSCORE_NO_FEATURES")]
 
     contributions: list[ScoreContribution] = []
     score = 0.0
@@ -291,25 +299,38 @@ def _content_task_subscore(
         # 항목별 충족·미충족 근거를 영역 근거로 끌어올린다.
         # 백엔드가 체크리스트를 따로 뒤지지 않아도 "왜 이 점수인지"를 바로 보여 줄 수 있게 하려는 것
         for c in checklist_results:
-            mark = "충족" if c.met == 1 else "미충족"
+            # 충족/미충족 표시도 화면에 뜨는 글자라 코드를 붙인다
+            mark_notice = _MET_MARK if c.met == 1 else _UNMET_MARK
+            mark = mark_notice.message
             for ev in c.evidence[:1]:
+                # 겉 문구([충족] 항목 — 설명)와 안쪽 두 조각(마크·설명)을 모두 코드로 담는다.
+                # 항목 설명(description)은 문항 데이터라 번역 대상이 아니다
+                wrapped = notice(
+                    "CHECKLIST_EVIDENCE_WRAP",
+                    mark=mark,
+                    markNotice=mark_notice,
+                    description=c.description,
+                    comment=ev.comment,
+                    commentNotice=ev.notice,
+                )
                 evidence.append(
                     Evidence(
                         source=ev.source,
                         quote=ev.quote,
                         start=ev.start,
                         end=ev.end,
-                        comment=f"[{mark}] {c.description} — {ev.comment}",
+                        comment=wrapped.message,
+                        notice=wrapped,
                         detail={"checklist_id": c.id, "met": c.met},
                     )
                 )
         # 임시 판정으로 매겨진 결과라면 영역 상태를 '일부만 계산됨'으로 낮춘다
         if any(c.note.startswith("※ 임시") for c in checklist_results):
             partial = True
-            notes.append("체크리스트가 임시 대체 판정(핵심어 일치)으로 매겨졌다.")
+            notes.append(notice("SUBSCORE_CHECKLIST_FALLBACK"))
     else:
         partial = True
-        notes.append("체크리스트가 없어 충족률을 반영하지 못했다.")
+        notes.append(notice("SUBSCORE_CHECKLIST_MISSING"))
 
     # 충족률 외에 '말을 충분히 했는가'를 보는 보조 자질을 더한다
     for fid, w in weights.content_feature_weights.items():
@@ -317,7 +338,7 @@ def _content_task_subscore(
         # 값을 못 구한 자질은 0점으로 때우지 않고 아예 빼고 간다(위에서 가중치가 재정규화된다)
         if not _usable(f):
             partial = True
-            notes.append(f"자질 '{fid}' 를 쓸 수 없어 가중치를 다시 나눴다.")
+            notes.append(notice("SUBSCORE_FEATURE_EXCLUDED", featureId=fid))
             continue
         normalizer = FEATURE_NORMALIZERS[fid]
         parts.append((fid, f.name, f.value, normalizer.normalize(f.value), w))
@@ -341,7 +362,8 @@ def _content_task_subscore(
         status=status,
         contributions=contributions,
         evidence=evidence[:12],
-        note=" / ".join(notes),
+        note=" / ".join(one.message for one in notes),
+        notice=join_notices(notes),
     )
 
 
@@ -366,7 +388,7 @@ def _language_use_subscore(
             f = features.get("formality")
             if not _usable(f) or "banmal_count" not in f.components:
                 partial = True
-                notes.append("반말 혼입 횟수를 확인할 수 없어 가중치를 다시 나눴다.")
+                notes.append(notice("SUBSCORE_BANMAL_UNAVAILABLE"))
                 continue
             count = f.components["banmal_count"]
             parts.append(
@@ -397,7 +419,17 @@ def _language_use_subscore(
     # 같은 사유로 빠진 자질들을 한 줄로 묶는다.
     # "자질 4개(...)를 제외했다: <사유 한 번>" 형태가 되어 문구가 짧아진다
     for reason, fids in excluded_by_reason.items():
-        notes.append(f"자질 {len(fids)}개({', '.join(fids)}) 제외 — {reason}")
+        # 사유는 자질의 note 에서 온 자유문이라 고정 코드가 없다.
+        # 그래도 '번역할 고정 문장이 없는 자유문' 이라는 표시는 붙여 둔다
+        notes.append(
+            notice(
+                "SUBSCORE_FEATURES_EXCLUDED_GROUP",
+                count=len(fids),
+                featureIds=", ".join(fids),
+                reason=reason,
+                reasonNotice=notice_or_free_text(None, reason),
+            )
+        )
 
     score, contributions, calc_notes = _weighted_average(parts)
     notes.extend(calc_notes)
@@ -416,7 +448,8 @@ def _language_use_subscore(
         status=status,
         contributions=contributions,
         evidence=evidence[:12],
-        note=" / ".join(notes),
+        note=" / ".join(one.message for one in notes),
+        notice=join_notices(notes),
     )
 
 
@@ -449,7 +482,7 @@ def _delivery_subscore(
             # 그 경우는 아래에서 '채점 안 함'으로 빠지므로 여기서는 표시만 남긴다
             if f is not None:
                 partial = True
-                notes.append(f"자질 '{fid}' 를 쓸 수 없어 가중치를 다시 나눴다.")
+                notes.append(notice("SUBSCORE_FEATURE_EXCLUDED", featureId=fid))
             continue
 
         normalizer = FEATURE_NORMALIZERS[fid]
@@ -468,10 +501,8 @@ def _delivery_subscore(
             status=AreaStatus.NOT_EVALUATED,
             contributions=[],
             evidence=[],
-            note=(
-                "발음 평가 결과가 없어 채점하지 않았다(종합 점수에서 제외). "
-                "쓰기 답안이거나, 발음을 재지 못하는 받아쓰기로 채점한 경우다."
-            ),
+            note=_DELIVERY_NOT_SCORED.message,
+            notice=_DELIVERY_NOT_SCORED,
         )
 
     score, contributions, calc_notes = _weighted_average(parts)
@@ -491,7 +522,8 @@ def _delivery_subscore(
         status=status,
         contributions=contributions,
         evidence=evidence[:12],
-        note=" / ".join(notes),
+        note=" / ".join(one.message for one in notes),
+        notice=join_notices(notes),
     )
 
 
@@ -540,6 +572,7 @@ def combine(
     # 자질을 id로 바로 찾을 수 있게 정리해 둔다
     fmap = {f.id: f for f in features}
     warnings: list[str] = []
+    notices: list[Notice] = []
 
     # 영역별 점수를 각각 계산한다. delivery 는 Azure 도입 전이라 자리만 만든다
     subscores = [
@@ -571,29 +604,34 @@ def combine(
                 s.weight = 0.0
         overall = round(overall, 2)
     else:
-        warnings.append("점수를 낼 수 있는 영역이 없어 종합 점수를 내지 못했다.")
+        emit(warnings, notices, "SUBSCORE_NO_SCORABLE_AREA")
 
     # 반쪽으로 계산됐거나 아예 못 낸 영역을 경고로 끌어올린다.
     # delivery 는 처음부터 범위 밖이라고 정한 것이라 경고 대상이 아니다
     for s in subscores:
+        # 겉 문구와 안쪽 사유(영역 note)를 둘 다 코드로 담아 백엔드가 조립할 수 있게 한다
         if s.status == AreaStatus.PARTIAL:
-            warnings.append(f"'{s.label}' 영역이 일부 자질 없이 계산되었다: {s.note}")
+            emit(
+                warnings, notices, "SUBSCORE_AREA_PARTIAL",
+                label=s.label, note=s.note, noteNotice=s.notice,
+            )
         if s.status == AreaStatus.NOT_EVALUATED and s.area != ScoreArea.DELIVERY:
-            warnings.append(f"'{s.label}' 영역을 채점하지 못했다: {s.note}")
+            emit(
+                warnings, notices, "SUBSCORE_AREA_FAILED",
+                label=s.label, note=s.note, noteNotice=s.notice,
+            )
 
     grade = _to_grade(overall, weights) if overall is not None else None
 
     # 임시 가중치로 계산했다는 사실을 결과에 반드시 실어 보낸다.
     # 이 경고가 없으면 임시 점수가 확정 등급처럼 쓰일 위험이 있다
     if weights.provisional:
-        warnings.append(
-            "※ 임시 ※ 결합 가중치와 등급 커트라인은 학습된 값이 아니라 손으로 정한 임시값이다. "
-            "절대 등급으로 쓰지 말고 답안 사이 비교에만 쓸 것."
-        )
+        emit(warnings, notices, "SCORE_PROVISIONAL_WEIGHTS")
 
     return CombineResult(
         overall_score=overall,
         overall_grade=grade,
         subscores=subscores,
         warnings=warnings,
+        notices=notices,
     )

@@ -27,6 +27,8 @@ import secrets
 from dotenv import load_dotenv
 from fastapi import Header, HTTPException
 
+from .scoring.messages import notice
+
 # .env 에 적어 둔 키도 읽는다. 이미 설정된 환경변수는 덮어쓰지 않는다
 load_dotenv(override=False)
 
@@ -62,16 +64,20 @@ def require_api_key(x_api_key: str | None = Header(default=None, alias=API_KEY_H
         return
 
     # 헤더를 아예 안 보낸 경우와 값이 틀린 경우를 나눠 알려 준다.
-    # 연동하는 쪽이 '헤더를 빠뜨렸는지, 키가 틀렸는지'를 바로 알 수 있어야 하기 때문이다
+    # 연동하는 쪽이 '헤더를 빠뜨렸는지, 키가 틀렸는지'를 바로 알 수 있어야 하기 때문이다.
+    #
+    # detail 은 글자 하나가 아니라 {code, params, message} 묶음으로 나간다.
+    # 응시자 화면에는 영어가 떠야 하는데 우리가 만드는 문장은 한국어라서,
+    # 백엔드가 code 로 자기 쪽 영어 문장을 골라 띄울 수 있어야 하기 때문이다
     if x_api_key is None:
         raise HTTPException(
             status_code=401,
-            detail=f"{API_KEY_HEADER} 헤더가 없습니다. 발급받은 채점 API 키를 헤더에 넣어 주세요.",
+            detail=notice("AUTH_API_KEY_MISSING", header=API_KEY_HEADER).model_dump(),
         )
 
     # 글자를 하나씩 비교하는 시간 차이로 키를 추측당하지 않도록 전용 비교 함수를 쓴다
     if not secrets.compare_digest(x_api_key.strip(), expected):
         raise HTTPException(
             status_code=401,
-            detail=f"{API_KEY_HEADER} 헤더의 값이 올바르지 않습니다.",
+            detail=notice("AUTH_API_KEY_INVALID", header=API_KEY_HEADER).model_dump(),
         )

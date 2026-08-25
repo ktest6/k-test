@@ -32,6 +32,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from ..scoring.messages import Notice, emit, notice
 from ..scoring.schema import AudioInput
 from .loudness import Loudness, measure_wav_loudness
 
@@ -79,7 +80,30 @@ class AudioRequestError(ValueError):
     (내려받기 자체가 실패한 경우는 다르다. 그쪽은 잠시 뒤 되는 일이라 503 으로 다룬다)
 
     메시지는 그대로 백엔드에 전달되므로 사람이 읽는 한 문장만 담는다.
+
+    **문구 말고 코드도 함께 들고 다닌다.** 화면에는 영어가 떠야 하는데 우리가 만드는
+    문장은 한국어라서, 백엔드가 영어 문장을 고를 열쇠(`code`)와 그 문장에 끼울
+    값(`params`)을 예외에 같이 담아 창구(api.py)까지 보낸다.
+    `code` 는 안 줘도 되게 해 두어서, 옛날 방식으로 부르던 자리도 그대로 돈다.
     """
+
+    def __init__(self, message: str, code: str = "", params: dict | None = None):
+        super().__init__(message)
+        #: 백엔드가 영어 문구를 찾을 열쇠 (예: "AUDIO_FILE_TOO_LARGE")
+        self.code = code
+        #: 그 문구에 끼워 넣을 값 (예: {"actualMb": 25.3, "maxMb": 20})
+        self.params = dict(params or {})
+
+    @property
+    def notice(self) -> Notice:
+        """이 예외를 백엔드에 나갈 모양(코드 + 값 + 한국어 문장)으로 바꾼다."""
+        return Notice(code=self.code, params=self.params, message=str(self))
+
+    @classmethod
+    def of(cls, code: str, **params) -> "AudioRequestError":
+        """코드 하나로 예외를 만든다. 한국어 문장은 카탈로그가 만들어 준다."""
+        made = notice(code, **params)
+        return cls(made.message, code=made.code, params=made.params)
 
 
 @dataclass
@@ -95,12 +119,16 @@ class FetchedAudio:
     duration_ms: int | None = None
     #: 사람이 알아야 할 것
     warnings: list[str] = None  # type: ignore[assignment]
+    #: 위 warnings 와 같은 내용을 '코드 + 값' 으로 담은 것. 백엔드가 영어로 바꿔 쓴다
+    notices: list[Notice] = None  # type: ignore[assignment]
     #: 소리 크기 측정값. wav 가 아니거나 압축돼 있으면 None(관문을 건너뛴다)
     loudness: Loudness | None = None
 
     def __post_init__(self) -> None:
         if self.warnings is None:
             self.warnings = []
+        if self.notices is None:
+            self.notices = []
 
     @property
     def size_bytes(self) -> int:
@@ -124,8 +152,8 @@ def resolve_format(audio: AudioInput, content_type: str = "") -> str:
     if audio.format:
         declared = audio.format.strip().lower().lstrip(".")
         if declared not in FORMAT_TO_MIME:
-            raise AudioRequestError(
-                f"'{audio.format}' 형식은 받아쓸 수 없다(받는 형식: {allowed})."
+            raise AudioRequestError.of(
+                "AUDIO_FORMAT_UNSUPPORTED", format=audio.format, allowed=allowed
             )
         return declared
 
@@ -140,10 +168,7 @@ def resolve_format(audio: AudioInput, content_type: str = "") -> str:
         return MIME_TO_FORMAT[base_type]
 
     # 여기까지 왔으면 무엇인지 모른다. 찍어서 읽지 않는다
-    raise AudioRequestError(
-        "음성 형식을 알 수 없다. audio.format 에 형식을 적어서 다시 보내야 한다"
-        f"(받는 형식: {allowed})."
-    )
+    raise AudioRequestError.of("AUDIO_FORMAT_UNKNOWN", allowed=allowed)
 
 
 def measure_wav_duration_ms(data: bytes) -> int | None:
@@ -186,9 +211,7 @@ def fetch_audio(
     # 이것을 열어 두면 'file:///C:/...' 같은 주소로 서버 안의 파일을 읽어 갈 수 있다
     parsed = urlparse(audio.url)
     if parsed.scheme not in ("http", "https"):
-        raise AudioRequestError(
-            "음성 파일 주소는 http 또는 https 여야 한다(서버 안의 파일 경로는 받지 않는다)."
-        )
+        raise AudioRequestError.of("AUDIO_URL_SCHEME_INVALID")
 
     # 클라이언트를 받아 왔으면 우리가 닫지 않는다(부르는 쪽이 계속 쓸 수 있어야 한다)
     owned = http_client is None
@@ -199,17 +222,17 @@ def fetch_audio(
             with client.stream("GET", audio.url) as response:
                 # 파일이 없거나 권한이 없으면 여기서 걸린다
                 if response.status_code >= 400:
-                    raise AudioRequestError(
-                        f"음성 파일을 받지 못했다(주소가 {response.status_code} 로 응답했다). "
-                        "파일 주소와 접근 권한을 확인해야 한다."
+                    raise AudioRequestError.of(
+                        "AUDIO_FETCH_HTTP_ERROR", statusCode=response.status_code
                     )
 
                 # 관문 2 (앞): 서버가 크기를 알려 줬고 그것이 이미 한도를 넘으면 받지 않는다
                 declared = response.headers.get("content-length")
                 if declared and declared.isdigit() and int(declared) > MAX_AUDIO_BYTES:
-                    raise AudioRequestError(
-                        f"음성 파일이 {int(declared) / 1024 / 1024:.1f}MB 로 너무 크다"
-                        f"(최대 {MAX_AUDIO_BYTES // 1024 // 1024}MB)."
+                    raise AudioRequestError.of(
+                        "AUDIO_FILE_TOO_LARGE",
+                        actualMb=round(int(declared) / 1024 / 1024, 1),
+                        maxMb=MAX_AUDIO_BYTES // 1024 // 1024,
                     )
 
                 # 관문 2 (실제): 받으면서 센다. 넘는 순간 끊는다
@@ -218,8 +241,9 @@ def fetch_audio(
                 for chunk in response.iter_bytes():
                     received += len(chunk)
                     if received > MAX_AUDIO_BYTES:
-                        raise AudioRequestError(
-                            f"음성 파일이 최대 {MAX_AUDIO_BYTES // 1024 // 1024}MB 를 넘는다."
+                        raise AudioRequestError.of(
+                            "AUDIO_FILE_TOO_LARGE_STREAM",
+                            maxMb=MAX_AUDIO_BYTES // 1024 // 1024,
                         )
                     chunks.append(chunk)
 
@@ -230,10 +254,10 @@ def fetch_audio(
             # (여기서 import 하는 이유: 파일 맨 위에서 서로를 부르면 순환 참조가 된다)
             from .port import SttUnavailable
 
-            raise SttUnavailable(
-                f"음성 파일을 내려받지 못했다(제한 시간 {DOWNLOAD_TIMEOUT_S:.0f}초). "
-                "저장소 주소가 살아 있는지 확인해야 한다.",
+            raise SttUnavailable.of(
+                "AUDIO_DOWNLOAD_TIMEOUT",
                 detail=str(exc),
+                timeoutSec=round(DOWNLOAD_TIMEOUT_S),
             ) from exc
     finally:
         if owned:
@@ -242,21 +266,19 @@ def fetch_audio(
     data = b"".join(chunks)
     # 빈 파일은 받아쓸 것이 없다. 여기서 막지 않으면 LLM 이 빈 소리에 대고 문장을 지어낸다
     if not data:
-        raise AudioRequestError("음성 파일이 비어 있다(0바이트).")
+        raise AudioRequestError.of("AUDIO_FILE_EMPTY")
 
     # 관문 4: 형식 확인. 못 읽는 형식이면 여기서 막힌다
     audio_format = resolve_format(audio, content_type)
 
     # 길이는 wav 만 직접 재고, 나머지는 요청이 알려 준 값을 쓴다
     warnings: list[str] = []
+    notices: list[Notice] = []
     duration_ms = measure_wav_duration_ms(data) if audio_format == "wav" else None
     if duration_ms is None:
         duration_ms = audio.duration_ms
         if duration_ms is None and audio_format != "wav":
-            warnings.append(
-                f"{audio_format} 형식은 파일에서 길이를 재지 못한다. "
-                "녹음 길이가 필요하면 audio.duration_ms 로 알려 줘야 한다."
-            )
+            emit(warnings, notices, "AUDIO_DURATION_UNMEASURABLE", format=audio_format)
 
     # 소리 크기를 여기서 재 둔다. wav 가 아니면 None 이고, 그러면 무음 관문이 없다
     return FetchedAudio(
@@ -265,6 +287,7 @@ def fetch_audio(
         mime_type=FORMAT_TO_MIME[audio_format],
         duration_ms=duration_ms,
         warnings=warnings,
+        notices=notices,
         loudness=measure_wav_loudness(data) if audio_format == "wav" else None,
     )
 
@@ -278,20 +301,22 @@ def load_local_audio(path: str | Path, declared_format: str | None = None) -> Fe
     """
     file_path = Path(path)
     if not file_path.exists():
+        # 스크립트 전용 경로라 사용자 대면 코드가 없다(응답으로 나가지 않는다)
         raise AudioRequestError(f"음성 파일을 찾을 수 없다: {file_path}")
 
     # 확장자로 형식을 정한다. 로컬 파일에는 알려 줄 서버가 없다
     audio_format = (declared_format or file_path.suffix).strip().lower().lstrip(".")
     if audio_format not in FORMAT_TO_MIME:
-        raise AudioRequestError(
-            f"'{audio_format}' 형식은 받아쓸 수 없다"
-            f"(받는 형식: {', '.join(sorted(FORMAT_TO_MIME))})."
+        raise AudioRequestError.of(
+            "AUDIO_FORMAT_UNSUPPORTED",
+            format=audio_format,
+            allowed=", ".join(sorted(FORMAT_TO_MIME)),
         )
 
     data = file_path.read_bytes()
     if len(data) > MAX_AUDIO_BYTES:
-        raise AudioRequestError(
-            f"음성 파일이 최대 {MAX_AUDIO_BYTES // 1024 // 1024}MB 를 넘는다."
+        raise AudioRequestError.of(
+            "AUDIO_FILE_TOO_LARGE_STREAM", maxMb=MAX_AUDIO_BYTES // 1024 // 1024
         )
 
     return FetchedAudio(

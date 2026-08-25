@@ -26,6 +26,7 @@ import re
 from dataclasses import dataclass, field
 
 from ..llm.citation import normalize_for_match, verify_citation
+from ..scoring.messages import Notice, emit, notice
 from ..scoring.schema import ItemInfo
 from ..scoring.validity import FLAG_PROMPT_COPY, check_answer_validity, prompt_overlap
 from .preprocess import CUT_MARKER
@@ -113,6 +114,8 @@ class ItemValidation:
     item: GeneratedItem | None = None
     drop: DroppedItem | None = None
     warnings: list[str] = field(default_factory=list)
+    #: 위 warnings 와 같은 내용을 '코드 + 값' 으로 담은 것
+    notices: list[Notice] = field(default_factory=list)
 
 
 def _preview(text: object, limit: int = 40) -> str:
@@ -124,15 +127,25 @@ def _preview(text: object, limit: int = 40) -> str:
 
 
 def _drop(
-    index: int, raw: object, reason: DropReason, detail: str, quote: object = ""
+    index: int,
+    raw: object,
+    reason: DropReason,
+    detail: "str | Notice",
+    quote: object = "",
 ) -> DroppedItem:
-    """폐기 보고 한 줄을 만든다."""
+    """폐기 보고 한 줄을 만든다.
+
+    detail 로 Notice 를 주면 한국어 문장과 코드를 둘 다 싣는다.
+    글자만 주면 지금까지처럼 문장만 싣는다(코드 없이도 돌아가게 두려는 것).
+    """
     # 사전이 아닌 값이 올 수도 있어(모델이 형식을 깨는 경우) 안전하게 꺼낸다
     prompt_text = raw.get("prompt", "") if isinstance(raw, dict) else raw
+    made = detail if isinstance(detail, Notice) else None
     return DroppedItem(
         index=index,
         reason=reason,
-        detail=detail,
+        detail=made.message if made is not None else str(detail),
+        notice=made,
         rejected_preview=_preview(prompt_text),
         quote_preview=_preview(quote),
     )
@@ -159,17 +172,18 @@ def check_schema_and_format(
     """
     # 애초에 사전 모양이 아니면 볼 것이 없다
     if not isinstance(raw, dict):
-        return _drop(index, raw, DropReason.SCHEMA_INVALID, "문항이 JSON 객체 모양이 아니다.")
+        return _drop(index, raw, DropReason.SCHEMA_INVALID, notice("DROP_NOT_OBJECT"))
 
     # --- 필수 필드가 있고 타입이 맞는지 ---
     for key in ("prompt", "item_type", "expected_register", "source_quote"):
         if not isinstance(raw.get(key), str) or not raw.get(key, "").strip():
             return _drop(
-                index, raw, DropReason.SCHEMA_INVALID, f"필수 항목 '{key}' 이(가) 비었거나 글자가 아니다."
+                index, raw, DropReason.SCHEMA_INVALID,
+                notice("DROP_REQUIRED_FIELD_MISSING", key=key),
             )
     checklist = raw.get("checklist")
     if not isinstance(checklist, list):
-        return _drop(index, raw, DropReason.SCHEMA_INVALID, "checklist 가 목록이 아니다.")
+        return _drop(index, raw, DropReason.SCHEMA_INVALID, notice("DROP_CHECKLIST_NOT_LIST"))
 
     # --- 문항 유형이 우리가 정한 다섯 가지 안에 있는지 ---
     allowed_values = {t.value for t in (allowed_types or list(GeneratedItemType))}
@@ -177,7 +191,11 @@ def check_schema_and_format(
     if item_type not in allowed_values:
         return _drop(
             index, raw, DropReason.UNKNOWN_ITEM_TYPE,
-            f"문항 유형 '{item_type}' 은(는) 쓸 수 있는 유형이 아니다(허용: {', '.join(sorted(allowed_values))}).",
+            notice(
+                "DROP_ITEM_TYPE_INVALID",
+                itemType=item_type,
+                allowed=", ".join(sorted(allowed_values)),
+            ),
         )
 
     # --- 말투 ---
@@ -185,31 +203,50 @@ def check_schema_and_format(
     if register not in ("formal", "polite"):
         return _drop(
             index, raw, DropReason.SCHEMA_INVALID,
-            f"말투 '{register}' 는 formal 또는 polite 가 아니다.",
+            notice("DROP_REGISTER_INVALID", register=register),
         )
 
     # --- 체크리스트 개수와 각 항목의 값 ---
     if not (MIN_CHECKLIST_ITEMS <= len(checklist) <= MAX_CHECKLIST_ITEMS):
         return _drop(
             index, raw, DropReason.SCHEMA_INVALID,
-            f"체크리스트가 {len(checklist)}개다(허용 {MIN_CHECKLIST_ITEMS}~{MAX_CHECKLIST_ITEMS}개).",
+            notice(
+                "DROP_CHECKLIST_COUNT",
+                count=len(checklist),
+                min=MIN_CHECKLIST_ITEMS,
+                max=MAX_CHECKLIST_ITEMS,
+            ),
         )
     for order, entry in enumerate(checklist):
         if not isinstance(entry, dict):
-            return _drop(index, raw, DropReason.SCHEMA_INVALID, f"체크리스트 {order + 1}번이 객체가 아니다.")
+            return _drop(
+                index, raw, DropReason.SCHEMA_INVALID,
+                notice("DROP_CHECKLIST_ENTRY_NOT_OBJECT", index=order + 1),
+            )
         if not isinstance(entry.get("description"), str) or not entry["description"].strip():
-            return _drop(index, raw, DropReason.SCHEMA_INVALID, f"체크리스트 {order + 1}번에 설명이 없다.")
+            return _drop(
+                index, raw, DropReason.SCHEMA_INVALID,
+                notice("DROP_CHECKLIST_ENTRY_NO_DESCRIPTION", index=order + 1),
+            )
         weight = entry.get("weight")
         if not isinstance(weight, (int, float)) or isinstance(weight, bool):
-            return _drop(index, raw, DropReason.SCHEMA_INVALID, f"체크리스트 {order + 1}번의 weight 가 숫자가 아니다.")
+            return _drop(
+                index, raw, DropReason.SCHEMA_INVALID,
+                notice("DROP_CHECKLIST_WEIGHT_NOT_NUMBER", index=order + 1),
+            )
         # 범위를 벗어난 가중치를 조용히 깎지 않고 폐기한다.
         # weight 는 점수에 직접 들어가는 값이라, 우리가 몰래 고치면
         # 관리자가 승인한 문항과 채점에 쓰인 문항이 달라진다
         if not (MIN_CHECKLIST_WEIGHT <= float(weight) <= MAX_CHECKLIST_WEIGHT):
             return _drop(
                 index, raw, DropReason.SCHEMA_INVALID,
-                f"체크리스트 {order + 1}번의 weight 가 {weight} 로 허용 범위"
-                f"({MIN_CHECKLIST_WEIGHT}~{MAX_CHECKLIST_WEIGHT})를 벗어났다.",
+                notice(
+                    "DROP_CHECKLIST_WEIGHT_OUT_OF_RANGE",
+                    index=order + 1,
+                    weight=weight,
+                    min=MIN_CHECKLIST_WEIGHT,
+                    max=MAX_CHECKLIST_WEIGHT,
+                ),
             )
 
     # --- 지시문의 모양 ---
@@ -217,28 +254,29 @@ def check_schema_and_format(
     if not (MIN_PROMPT_CHARS <= len(prompt_text) <= MAX_PROMPT_CHARS):
         return _drop(
             index, raw, DropReason.PROMPT_FORMAT_INVALID,
-            f"지시문이 {len(prompt_text)}자다(허용 {MIN_PROMPT_CHARS}~{MAX_PROMPT_CHARS}자).",
+            notice(
+                "DROP_PROMPT_LENGTH",
+                chars=len(prompt_text), min=MIN_PROMPT_CHARS, max=MAX_PROMPT_CHARS,
+            ),
         )
     missing_marks = [mark for mark in REQUIRED_PROMPT_MARKS if mark not in prompt_text]
     if missing_marks:
         return _drop(
             index, raw, DropReason.PROMPT_FORMAT_INVALID,
-            f"지시문에 번호 기호 {''.join(missing_marks)} 가 없어 무엇을 써야 하는지 나뉘어 있지 않다.",
+            notice("DROP_PROMPT_NO_NUMBERING", markers="".join(missing_marks)),
         )
     run = longest_unspaced_run(prompt_text)
     if run > MAX_UNSPACED_RUN:
         return _drop(
             index, raw, DropReason.PROMPT_FORMAT_INVALID,
-            f"지시문에 띄어쓰기 없이 {run}자가 이어지는 곳이 있다(허용 {MAX_UNSPACED_RUN}자). "
-            "문서에서 띄어쓰기가 사라진 문구가 그대로 새어 나온 것으로 보인다.",
+            notice("DROP_PROMPT_RUNON", chars=run, maxChars=MAX_UNSPACED_RUN),
         )
 
     # --- 쓰기를 시키는 문항인지 ---
     if not any(verb in prompt_text for verb in WRITING_TASK_VERBS):
         return _drop(
             index, raw, DropReason.PROMPT_NOT_A_WRITING_TASK,
-            "지시문에 쓰기를 시키는 말(쓰세요·작성하세요·알리세요 등)이 없다. "
-            "글을 쓰게 하는 문항이 아니라 지식을 묻는 문항으로 보인다.",
+            notice("DROP_PROMPT_NO_WRITING_VERB"),
         )
 
     return None
@@ -249,7 +287,7 @@ def check_schema_and_format(
 # ---------------------------------------------------------------------------
 
 
-def check_citation_format(quote: object) -> tuple[DropReason, str] | None:
+def check_citation_format(quote: object) -> tuple[DropReason, Notice] | None:
     """G2) 인용이 '이어진 한 구절'의 모양인지 본다. 문서와 대조하기 전 단계다.
 
     프롬프트로 이미 부탁한 규칙을 코드로 한 번 더 확인하는 이유:
@@ -259,35 +297,31 @@ def check_citation_format(quote: object) -> tuple[DropReason, str] | None:
 
     # 근거를 아예 안 단 경우
     if not text:
-        return DropReason.CITATION_MISSING, "근거 인용이 비어 있다."
+        return DropReason.CITATION_MISSING, notice("DROP_EVIDENCE_EMPTY")
 
     # 전처리로 잘라낸 자리를 가로지른 인용.
     # 정제 텍스트에는 있지만 실제 문서에는 없는 문장이므로 근거가 될 수 없다
     if CUT_MARKER in text:
-        return (
-            DropReason.CITATION_CROSSES_CUT,
-            "인용이 문서에서 잘라낸 자리를 가로지른다. 실제 문서에는 이어져 있지 않은 문장이다.",
-        )
+        return DropReason.CITATION_CROSSES_CUT, notice("DROP_EVIDENCE_CROSSES_CHUNK")
 
     # 여러 곳의 구절을 이어붙인 인용
     for marker in STITCH_MARKERS:
         if marker in text:
             return (
                 DropReason.CITATION_STITCHED,
-                f"인용에 이음표 '{marker}' 가 있어 여러 구절을 합친 것으로 보인다.",
+                notice("DROP_EVIDENCE_JOINER", marker=marker),
             )
 
     # 길이 규칙
     if len(text) < MIN_CITATION_CHARS:
         return (
             DropReason.CITATION_STITCHED,
-            f"인용이 {len(text)}자로 너무 짧아 근거로 인정하지 않는다(최소 {MIN_CITATION_CHARS}자).",
+            notice("DROP_EVIDENCE_TOO_SHORT", chars=len(text), minChars=MIN_CITATION_CHARS),
         )
     if len(text) > MAX_CITATION_CHARS:
         return (
             DropReason.CITATION_STITCHED,
-            f"인용이 {len(text)}자로 너무 길다(최대 {MAX_CITATION_CHARS}자). "
-            "짧은 한 구절만 인용해야 어디를 근거로 삼았는지 사람이 확인할 수 있다.",
+            notice("DROP_EVIDENCE_TOO_LONG", chars=len(text), maxChars=MAX_CITATION_CHARS),
         )
 
     return None
@@ -322,7 +356,9 @@ def match_citation(source_text: str, quote: str) -> Citation | None:
 # ---------------------------------------------------------------------------
 
 
-def check_scoring_guards(item_prompt: str, matched_text: str) -> tuple[DropReason, str] | None:
+def check_scoring_guards(
+    item_prompt: str, matched_text: str
+) -> tuple[DropReason, Notice] | None:
     """G4) 이 문항을 채점기의 유효성 가드에 미리 태워 본다.
 
     왜 이 검사가 필요한가:
@@ -337,19 +373,18 @@ def check_scoring_guards(item_prompt: str, matched_text: str) -> tuple[DropReaso
     if ratio >= MAX_PROMPT_QUOTE_OVERLAP:
         return (
             DropReason.PROMPT_LEAKS_ANSWER,
-            f"지시문 글자의 {ratio:.0%}가 근거 구절과 그대로 겹친다"
-            f"(기준 {MAX_PROMPT_QUOTE_OVERLAP:.0%}). 답이 문제 안에 들어 있다.",
+            notice(
+                "DROP_ANSWER_IN_PROMPT",
+                ratio=f"{ratio:.0%}",
+                threshold=f"{MAX_PROMPT_QUOTE_OVERLAP:.0%}",
+            ),
         )
 
     # 반대 방향도 본다. 문서 문장을 그대로 옮겨 쓴 응시자가 무효 처리되지 않는지,
     # 실제 채점 가드를 그대로 돌려서 확인한다
     report = check_answer_validity(answer_text=matched_text, item_prompt=item_prompt)
     if FLAG_PROMPT_COPY in report.flags:
-        return (
-            DropReason.PROMPT_LEAKS_ANSWER,
-            "근거 구절을 그대로 옮겨 쓴 답안이 채점기의 '지시문 베끼기' 가드에 걸린다. "
-            "성실한 응시자가 무효 0점을 받을 수 있는 문항이다.",
-        )
+        return DropReason.PROMPT_LEAKS_ANSWER, notice("DROP_TRIPS_COPY_GUARD")
 
     return None
 
@@ -373,6 +408,7 @@ def validate_item(
     item_id 는 여기서 임시 값을 쓰고, 통과한 문항끼리 모아 조립할 때 다시 붙인다.
     """
     warnings: list[str] = []
+    notices: list[Notice] = []
 
     # --- G1 스키마·형식 ---
     drop = check_schema_and_format(index, raw, allowed_types or list(GeneratedItemType))
@@ -386,24 +422,41 @@ def validate_item(
 
     # --- G2·G3 인용: 문항 근거부터 ---
     # 확인할 인용을 한 줄로 모은다. (표시용 이름, 인용 글자)
-    quotes: list[tuple[str, str]] = [("문항 근거", str(raw["source_quote"]))]
+    quotes: list[tuple[Notice, str]] = [
+        (notice("DROP_LABEL_ITEM_EVIDENCE"), str(raw["source_quote"]))
+    ]
     for order, entry in enumerate(checklist_raw):
-        quotes.append((f"체크리스트 {entry.get('id') or order + 1}번 근거", str(entry.get("quote", ""))))
+        quotes.append((
+            notice("DROP_LABEL_CHECKLIST_EVIDENCE", index=entry.get("id") or order + 1),
+            str(entry.get("quote", "")),
+        ))
 
     citations: list[Citation] = []
     for label, quote in quotes:
         # G2 형식 검사
         format_problem = check_citation_format(quote)
         if format_problem is not None:
+            # 겉 문구(어느 근거인지)와 안쪽 사유를 둘 다 코드로 담는다
             reason, detail = format_problem
-            return ItemValidation(drop=_drop(index, raw, reason, f"{label}: {detail}", quote))
+            return ItemValidation(drop=_drop(
+                index, raw, reason,
+                notice(
+                    "DROP_EVIDENCE_WRAP",
+                    label=label.message, labelNotice=label,
+                    detail=detail.message, detailNotice=detail,
+                ),
+                quote,
+            ))
         # G3 문서 대조
         citation = match_citation(source_text, quote)
         if citation is None:
             return ItemValidation(
                 drop=_drop(
                     index, raw, DropReason.CITATION_NOT_FOUND,
-                    f"{label}: 문서에서 찾을 수 없는 인용이다(지어낸 근거로 보고 폐기했다).",
+                    notice(
+                        "DROP_EVIDENCE_NOT_FOUND",
+                        label=label.message, labelNotice=label,
+                    ),
                     quote,
                 )
             )
@@ -449,7 +502,7 @@ def validate_item(
         return ItemValidation(
             drop=_drop(
                 index, raw, DropReason.NOT_SCOREABLE,
-                f"채점 API 형식으로 바꾸지 못했다({type(exc).__name__}).",
+                notice("DROP_CONVERT_FAILED", type=type(exc).__name__),
             )
         )
 
@@ -457,13 +510,13 @@ def validate_item(
     # 암기 문제처럼 보이는 말이 섞여 있으면 알려만 준다. 판단은 승인하는 사람이 한다
     for marker in MEMORIZATION_MARKERS:
         if marker in item.prompt:
-            warnings.append(
-                f"[{provisional_item_id}] 지시문에 '{marker}' 가 있어 암기 문제로 보일 수 있다. "
-                "승인 전에 사람이 확인해야 한다."
+            emit(
+                warnings, notices, "GEN_MEMORIZATION_SUSPECT",
+                itemId=provisional_item_id, marker=marker,
             )
             break
 
-    return ItemValidation(item=item, warnings=warnings)
+    return ItemValidation(item=item, warnings=warnings, notices=notices)
 
 
 # ---------------------------------------------------------------------------

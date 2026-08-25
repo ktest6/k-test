@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 
 from ..llm.citation import filter_by_citation
 from ..llm.client import GeminiClient, LLMUnavailable
+from ..scoring.messages import Notice, emit
 from ..scoring.schema import Evidence, FeatureSource, FeatureStatus, FeatureValue, Mode
 
 # 오류 종류 -> (자질 id, 사람이 읽는 이름)
@@ -118,6 +119,8 @@ class ErrorExtractionResult:
 
     features: list[FeatureValue] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    #: 위 warnings 와 같은 내용을 '코드 + 값' 으로 담은 것. 백엔드가 영어로 바꿔 쓴다
+    notices: list[Notice] = field(default_factory=list)
     dropped_citations: int = 0
     llm_used: bool = False
 
@@ -286,17 +289,14 @@ def extract_error_features(
     # 호출하는 쪽이 LLM을 끈 경우. 규칙 자질만으로 채점하는 빠른 모드다
     if not use_llm:
         result.features = _unavailable_features(active_types, "옵션에서 LLM 사용을 껐다") + result.features
-        result.warnings.append("LLM 사용이 꺼져 있어 오류 자질(조사·어미·어휘·높임법)을 계산하지 못했다.")
+        emit(result.warnings, result.notices, "ERRORS_LLM_DISABLED")
         return result
 
     # 키가 없으면 호출을 시도조차 하지 않고 대체 경로로 넘어간다(멈추지 않는다)
     client = client or GeminiClient()
     if not client.available:
         result.features = _unavailable_features(active_types, "GEMINI_API_KEY 없음") + result.features
-        result.warnings.append(
-            "GEMINI_API_KEY 가 없어 오류 자질을 계산하지 못했다. "
-            "언어 사용 점수는 규칙 자질만으로 계산된 임시 결과다."
-        )
+        emit(result.warnings, result.notices, "ERRORS_API_KEY_MISSING")
         return result
 
     prompt = build_prompt(answer_text, item_prompt, active_types)
@@ -310,19 +310,27 @@ def extract_error_features(
         # 네트워크가 끊기거나 사용량을 넘겨도 채점 전체를 실패시키지 않는다.
         # 대신 무엇을 못 했는지 경고에 남겨서 결과를 읽는 사람이 알 수 있게 한다
         result.features = _unavailable_features(active_types, str(exc)) + result.features
-        result.warnings.append(f"LLM 오류 자질 추출 실패(규칙 자질만으로 진행): {exc}")
+        # 안쪽 사유(LLM 이 왜 안 됐는지)도 코드째로 함께 담는다
+        emit(
+            result.warnings,
+            result.notices,
+            "ERRORS_EXTRACTION_FAILED",
+            reason=str(exc),
+            reasonNotice=exc.notice,
+        )
         return result
 
     # 형식이 깨진 응답이 와도 그대로 진행할 수 있게, 목록이 아니면 빈 목록으로 바꾼다
     raw_errors = raw.get("errors")
     if not isinstance(raw_errors, list):
         raw_errors = []
-        result.warnings.append("LLM 응답에 errors 목록이 없어 오류를 0건으로 처리했다.")
+        emit(result.warnings, result.notices, "ERRORS_NO_ERRORS_LIST")
 
     # 원문에 없는 인용은 여기서 버린다. 이 단계가 환각을 점수에서 막는 지점이다
     filtered = filter_by_citation(answer_text, raw_errors, quote_keys=("quote",))
     result.dropped_citations = filtered.dropped_count
     result.warnings.extend(filtered.drop_messages)
+    result.notices.extend(filtered.drop_notices)
 
     result.features = features_from_error_items(answer_text, filtered.kept, active_types) + result.features
     result.llm_used = True

@@ -25,6 +25,8 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+from ..scoring.messages import Notice, notice
+
 # 실패한 호출의 자세한 내용은 화면이 아니라 로그로 보낸다.
 # 채점 결과에 실리는 문구와 개발자가 볼 진단 정보를 분리하기 위해서다
 logger = logging.getLogger(__name__)
@@ -65,49 +67,75 @@ class LLMUnavailable(RuntimeError):
     warnings 와 영역별 note 는 백엔드가 받아 응시자에게 보여줄 수 있는 자리라서,
     여기에는 사람이 읽을 짧은 한 문장만 담는다.
     서버가 돌려준 원문(JSON 덩어리)은 detail 에 따로 담고 로그로만 내보낸다.
+
+    **문구 말고 코드도 함께 들고 다닌다.** 응시자 화면에는 영어가 떠야 하는데 우리가
+    만드는 문장은 한국어라서, 백엔드가 영어 문장을 고를 열쇠(`code`)와 그 문장에 끼울
+    값(`params`)을 예외에 같이 담는다.
+    `code` 는 안 줘도 되게 해 두어서, 옛날 방식으로 부르던 자리도 그대로 돈다.
     """
 
-    def __init__(self, message: str, detail: str = ""):
+    def __init__(
+        self,
+        message: str,
+        detail: str = "",
+        code: str = "",
+        params: dict | None = None,
+    ):
         super().__init__(message)
         # 개발자가 원인을 찾을 때 쓰는 자리. 채점 결과에는 실리지 않는다
         self.detail = detail
+        #: 백엔드가 영어 문구를 찾을 열쇠 (예: "LLM_QUOTA_EXHAUSTED")
+        self.code = code
+        #: 그 문구에 끼워 넣을 값
+        self.params = dict(params or {})
+
+    @property
+    def notice(self) -> Notice:
+        """이 예외를 백엔드에 나갈 모양(코드 + 값 + 한국어 문장)으로 바꾼다."""
+        return Notice(code=self.code, params=self.params, message=str(self))
+
+    @classmethod
+    def of(cls, code: str, *, detail: str = "", **params) -> "LLMUnavailable":
+        """코드 하나로 예외를 만든다. 한국어 문장은 카탈로그가 만들어 준다."""
+        made = notice(code, **params)
+        return cls(made.message, detail=detail, code=made.code, params=made.params)
 
 
 # 호출이 실패하는 이유는 여러 가지지만, 결과를 읽는 사람에게 필요한 것은
 # "무슨 일이 있었고 내가 무엇을 하면 되는가" 한 줄이다.
 # (서버 응답에서 찾을 표시, 사람이 읽을 문구) 짝으로 적어 둔다.
 _FAILURE_PATTERNS: tuple[tuple[tuple[str, ...], str], ...] = (
-    (("RESOURCE_EXHAUSTED", "429", "quota"),
-     "LLM 하루 호출 한도를 다 썼다(429). 한도가 풀리거나 결제를 활성화해야 한다."),
-    (("NOT_FOUND", "404"),
-     "요청한 LLM 모델을 쓸 수 없다(404). .env 의 GEMINI_MODEL 을 확인해야 한다."),
+    (("RESOURCE_EXHAUSTED", "429", "quota"), "LLM_QUOTA_EXHAUSTED"),
+    (("NOT_FOUND", "404"), "LLM_MODEL_NOT_FOUND"),
     (("PERMISSION_DENIED", "403", "API_KEY_INVALID", "API key not valid"),
-     "LLM 접근이 거부됐다(403). API 키가 올바른지 확인해야 한다."),
-    (("UNAUTHENTICATED", "401"),
-     "LLM 인증에 실패했다(401). API 키를 확인해야 한다."),
-    (("DEADLINE_EXCEEDED", "timeout", "Timeout", "timed out"),
-     "LLM 응답이 제한 시간 안에 오지 않았다."),
-    (("UNAVAILABLE", "503", "500", "INTERNAL"),
-     "LLM 서버가 일시적으로 응답하지 않는다."),
-    (("ConnectionError", "Connection", "getaddrinfo", "Network"),
-     "LLM 서버에 연결하지 못했다. 네트워크를 확인해야 한다."),
+     "LLM_PERMISSION_DENIED"),
+    (("UNAUTHENTICATED", "401"), "LLM_UNAUTHENTICATED"),
+    (("DEADLINE_EXCEEDED", "timeout", "Timeout", "timed out"), "LLM_TIMEOUT"),
+    (("UNAVAILABLE", "503", "500", "INTERNAL"), "LLM_SERVER_ERROR"),
+    (("ConnectionError", "Connection", "getaddrinfo", "Network"), "LLM_CONNECTION_FAILED"),
 )
 
 
-def classify_failure(exc: Exception) -> str:
-    """호출 실패의 원인을 사람이 읽을 한 문장으로 바꾼다.
+def classify_failure_notice(exc: Exception) -> Notice:
+    """호출 실패의 원인을 '코드 + 한국어 한 문장' 으로 바꾼다.
 
     분류를 이 함수 한 곳에서만 하는 이유:
     같은 판별을 여러 파일에 흩어 놓으면 새로운 오류 유형이 생겼을 때
     어떤 곳은 고쳐지고 어떤 곳은 안 고쳐져서 문구가 제각각이 된다.
     """
     text = str(exc)
-    for markers, message in _FAILURE_PATTERNS:
+    # 서버 응답에서 알아볼 만한 표시를 찾아 미리 정해 둔 코드로 바꾼다
+    for markers, code in _FAILURE_PATTERNS:
         if any(marker in text for marker in markers):
-            return message
+            return notice(code)
     # 어디에도 해당하지 않으면 예외 종류만 밝힌다.
     # 서버 응답 원문을 여기에 붙이면 안 된다(채점 결과에 그대로 실린다)
-    return f"LLM 호출에 실패했다({type(exc).__name__})."
+    return notice("LLM_CALL_FAILED", excType=type(exc).__name__)
+
+
+def classify_failure(exc: Exception) -> str:
+    """호출 실패의 원인을 사람이 읽을 한 문장으로 바꾼다(코드는 버리고 문장만)."""
+    return classify_failure_notice(exc).message
 
 
 # 답변 길이 상한. **생각(thinking) 토큰이 이 예산에서 같이 깎인다.**
@@ -206,10 +234,7 @@ class GeminiClient:
         """접속 객체를 준비한다. 키가 없으면 여기서 막는다."""
         # 키가 없으면 여기서 딱 잘라 막는다. 파이프라인은 이 예외를 받아 대체 경로로 넘어간다
         if not self._api_key:
-            raise LLMUnavailable(
-                "GEMINI_API_KEY 가 설정되어 있지 않습니다. "
-                ".env 파일이나 환경변수에 키를 넣어 주세요."
-            )
+            raise LLMUnavailable.of("LLM_API_KEY_MISSING")
 
         # 접속 객체는 한 번만 만들어 두고 계속 쓴다(매번 만들면 느려진다)
         if self._client is None:
@@ -288,8 +313,8 @@ class GeminiClient:
             bigger = self.config.max_output_tokens * multiplier
             if multiplier <= 1:
                 # 다시 부르지 않기로 설정된 경우. 무슨 일이 있었는지는 분명히 남긴다
-                raise LLMUnavailable(
-                    "LLM 답이 길이 제한에 걸려 잘렸다(답변 예산이 모자랐다).",
+                raise LLMUnavailable.of(
+                    "LLM_RESPONSE_TRUNCATED",
                     detail=f"max_output_tokens={self.config.max_output_tokens}, 재시도 꺼짐",
                 )
             logger.warning(
@@ -302,17 +327,15 @@ class GeminiClient:
             # 예산을 두 배로 줬는데도 잘렸다면 이 답안은 이 설정으로 감당이 안 되는 것이다.
             # 반쪽짜리 결과를 지어내지 않고 실패로 두고, 사유를 그대로 밝힌다
             if _is_truncated(response):
-                raise LLMUnavailable(
-                    "LLM 답이 길이 제한에 걸려 잘렸다(예산을 늘려 다시 불러도 마찬가지였다).",
+                raise LLMUnavailable.of(
+                    "LLM_RESPONSE_TRUNCATED_RETRIED",
                     detail=f"max_output_tokens={self.config.max_output_tokens} -> {bigger}",
                 )
 
         # 안전 필터에 걸리거나 답을 못 만들면 빈 응답이 온다. 이것도 실패로 다룬다
         text = (response.text or "").strip()
         if not text:
-            raise LLMUnavailable(
-                "LLM이 빈 응답을 보냈다(안전 필터에 걸렸거나 답을 만들지 못했다)."
-            )
+            raise LLMUnavailable.of("LLM_EMPTY_RESPONSE")
 
         return _parse_json_object(text)
 
@@ -360,23 +383,19 @@ def _parse_json_object(text: str) -> dict[str, Any]:
         first = text.find("{")
         if first == -1:
             # 중괄호조차 없으면 JSON이 아니다. 채점에 쓸 수 없으므로 실패로 처리한다
-            raise LLMUnavailable(
-                "LLM 응답을 JSON으로 해석하지 못했다.", detail=text[:500]
-            )
+            raise LLMUnavailable.of("LLM_JSON_PARSE_FAILED", detail=text[:500])
         try:
             # raw_decode 는 앞에서부터 완성된 값 하나만 읽고 나머지는 그냥 둔다.
             # 뒤에 붙은 여분의 괄호나 설명이 여기서 자연히 떨어져 나간다
             parsed, _ = json.JSONDecoder().raw_decode(text[first:])
         except json.JSONDecodeError as exc:
-            raise LLMUnavailable(
-                "LLM 응답을 JSON으로 해석하지 못했다.", detail=f"{exc} | {text[:500]}"
+            raise LLMUnavailable.of(
+                "LLM_JSON_PARSE_FAILED", detail=f"{exc} | {text[:500]}"
             ) from exc
 
     # 목록(list)이나 숫자가 최상위로 오면 뒤쪽 처리가 전부 어긋나므로 미리 막는다
     if not isinstance(parsed, dict):
-        raise LLMUnavailable(
-            "LLM 응답의 최상위가 JSON 객체가 아니다.", detail=text[:500]
-        )
+        raise LLMUnavailable.of("LLM_JSON_NOT_OBJECT", detail=text[:500])
     return parsed
 
 
