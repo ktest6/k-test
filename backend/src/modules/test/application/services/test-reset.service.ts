@@ -2,6 +2,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { appConfig } from '../../../../config/configuration';
 import { ForbiddenDomainException } from '../../../../common/exceptions/domain.exception';
+import {
+  NOT_AVAILABLE_IN_PRODUCTION,
+  operationFailed,
+} from '../../../../common/exceptions/error-messages';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import { SessionStatus } from '../../../exam-session/domain/enums/session-status.enum';
 
@@ -22,7 +26,7 @@ export class TestResetService {
 
   async resetAllSessionsToInProgress(): Promise<number> {
     if (this.config.env === 'production') {
-      throw new ForbiddenDomainException('프로덕션 환경에서는 사용할 수 없습니다.');
+      throw new ForbiddenDomainException(NOT_AVAILABLE_IN_PRODUCTION);
     }
 
     const client = this.supabaseService.getAdminClient();
@@ -33,7 +37,7 @@ export class TestResetService {
       .select('exam_session_id');
 
     if (error) {
-      throw new ForbiddenDomainException(error.message ?? '세션 리셋에 실패했습니다.');
+      throw new ForbiddenDomainException(error.message ?? operationFailed('reset sessions'));
     }
     return (data ?? []).length;
   }

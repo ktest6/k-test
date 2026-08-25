@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConflictDomainException } from '../../common/exceptions/domain.exception';
+import { operationFailed } from '../../common/exceptions/error-messages';
 import { SupabaseService } from './supabase.service';
 
 export interface SignedUploadUrl {
@@ -36,7 +37,7 @@ export class StorageUploadUrlService {
       .createSignedUploadUrl(path, { upsert: options?.upsert ?? false });
 
     if (error || !data) {
-      throw new ConflictDomainException(error?.message ?? '업로드 URL 발급에 실패했습니다.');
+      throw new ConflictDomainException(error?.message ?? operationFailed('issue upload URL'));
     }
 
     return { path: data.path, signedUrl: data.signedUrl, token: data.token };

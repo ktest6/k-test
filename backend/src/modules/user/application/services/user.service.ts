@@ -5,6 +5,11 @@ import {
   NotFoundDomainException,
   UnauthorizedDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import {
+  EMAIL_ALREADY_IN_USE,
+  INVALID_CREDENTIALS,
+  notFound,
+} from '../../../../common/exceptions/error-messages';
 import { User } from '../../domain/entities/user.entity';
 import { IdentityDocumentType } from '../../domain/enums/identity-document-type.enum';
 import {
@@ -45,7 +50,7 @@ export class UserService {
   async register(input: RegisterUserRequest): Promise<User> {
     const emailTaken = await this.userRepository.existsByEmail(input.email);
     if (emailTaken) {
-      throw new ConflictDomainException('이미 사용 중인 이메일입니다.');
+      throw new ConflictDomainException(EMAIL_ALREADY_IN_USE);
     }
     if (input.idType && input.idNumber) {
       const identityTaken = await this.userRepository.existsByIdentityDocument(
@@ -53,7 +58,7 @@ export class UserService {
         input.idNumber,
       );
       if (identityTaken) {
-        throw new ConflictDomainException('이미 등록된 신분증 정보입니다.');
+        throw new ConflictDomainException('This identity document is already registered.');
       }
     }
 
@@ -65,14 +70,14 @@ export class UserService {
     const credentials = await this.userRepository.findCredentialsByEmail(email);
     if (!credentials) {
       this.logger.warn(`로그인 실패 (계정 없음): email=${email}`);
-      throw new UnauthorizedDomainException('이메일 또는 비밀번호가 올바르지 않습니다.');
+      throw new UnauthorizedDomainException(INVALID_CREDENTIALS);
     }
 
     const matches = await bcrypt.compare(password, credentials.passwordHash);
     if (!matches) {
       await this.userRepository.recordLoginFailure(credentials.user.id);
       this.logger.warn(`로그인 실패 (비밀번호 불일치): email=${email}`);
-      throw new UnauthorizedDomainException('이메일 또는 비밀번호가 올바르지 않습니다.');
+      throw new UnauthorizedDomainException(INVALID_CREDENTIALS);
     }
 
     await this.userRepository.recordLoginSuccess(credentials.user.id);
@@ -82,7 +87,7 @@ export class UserService {
   async findById(id: string): Promise<User> {
     const user = await this.userRepository.findById(id);
     if (!user) {
-      throw new NotFoundDomainException(`사용자(${id})를 찾을 수 없습니다.`);
+      throw new NotFoundDomainException(notFound('User', id));
     }
     return user;
   }

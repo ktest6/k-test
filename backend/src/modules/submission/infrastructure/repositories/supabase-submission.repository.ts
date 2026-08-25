@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { NotFoundDomainException } from '../../../../common/exceptions/domain.exception';
+import { notFound, operationFailed } from '../../../../common/exceptions/error-messages';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import { Submission } from '../../domain/entities/submission.entity';
 import { SubmissionStatus } from '../../domain/enums/submission-status.enum';
@@ -53,7 +54,7 @@ export class SupabaseSubmissionRepository implements SubmissionRepository {
       .single<SubmissionRow>();
 
     if (error || !data) {
-      throw new NotFoundDomainException(error?.message ?? '응시 시작에 실패했습니다.');
+      throw new NotFoundDomainException(error?.message ?? operationFailed('start the submission'));
     }
     return toDomain(data);
   }
@@ -82,7 +83,7 @@ export class SupabaseSubmissionRepository implements SubmissionRepository {
       .single<SubmissionRow>();
 
     if (error || !data) {
-      throw new NotFoundDomainException(`응시(${id})를 찾을 수 없습니다.`);
+      throw new NotFoundDomainException(notFound('Submission', id));
     }
     return toDomain(data);
   }

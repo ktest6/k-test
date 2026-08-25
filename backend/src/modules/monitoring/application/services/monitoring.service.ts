@@ -9,6 +9,7 @@ import {
   ForbiddenDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import { notFound, notOwnedByUser } from '../../../../common/exceptions/error-messages';
 import { describeError } from '../../../../common/utils/describe-error.util';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import {
@@ -273,7 +274,7 @@ export class MonitoringService {
 
     const expectedPrefix = `${userId}/${examSessionId}/`;
     if (!clipPath.startsWith(expectedPrefix)) {
-      throw new ForbiddenDomainException('본인 세션의 클립 경로가 아닙니다.');
+      throw new ForbiddenDomainException(notOwnedByUser("session's clip path"));
     }
 
     return this.proctoringEventRepository.updateClipPath(eventId, clipPath);
@@ -289,7 +290,7 @@ export class MonitoringService {
 
     const event = await this.proctoringEventRepository.findById(eventId);
     if (!event || event.examSessionId !== examSessionId) {
-      throw new NotFoundDomainException(`모니터링 이벤트(${eventId})를 찾을 수 없습니다.`);
+      throw new NotFoundDomainException(notFound('Monitoring event', eventId));
     }
   }
 

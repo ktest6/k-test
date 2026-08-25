@@ -3,6 +3,7 @@ import {
   ConflictDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import { notFound } from '../../../../common/exceptions/error-messages';
 import { Submission } from '../../domain/entities/submission.entity';
 import { SubmissionStatus } from '../../domain/enums/submission-status.enum';
 import {
@@ -27,7 +28,7 @@ export class SubmissionService {
   async findById(id: string): Promise<Submission> {
     const submission = await this.submissionRepository.findById(id);
     if (!submission) {
-      throw new NotFoundDomainException(`응시(${id})를 찾을 수 없습니다.`);
+      throw new NotFoundDomainException(notFound('Submission', id));
     }
     return submission;
   }
@@ -70,7 +71,9 @@ export class SubmissionService {
       submission.status === SubmissionStatus.SUBMITTED ||
       submission.status === SubmissionStatus.GRADED
     ) {
-      throw new ConflictDomainException(`응시(${id})는 이미 종료 처리되어 실격시킬 수 없습니다.`);
+      throw new ConflictDomainException(
+        `Submission (${id}) has already ended and cannot be disqualified.`,
+      );
     }
     return this.submissionRepository.updateStatus(id, SubmissionStatus.DISQUALIFIED);
   }

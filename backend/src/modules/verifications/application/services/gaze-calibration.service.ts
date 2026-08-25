@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { appConfig } from '../../../../config/configuration';
 import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
+import { serviceCommunicationFailed } from '../../../../common/exceptions/error-messages';
 import { describeError } from '../../../../common/utils/describe-error.util';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import {
@@ -73,9 +74,7 @@ export class GazeCalibrationService {
       if (!this.config.requireMonitoringService) {
         return NEUTRAL_RESULT;
       }
-      throw new ConflictDomainException(
-        '시선 캘리브레이션 서비스와 통신에 실패했습니다. 잠시 후 다시 시도해주세요.',
-      );
+      throw new ConflictDomainException(serviceCommunicationFailed('gaze calibration'));
     }
 
     if (result.calibrated) {

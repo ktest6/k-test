@@ -11,6 +11,7 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
+import { mustAgreeTo } from '../../../../common/exceptions/error-messages';
 import { IdentityDocumentType } from '../../../user/domain/enums/identity-document-type.enum';
 
 export class SignUpDto {
@@ -76,17 +77,17 @@ export class SignUpDto {
   // 동의 (필수, 타임스탬프 기록)
   @ApiProperty({ description: '이용약관 동의 여부 (필수)' })
   @IsBoolean()
-  @Equals(true, { message: '이용약관에 동의해야 가입할 수 있습니다.' })
+  @Equals(true, { message: mustAgreeTo('Terms of Service') })
   agreedToTerms: boolean;
 
   @ApiProperty({ description: '개인정보처리방침 동의 여부 (필수)' })
   @IsBoolean()
-  @Equals(true, { message: '개인정보처리방침에 동의해야 가입할 수 있습니다.' })
+  @Equals(true, { message: mustAgreeTo('Privacy Policy') })
   agreedToPrivacyPolicy: boolean;
 
   @ApiProperty({ description: '여권번호 처리 동의 여부 (필수)' })
   @IsBoolean()
-  @Equals(true, { message: '여권번호 처리에 동의해야 가입할 수 있습니다.' })
+  @Equals(true, { message: mustAgreeTo('passport information processing policy') })
   agreedToPassportProcessing: boolean;
 
   @ApiPropertyOptional({ description: '음성 데이터의 AI 모델 학습 활용 동의 여부 (선택)' })

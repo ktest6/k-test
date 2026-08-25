@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { NotFoundDomainException } from '../../../../common/exceptions/domain.exception';
+import { notFound } from '../../../../common/exceptions/error-messages';
 import { Document } from '../../domain/entities/document.entity';
 import {
   DOCUMENT_REPOSITORY,
@@ -41,7 +42,7 @@ export class DocumentService {
   async findById(id: string): Promise<Document> {
     const document = await this.documentRepository.findById(id);
     if (!document) {
-      throw new NotFoundDomainException(`문서(${id})를 찾을 수 없습니다.`);
+      throw new NotFoundDomainException(notFound('Document', id));
     }
     return document;
   }

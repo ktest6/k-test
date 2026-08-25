@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
+import { operationFailed } from '../../../../common/exceptions/error-messages';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import { Document, DocumentMetadata } from '../../domain/entities/document.entity';
 import { DocumentStatus } from '../../domain/enums/document-status.enum';
@@ -52,7 +53,7 @@ export class SupabaseDocumentRepository implements DocumentRepository {
       .single<DocumentRow>();
 
     if (error || !data) {
-      throw new ConflictDomainException(error?.message ?? '서류 업로드에 실패했습니다.');
+      throw new ConflictDomainException(error?.message ?? operationFailed('upload the document'));
     }
     return toDomain(data);
   }

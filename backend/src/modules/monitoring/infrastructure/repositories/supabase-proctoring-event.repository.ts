@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
+import { operationFailed } from '../../../../common/exceptions/error-messages';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import { ProctoringEvent, ProctoringSeverity } from '../../domain/entities/proctoring-event.entity';
 import {
@@ -52,7 +53,9 @@ export class SupabaseProctoringEventRepository implements ProctoringEventReposit
       .single<ProctoringEventRow>();
 
     if (error || !data) {
-      throw new ConflictDomainException(error?.message ?? '모니터링 이벤트 기록에 실패했습니다.');
+      throw new ConflictDomainException(
+        error?.message ?? operationFailed('record the monitoring event'),
+      );
     }
     return toDomain(data);
   }
@@ -92,7 +95,9 @@ export class SupabaseProctoringEventRepository implements ProctoringEventReposit
       .single<ProctoringEventRow>();
 
     if (error || !data) {
-      throw new ConflictDomainException(error?.message ?? '영상 클립 경로 저장에 실패했습니다.');
+      throw new ConflictDomainException(
+        error?.message ?? operationFailed('save the video clip path'),
+      );
     }
     return toDomain(data);
   }

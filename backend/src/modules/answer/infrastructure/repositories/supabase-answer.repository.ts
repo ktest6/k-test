@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
+import { operationFailed } from '../../../../common/exceptions/error-messages';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import { AnswerRepository, SaveAnswerInput } from '../../domain/answer.repository.interface';
 import { Answer } from '../../domain/entities/answer.entity';
@@ -56,7 +57,7 @@ export class SupabaseAnswerRepository implements AnswerRepository {
       .single<AnswerRow>();
 
     if (error || !data) {
-      throw new ConflictDomainException(error?.message ?? '답안 저장에 실패했습니다.');
+      throw new ConflictDomainException(error?.message ?? operationFailed('save the answer'));
     }
     return toDomain(data);
   }
