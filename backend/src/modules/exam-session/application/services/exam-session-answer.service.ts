@@ -4,6 +4,7 @@ import {
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
 import { describeError } from '../../../../common/utils/describe-error.util';
+import { translateAssessmentResponse } from '../../../../common/utils/translate-assessment-response.util';
 import {
   SignedUploadUrl,
   StorageUploadUrlService,
@@ -147,7 +148,11 @@ export class ExamSessionAnswerService {
 
   private async withScore(answer: Answer): Promise<AnswerWithScoreResult> {
     const score = await this.scoringService.findByAnswerId(answer.id);
-    return { answer, graded: score !== null, score: score?.rawResponse ?? null };
+    return {
+      answer,
+      graded: score !== null,
+      score: score ? translateAssessmentResponse(score.rawResponse) : null,
+    };
   }
 
   /**
