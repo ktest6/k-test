@@ -11,5 +11,6 @@ import { AuthController } from './presentation/auth.controller';
   imports: [UserModule, AdminModule, MailModule],
   controllers: [AuthController, AdminAuthController],
   providers: [AuthService, EmailVerificationService],
+  exports: [AuthService],
 })
 export class AuthModule {}

@@ -129,6 +129,15 @@ export class AuthService {
     return this.toAuthResponse(admin, Role.ADMIN);
   }
 
+  /**
+   * 테스트 전용 유틸리티(TestModule)에서만 호출한다 — 이미 존재가 보장된
+   * 계정(가입/이메일 인증 절차를 거치지 않고 만들어진 테스트 계정 포함)에
+   * 로그인 없이 바로 토큰을 발급한다. 관리자 role은 지원하지 않는다.
+   */
+  issueTestAccessToken(userId: string, email: string): AuthResponseDto {
+    return this.toAuthResponse({ id: userId, email }, Role.USER);
+  }
+
   async refreshSession(refreshToken: string): Promise<AuthResponseDto> {
     let payload: JwtPayload;
     try {
