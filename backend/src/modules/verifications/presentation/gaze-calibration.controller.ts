@@ -60,7 +60,7 @@ export class GazeCalibrationController {
   })
   @ApiStandardResponse(GazeCalibrationResponseDto, {
     status: 201,
-    message: '시선 캘리브레이션 완료',
+    message: 'Gaze calibration completed',
   })
   async calibrate(
     @CurrentUser() user: AuthenticatedUser,

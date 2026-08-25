@@ -24,7 +24,7 @@ export class AdminExamSessionController {
   })
   @ApiStandardResponse(ExamSessionStatusResponseDto, {
     status: 201,
-    message: '세션 실격 처리 완료',
+    message: 'Session disqualified',
   })
   async disqualify(
     @Param('examSessionId') examSessionId: string,

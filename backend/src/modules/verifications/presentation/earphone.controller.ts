@@ -63,7 +63,10 @@ export class EarphoneController {
       'earphoneDetected만 보고 시험 시작 가능 여부를 결정할 수 있고, ' +
       '어느 쪽 귀에서 무엇이 탐지됐는지는 left/rightEarDetected·label·confidence로 확인할 수 있다.',
   })
-  @ApiStandardResponse(EarphoneDetectResponseDto, { status: 201, message: '이어폰 탐지 완료' })
+  @ApiStandardResponse(EarphoneDetectResponseDto, {
+    status: 201,
+    message: 'Earphone detection completed',
+  })
   async detect(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: DetectEarphoneDto,

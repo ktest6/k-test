@@ -18,7 +18,7 @@ export class AdminScoringController {
 
   @Post()
   @ApiOperation({ summary: '채점 결과 등록 (관리자/채점 파이프라인)' })
-  @ApiStandardResponse(ScoreResponseDto, { status: 201, message: '채점 결과 등록 완료' })
+  @ApiStandardResponse(ScoreResponseDto, { status: 201, message: 'Score recorded' })
   record(@Body() dto: CreateScoreDto): Promise<ScoreResponseDto> {
     return this.scoringService.record(dto);
   }
