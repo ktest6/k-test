@@ -6,13 +6,13 @@ interface ExamResultReadyEmailContent {
 
 /** 실제 점수/등급은 담지 않는다 — 로그인해서 확인하도록 안내만 한다(민감한 채점 정보를 메일 본문에 남기지 않기 위함). */
 export function buildExamResultReadyEmail(): ExamResultReadyEmailContent {
-  const subject = '[K-TEST] 채점 결과가 준비되었습니다';
-  const text = `[K-TEST] 응시하신 시험의 채점 결과가 준비되었습니다.\n\nK-TEST에 로그인해서 결과를 확인해주세요.`;
+  const subject = '[K-TEST] Your exam results are ready';
+  const text = `[K-TEST] The results for your exam are ready.\n\nPlease log in to K-TEST to view your results.`;
 
   const html = `
 <!doctype html>
-<html lang="ko">
-  <body style="margin:0; padding:0; background-color:#f4f5f7; font-family:'Apple SD Gothic Neo','Malgun Gothic',Helvetica,Arial,sans-serif;">
+<html lang="en">
+  <body style="margin:0; padding:0; background-color:#f4f5f7; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7; padding:32px 16px;">
       <tr>
         <td align="center">
@@ -24,16 +24,16 @@ export function buildExamResultReadyEmail(): ExamResultReadyEmailContent {
             </tr>
             <tr>
               <td style="padding:32px;">
-                <p style="margin:0 0 8px; color:#111827; font-size:16px; font-weight:600;">채점 결과가 준비되었습니다</p>
+                <p style="margin:0 0 8px; color:#111827; font-size:16px; font-weight:600;">Your exam results are ready</p>
                 <p style="margin:0 0 24px; color:#6b7280; font-size:14px; line-height:1.5;">
-                  응시하신 시험의 채점 결과가 준비되었습니다.<br />
-                  K-TEST에 로그인해서 결과를 확인해주세요.
+                  The results for your exam are ready.<br />
+                  Please log in to K-TEST to view your results.
                 </p>
               </td>
             </tr>
             <tr>
               <td style="padding:16px 32px; background-color:#f9fafb; border-top:1px solid #f0f0f0;">
-                <p style="margin:0; color:#9ca3af; font-size:12px;">© K-TEST. 본 메일은 발신 전용입니다.</p>
+                <p style="margin:0; color:#9ca3af; font-size:12px;">© K-TEST. This is an automated message; please do not reply.</p>
               </td>
             </tr>
           </table>

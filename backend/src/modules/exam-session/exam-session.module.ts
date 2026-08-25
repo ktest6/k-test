@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AiModule } from '../ai/ai.module';
 import { AnswerModule } from '../answer/answer.module';
+import { MailModule } from '../../infrastructure/mail/mail.module';
 import { PROCTORING_EVENT_REPOSITORY } from '../monitoring/domain/proctoring-event.repository.interface';
 import { SupabaseProctoringEventRepository } from '../monitoring/infrastructure/repositories/supabase-proctoring-event.repository';
 import { QuestionModule } from '../question/question.module';
@@ -9,6 +10,7 @@ import { UserModule } from '../user/user.module';
 import { VerificationsModule } from '../verifications/verifications.module';
 import { ExamSessionAccessModule } from './exam-session-access.module';
 import { SKIPPED_QUESTION_REPOSITORY } from './domain/skipped-question.repository.interface';
+import { SessionDisqualifiedListener } from './application/listeners/session-disqualified.listener';
 import { ExamSessionExpiryScheduler } from './application/schedulers/exam-session-expiry.scheduler';
 import { ExamSessionReportRetryScheduler } from './application/schedulers/exam-session-report-retry.scheduler';
 import { ExamSessionAnswerService } from './application/services/exam-session-answer.service';
@@ -30,6 +32,7 @@ import { MypageController } from './presentation/mypage.controller';
     ScoringModule,
     AiModule,
     UserModule,
+    MailModule,
   ],
   controllers: [ExamSessionController, MypageController, AdminExamSessionController],
   providers: [
@@ -40,6 +43,7 @@ import { MypageController } from './presentation/mypage.controller';
     ExamSessionReportRetryScheduler,
     ExamSessionExpiryScheduler,
     MypageReportService,
+    SessionDisqualifiedListener,
     { provide: SKIPPED_QUESTION_REPOSITORY, useClass: SupabaseSkippedQuestionRepository },
     // MonitoringModule이 이미 ExamSessionModule을 가져다 쓰기 때문에(순환 참조 방지),
     // 리포트에서 부정행위 로그를 읽기 위해 여기서 리포지토리를 별도로 바인딩한다.

@@ -32,7 +32,7 @@ describe('AdminExamSessionController.disqualify', () => {
 
     const result = await controller.disqualify('100');
 
-    expect(disqualify).toHaveBeenCalledWith('100');
+    expect(disqualify).toHaveBeenCalledWith('100', expect.any(String));
     expect(result).toEqual({
       id: '100',
       status: SessionStatus.DISQUALIFIED,
