@@ -14,7 +14,7 @@ export class ScoringController {
 
   @Get(':answerId')
   @ApiOperation({ summary: '답안별 채점 결과 조회' })
-  @ApiStandardResponse(ScoreResponseDto, { message: '채점 결과 조회 성공' })
+  @ApiStandardResponse(ScoreResponseDto, { message: 'Score retrieved' })
   findByAnswer(@Param('answerId') answerId: string): Promise<ScoreResponseDto> {
     return this.scoringService.getByAnswerId(answerId);
   }

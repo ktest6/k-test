@@ -20,7 +20,7 @@ export class AdminMonitoringController {
   @ApiOperation({ summary: '세션의 부정행위 이벤트 목록 조회 (관리자)' })
   @ApiStandardResponse(ProctoringEventResponseDto, {
     isArray: true,
-    message: '모니터링 이벤트 조회 성공',
+    message: 'Monitoring events retrieved',
   })
   async getEvents(
     @Param('examSessionId') examSessionId: string,

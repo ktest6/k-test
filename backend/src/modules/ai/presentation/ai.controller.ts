@@ -14,7 +14,7 @@ export class AiController {
 
   @Get('health')
   @ApiOperation({ summary: 'AI provider 연결 상태 확인' })
-  @ApiStandardResponse(AiHealthResponseDto, { message: 'AI 상태 조회 성공' })
+  @ApiStandardResponse(AiHealthResponseDto, { message: 'AI status retrieved' })
   getHealth(): Promise<AiHealthResponseDto> {
     return this.aiService.getStatus();
   }

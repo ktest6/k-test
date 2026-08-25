@@ -24,7 +24,7 @@ export class TestController {
       '되돌리기 위한 개발용 유틸리티다. 프로덕션 환경(NODE_ENV=production)에서는 항상 거부된다. ' +
       '실제 서비스 배포 전 이 컨트롤러/모듈 자체를 반드시 제거할 것.',
   })
-  @ApiStandardResponse(ResetSessionResponseDto, { message: '세션 리셋 완료' })
+  @ApiStandardResponse(ResetSessionResponseDto, { message: 'Sessions reset' })
   async resetSessions(): Promise<ResetSessionResponseDto> {
     const resetCount = await this.testResetService.resetAllSessionsToInProgress();
     return { resetCount };
@@ -42,7 +42,7 @@ export class TestController {
       '인증 없이 호출 가능. 프로덕션 환경(NODE_ENV=production)에서는 항상 거부된다. ' +
       '실제 서비스 배포 전 이 컨트롤러/모듈 자체를 반드시 제거할 것.',
   })
-  @ApiStandardResponse(QuickStartResponseDto, { status: 201, message: '테스트 세션 준비 완료' })
+  @ApiStandardResponse(QuickStartResponseDto, { status: 201, message: 'Test session ready' })
   async quickStart(): Promise<QuickStartResponseDto> {
     return this.testQuickStartService.quickStart();
   }

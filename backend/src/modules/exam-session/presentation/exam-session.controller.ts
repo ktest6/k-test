@@ -47,7 +47,7 @@ export class ExamSessionController {
       'data:null) 결정하면 된다.',
   })
   @ApiStandardResponse(ExamSessionStatusResponseDto, {
-    message: '지금 진행중인 세션 조회 성공',
+    message: 'Current session retrieved',
   })
   async getCurrent(
     @CurrentUser() user: AuthenticatedUser,
@@ -69,7 +69,7 @@ export class ExamSessionController {
       '자체는 본인인증/이어폰 확인과 무관하게 항상 허용된다 — 응답의 verified가 false면 검증부터 ' +
       '진행해야 한다(문항 조회·답안 제출 둘 다 verified:true가 될 때까지 403). 반복 재접속 3회째면 403.',
   })
-  @ApiStandardResponse(StartExamSessionResponseDto, { status: 201, message: '시험 시작' })
+  @ApiStandardResponse(StartExamSessionResponseDto, { status: 201, message: 'Exam started' })
   async start(@CurrentUser() user: AuthenticatedUser): Promise<StartExamSessionResponseDto> {
     const session = await this.examSessionService.start(user.id);
     const verified = await this.examSessionService.isVerified(session.id);
@@ -90,7 +90,7 @@ export class ExamSessionController {
       '문항별 진행 상황(다음에 풀 문항)은 문항 목록 조회의 answered 필드로 프런트가 직접 계산한다. ' +
       'verified가 false면 아직 본인인증/이어폰 확인이 끝나지 않아 문항 조회·답안 제출이 막힌 상태다.',
   })
-  @ApiStandardResponse(ExamSessionStatusResponseDto, { message: '세션 상태 조회 성공' })
+  @ApiStandardResponse(ExamSessionStatusResponseDto, { message: 'Session status retrieved' })
   async getStatus(
     @Param('examSessionId') examSessionId: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -108,7 +108,7 @@ export class ExamSessionController {
   })
   @ApiStandardResponse(SessionQuestionResponseDto, {
     isArray: true,
-    message: '문항 목록 조회 성공',
+    message: 'Question list retrieved',
   })
   async listQuestions(
     @Param('examSessionId') examSessionId: string,
@@ -123,7 +123,7 @@ export class ExamSessionController {
     summary: '문항 상세 조회',
     description: '관리자는 세션 소유자가 아니어도 항상 조회할 수 있다.',
   })
-  @ApiStandardResponse(SessionQuestionResponseDto, { message: '문항 조회 성공' })
+  @ApiStandardResponse(SessionQuestionResponseDto, { message: 'Question retrieved' })
   async getQuestion(
     @Param('examSessionId') examSessionId: string,
     @Param('questionId') questionId: string,
@@ -145,7 +145,7 @@ export class ExamSessionController {
       '말하기 답안 녹음 파일을 올릴 URL을 발급한다. 프론트는 이 URL로 Supabase Storage에 직접 업로드한 뒤, ' +
       '응답의 path를 그대로 답안 제출(POST .../answer)의 audioFileUrl로 전달하면 된다.',
   })
-  @ApiStandardResponse(AnswerUploadUrlResponseDto, { status: 201, message: '업로드 URL 발급 완료' })
+  @ApiStandardResponse(AnswerUploadUrlResponseDto, { status: 201, message: 'Upload URL issued' })
   createAnswerAudioUploadUrl(
     @Param('examSessionId') examSessionId: string,
     @Param('questionId') questionId: string,
@@ -166,7 +166,7 @@ export class ExamSessionController {
     description:
       '문항별 답안을 저장한다. 이미 저장된 답안이 있으면 덮어쓴다. 진행중인 세션이 아니면 409.',
   })
-  @ApiStandardResponse(AnswerResponseDto, { status: 201, message: '답안 저장 완료' })
+  @ApiStandardResponse(AnswerResponseDto, { status: 201, message: 'Answer saved' })
   async saveAnswer(
     @Param('examSessionId') examSessionId: string,
     @Param('questionId') questionId: string,
@@ -184,7 +184,7 @@ export class ExamSessionController {
 
   @Get('exam-sessions/:examSessionId/questions/:questionId/answer')
   @ApiOperation({ summary: '답안·채점 진행 상태 조회' })
-  @ApiStandardResponse(AnswerResponseDto, { message: '답안 조회 성공' })
+  @ApiStandardResponse(AnswerResponseDto, { message: 'Answer retrieved' })
   async getAnswer(
     @Param('examSessionId') examSessionId: string,
     @Param('questionId') questionId: string,
@@ -201,7 +201,7 @@ export class ExamSessionController {
       '답안 없이 이 문항을 건너뛴다. 이미 답안을 저장한 문항은 건너뛸 수 없다(409). ' +
       '진행중인 세션이 아니면 409. 건너뛴 문항에 나중에 답안을 저장하면 건너뛰기 기록은 자동으로 취소된다.',
   })
-  @ApiStandardResponse(SessionQuestionResponseDto, { status: 201, message: '문항 건너뛰기 완료' })
+  @ApiStandardResponse(SessionQuestionResponseDto, { status: 201, message: 'Question skipped' })
   async skipQuestion(
     @Param('examSessionId') examSessionId: string,
     @Param('questionId') questionId: string,

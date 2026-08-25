@@ -23,7 +23,7 @@ export class AdminAuthController {
       '있어야 생성된다 — 첫 관리자를 만들 방법이 없다는 부트스트랩 문제를 이렇게 푼다. ' +
       '신분증/약관동의 같은 응시자 전용 필드는 받지 않는다.',
   })
-  @ApiStandardResponse(AuthResponseDto, { status: 201, message: '관리자 계정 생성 완료' })
+  @ApiStandardResponse(AuthResponseDto, { status: 201, message: 'Admin account created' })
   adminSignUp(@Body() dto: AdminSignUpDto): Promise<AuthResponseDto> {
     return this.authService.adminSignUp(dto);
   }
@@ -36,7 +36,7 @@ export class AdminAuthController {
     description:
       '관리자는 tb_admin에 별도로 저장되어 있어 응시자 로그인(sign-in)과 다른 엔드포인트를 쓴다.',
   })
-  @ApiStandardResponse(AuthResponseDto, { message: '관리자 로그인 성공' })
+  @ApiStandardResponse(AuthResponseDto, { message: 'Admin login successful' })
   adminSignIn(@Body() dto: SignInDto): Promise<AuthResponseDto> {
     return this.authService.adminSignIn(dto);
   }

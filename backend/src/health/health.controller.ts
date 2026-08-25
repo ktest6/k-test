@@ -10,7 +10,7 @@ export class HealthController {
   @Public()
   @Get()
   @ApiOperation({ summary: '헬스체크' })
-  @ApiStandardResponse(HealthResponseDto, { message: '헬스체크 성공' })
+  @ApiStandardResponse(HealthResponseDto, { message: 'Health check successful' })
   check(): HealthResponseDto {
     return { status: 'ok', timestamp: new Date().toISOString() };
   }

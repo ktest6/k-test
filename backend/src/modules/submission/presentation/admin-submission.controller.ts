@@ -18,7 +18,7 @@ export class AdminSubmissionController {
   @Post(':id/disqualify')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '수동 실격 처리 (관리자, 자동 정책 외 개입)' })
-  @ApiStandardResponse(SubmissionResponseDto, { message: '실격 처리 완료' })
+  @ApiStandardResponse(SubmissionResponseDto, { message: 'Disqualified' })
   disqualify(@Param('id') id: string): Promise<SubmissionResponseDto> {
     return this.submissionService.disqualify(id);
   }

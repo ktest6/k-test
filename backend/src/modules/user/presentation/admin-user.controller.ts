@@ -17,14 +17,14 @@ export class AdminUserController {
 
   @Get()
   @ApiOperation({ summary: '전체 사용자 목록 (관리자)' })
-  @ApiStandardResponse(UserResponseDto, { isArray: true, message: '사용자 목록 조회 성공' })
+  @ApiStandardResponse(UserResponseDto, { isArray: true, message: 'User list retrieved' })
   list(): Promise<UserResponseDto[]> {
     return this.userService.list();
   }
 
   @Get(':id')
   @ApiOperation({ summary: '사용자 상세 조회 (관리자)' })
-  @ApiStandardResponse(UserResponseDto, { message: '사용자 조회 성공' })
+  @ApiStandardResponse(UserResponseDto, { message: 'User retrieved' })
   findById(@Param('id') id: string): Promise<UserResponseDto> {
     return this.userService.findById(id);
   }

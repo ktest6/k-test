@@ -34,7 +34,7 @@ export class IdCardController {
       '프론트는 이 URL로 Supabase Storage에 직접 업로드한다 (백엔드를 거치지 않음). ' +
       '경로는 서버가 직접 정하므로(요청자 소유 폴더로 고정) 다른 사용자 경로로 업로드할 수 없다.',
   })
-  @ApiStandardResponse(UploadUrlResponseDto, { status: 201, message: '업로드 URL 발급 완료' })
+  @ApiStandardResponse(UploadUrlResponseDto, { status: 201, message: 'Upload URL issued' })
   createUploadUrl(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: RequestIdCardUploadUrlDto,
@@ -51,7 +51,7 @@ export class IdCardController {
   })
   @ApiStandardResponse(VerifyIdCardResponseDto, {
     status: 201,
-    message: '본인인증 요청 접수 완료',
+    message: 'Identity verification request received',
   })
   verify(
     @CurrentUser() user: AuthenticatedUser,

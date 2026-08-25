@@ -33,7 +33,10 @@ export class DocumentController {
       '파일 자체는 받지 않는다 — 프론트가 Supabase Storage에 직접 올린 뒤 그 경로(filePath)만 전달한다. ' +
       '문서 레코드만 만들고 즉시 202로 응답하며, 실제 문항 생성은 document.uploaded 이벤트를 받아 백그라운드로 처리한다.',
   })
-  @ApiStandardResponse(UploadDocumentResponseDto, { status: 202, message: '서류 업로드 접수' })
+  @ApiStandardResponse(UploadDocumentResponseDto, {
+    status: 202,
+    message: 'Document upload received',
+  })
   async upload(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: UploadDocumentDto,
@@ -47,7 +50,7 @@ export class DocumentController {
     summary: '문서 상태 조회',
     description: 'UPLOADED/PROCESSING/COMPLETED/FAILED 중 하나. 폴링용.',
   })
-  @ApiStandardResponse(DocumentResponseDto, { message: '문서 조회 성공' })
+  @ApiStandardResponse(DocumentResponseDto, { message: 'Document retrieved' })
   async findById(@Param('id') id: string): Promise<DocumentResponseDto> {
     const document = await this.documentService.findById(id);
     return {
@@ -64,7 +67,7 @@ export class DocumentController {
   @ApiOperation({ summary: '해당 문서로 생성된 문항 목록 조회 (체크리스트 포함)' })
   @ApiStandardResponse(GeneratedQuestionResponseDto, {
     isArray: true,
-    message: '문항 목록 조회 성공',
+    message: 'Question list retrieved',
   })
   async getQuestions(@Param('id') id: string): Promise<GeneratedQuestionResponseDto[]> {
     await this.documentService.findById(id);
