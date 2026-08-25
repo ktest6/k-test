@@ -110,7 +110,7 @@ export class IdCardVerificationService {
     }
 
     const matched = result.verified;
-    // similarity(0~100)를 identity_logs.confidence(0~1) 스케일에 맞춘다.
+    // similarity(0~100)를 tb_identity_logs.confidence(0~1) 스케일에 맞춘다.
     const confidence = result.similarity / 100;
 
     // 4) 신분증 사진은 결과를 받은 이 시점부터 더 이상 쓰이지 않으므로 항상 정리한다.
@@ -121,7 +121,7 @@ export class IdCardVerificationService {
     await this.deleteImages(client, pathsToDelete);
 
     // 5) 결과 로그 저장
-    await client.from('identity_logs').insert({
+    await client.from('tb_identity_logs').insert({
       exam_session_id: Number(dto.examSessionId),
       id_card_path: dto.idCardPath,
       face_path: dto.facePath,
@@ -151,7 +151,7 @@ export class IdCardVerificationService {
   async hasVerifiedSession(examSessionId: string): Promise<boolean> {
     const client = this.supabaseService.getAdminClient();
     const { data } = await client
-      .from('identity_logs')
+      .from('tb_identity_logs')
       .select('id')
       .eq('exam_session_id', Number(examSessionId))
       .eq('matched', true)
@@ -165,7 +165,7 @@ export class IdCardVerificationService {
   async getVerifiedFacePath(examSessionId: string): Promise<string | null> {
     const client = this.supabaseService.getAdminClient();
     const { data } = await client
-      .from('identity_logs')
+      .from('tb_identity_logs')
       .select('face_path')
       .eq('exam_session_id', Number(examSessionId))
       .eq('matched', true)
