@@ -36,7 +36,8 @@ def compare_faces(
 
     except (BotoCoreError, ClientError) as error:
         raise RekognitionAPIError(
-            "AWS Rekognition CompareFaces API 호출에 실패했습니다."
+            "AWS Rekognition CompareFaces API 호출에 실패했습니다.",
+            code="REKOGNITION_COMPARE_FACES_FAILED",
         ) from error
 
     return response

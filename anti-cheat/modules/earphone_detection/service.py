@@ -27,12 +27,14 @@ from modules.earphone_detection.detector import (
 def analyze_earphone_image(
     image_bytes: bytes,
     image_name: str = "귀",
+    image_key: str = "earImage",
 ) -> dict[str, Any]:
     """귀 이미지 한 장을 분석하여 이어폰 착용 여부를 반환한다."""
 
     validate_image_bytes(
         image_bytes=image_bytes,
         image_name=image_name,
+        image_key=image_key,
     )
 
     detection_result = detect_earphone(

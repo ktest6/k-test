@@ -17,7 +17,6 @@ from fastapi import (
     APIRouter,
     File,
     Form,
-    HTTPException,
     UploadFile,
     status,
 )
@@ -26,7 +25,9 @@ from app.schemas.identity import (
     DocumentType,
     IdentityVerificationResponse,
 )
+from app.core.error_handlers import CodedHTTPException, from_proctoring_error
 from modules.common.exceptions import (
+    ApplicantVerificationError,
     DocumentIntelligenceAPIError,
     DocumentReadError,
     InvalidImageError,
@@ -112,33 +113,40 @@ async def verify_identity_api(
         )
 
     except InvalidImageError as error:
-        raise HTTPException(
+        raise from_proctoring_error(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error),
+            error=error,
         ) from error
 
     except RekognitionAPIError as error:
-        raise HTTPException(
+        raise from_proctoring_error(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(error),
+            error=error,
         ) from error
 
     except DocumentIntelligenceAPIError as error:
-        raise HTTPException(
+        raise from_proctoring_error(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(error),
+            error=error,
         ) from error
 
     except DocumentReadError as error:
-        raise HTTPException(
+        raise from_proctoring_error(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error),
+            error=error,
+        ) from error
+
+    except ApplicantVerificationError as error:
+        raise from_proctoring_error(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            error=error,
         ) from error
 
     except Exception as error:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="본인 인증 처리 중 예상하지 못한 오류가 발생했습니다.",
+            code="IDENTITY_VERIFICATION_INTERNAL_ERROR",
         ) from error
 
     finally:

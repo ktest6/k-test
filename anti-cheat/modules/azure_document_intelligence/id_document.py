@@ -43,5 +43,6 @@ def analyze_id_document(image_bytes: bytes) -> Any:
             error,
         )
         raise DocumentIntelligenceAPIError(
-            "Azure Document Intelligence API 호출에 실패했습니다."
+            "Azure Document Intelligence API 호출에 실패했습니다.",
+            code="DOCUMENT_INTELLIGENCE_API_FAILED",
         ) from error

@@ -37,10 +37,21 @@ def verify_identity(
     """여권 정보와 얼굴을 순서대로 검증해 본인 여부를 판단한다."""
 
     if document_type != DocumentType.PASSPORT:
-        raise UnsupportedDocumentError("지원하는 문서는 여권뿐입니다.")
+        raise UnsupportedDocumentError(
+            "지원하는 문서는 여권뿐입니다.",
+            code="DOCUMENT_TYPE_UNSUPPORTED",
+            params={
+                "actualType": str(document_type),
+                "supportedTypes": [DocumentType.PASSPORT.value],
+            },
+        )
 
-    validate_image_bytes(source_image_bytes, "여권")
-    validate_image_bytes(target_image_bytes, "얼굴 캡처")
+    validate_image_bytes(source_image_bytes, "여권", "passportImage")
+    validate_image_bytes(
+        target_image_bytes,
+        "얼굴 캡처",
+        "faceCaptureImage",
+    )
 
     # 여권 판독과 신청 정보 비교에 성공한 경우에만 얼굴 비교를 수행한다.
     document_fields = read_identity_document(source_image_bytes)

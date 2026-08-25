@@ -31,36 +31,67 @@ def validate_gaze_state_input(
 
     if not isinstance(gaze_monitor_result, dict):
         raise GazeStateError(
-            "시선 분석 결과는 딕셔너리 형식이어야 합니다."
+            "시선 분석 결과는 딕셔너리 형식이어야 합니다.",
+            code="GAZE_RESULT_TYPE_INVALID",
+            params={"expectedType": "object"},
         )
 
     if not isinstance(elapsed_ms, int) or isinstance(elapsed_ms, bool):
-        raise GazeStateError("시험 경과 시간은 정수여야 합니다.")
+        raise GazeStateError(
+            "시험 경과 시간은 정수여야 합니다.",
+            code="GAZE_ELAPSED_MS_TYPE_INVALID",
+            params={"actual": elapsed_ms, "expectedType": "integer"},
+        )
 
     if elapsed_ms < 0:
-        raise GazeStateError("시험 경과 시간은 0 이상이어야 합니다.")
+        raise GazeStateError(
+            "시험 경과 시간은 0 이상이어야 합니다.",
+            code="GAZE_ELAPSED_MS_OUT_OF_RANGE",
+            params={"actual": elapsed_ms, "min": 0},
+        )
 
     if not isinstance(capture_sequence, int) or isinstance(
         capture_sequence,
         bool,
     ):
-        raise GazeStateError("캡처 이미지 순번은 정수여야 합니다.")
+        raise GazeStateError(
+            "캡처 이미지 순번은 정수여야 합니다.",
+            code="GAZE_CAPTURE_SEQUENCE_TYPE_INVALID",
+            params={"actual": capture_sequence, "expectedType": "integer"},
+        )
 
     if capture_sequence < 1:
-        raise GazeStateError("캡처 이미지 순번은 1 이상이어야 합니다.")
+        raise GazeStateError(
+            "캡처 이미지 순번은 1 이상이어야 합니다.",
+            code="GAZE_CAPTURE_SEQUENCE_OUT_OF_RANGE",
+            params={"actual": capture_sequence, "min": 1},
+        )
 
     if not isinstance(persistent_count_threshold, int) or isinstance(
         persistent_count_threshold,
         bool,
     ):
-        raise GazeStateError("연속 시선 이탈 기준 횟수는 정수여야 합니다.")
+        raise GazeStateError(
+            "연속 시선 이탈 기준 횟수는 정수여야 합니다.",
+            code="GAZE_PERSISTENT_THRESHOLD_TYPE_INVALID",
+            params={
+                "actual": persistent_count_threshold,
+                "expectedType": "integer",
+            },
+        )
 
     if persistent_count_threshold < 1:
-        raise GazeStateError("연속 시선 이탈 기준 횟수는 1 이상이어야 합니다.")
+        raise GazeStateError(
+            "연속 시선 이탈 기준 횟수는 1 이상이어야 합니다.",
+            code="GAZE_PERSISTENT_THRESHOLD_OUT_OF_RANGE",
+            params={"actual": persistent_count_threshold, "min": 1},
+        )
 
     if previous_state is not None and not isinstance(previous_state, dict):
         raise GazeStateError(
-            "이전 시선 상태는 딕셔너리 형식이어야 합니다."
+            "이전 시선 상태는 딕셔너리 형식이어야 합니다.",
+            code="PREVIOUS_GAZE_STATE_TYPE_INVALID",
+            params={"expectedType": "object"},
         )
 
 
