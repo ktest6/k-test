@@ -11,6 +11,8 @@ field_normalizer.py
 import re
 from datetime import date, datetime
 
+from modules.common.exceptions import ApplicantVerificationError
+
 
 def normalize_name(value: str) -> str:
     # 공백과 이름 표기에 사용되는 구분 문자를 제거한다.
@@ -78,7 +80,11 @@ def _normalize_birth_date_string(value: str) -> date:
             value,
         )
 
-    raise ValueError(f"지원하지 않는 생년월일 형식입니다: {value}")
+    raise ApplicantVerificationError(
+        f"지원하지 않는 생년월일 형식입니다: {value}",
+        code="BIRTH_DATE_FORMAT_UNSUPPORTED",
+        params={"value": value},
+    )
 
 
 def _expand_two_digit_year(year: int) -> int:
@@ -96,6 +102,8 @@ def _build_date(year: int, month: int, day: int, original_value: str) -> date:
     try:
         return date(year, month, day)
     except ValueError as error:
-        raise ValueError(
-            f"지원하지 않는 생년월일 형식입니다: {original_value}"
+        raise ApplicantVerificationError(
+            f"지원하지 않는 생년월일 형식입니다: {original_value}",
+            code="BIRTH_DATE_FORMAT_UNSUPPORTED",
+            params={"value": original_value},
         ) from error

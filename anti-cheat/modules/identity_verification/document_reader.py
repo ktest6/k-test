@@ -31,17 +31,28 @@ _PASSPORT_DOCUMENT_TYPE = "idDocument.passport"
 def read_identity_document(image_bytes: bytes) -> dict[str, str]:
     """Azure 분석 결과에서 여권 신청자 정보를 추출한다."""
 
-    validate_image_bytes(image_bytes, "여권")
+    validate_image_bytes(image_bytes, "여권", "passportImage")
     result = analyze_id_document(image_bytes)
     documents = _get_value(result, "documents") or []
 
     if not documents:
-        raise DocumentReadError("여권을 인식할 수 없습니다.")
+        raise DocumentReadError(
+            "여권을 인식할 수 없습니다.",
+            code="DOCUMENT_NOT_DETECTED",
+            params={"documentType": "passport"},
+        )
 
     document = documents[0]
     document_type = _get_value(document, "doc_type")
     if document_type != _PASSPORT_DOCUMENT_TYPE:
-        raise UnsupportedDocumentError("지원하는 문서는 여권뿐입니다.")
+        raise UnsupportedDocumentError(
+            "지원하는 문서는 여권뿐입니다.",
+            code="DOCUMENT_TYPE_UNSUPPORTED",
+            params={
+                "actualType": str(document_type),
+                "supportedTypes": ["passport"],
+            },
+        )
 
     fields = _get_value(document, "fields") or {}
     extracted_fields = {
@@ -64,7 +75,9 @@ def read_identity_document(image_bytes: bytes) -> dict[str, str]:
     if missing_fields:
         raise DocumentReadError(
             "여권에서 필수 정보를 읽을 수 없습니다: "
-            f"{', '.join(missing_fields)}"
+            f"{', '.join(missing_fields)}",
+            code="DOCUMENT_REQUIRED_FIELDS_MISSING",
+            params={"fields": missing_fields},
         )
 
     return {

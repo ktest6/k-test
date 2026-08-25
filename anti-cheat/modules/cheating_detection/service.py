@@ -105,6 +105,7 @@ def create_gaze_calibration_from_images(
         validate_image_bytes(
             image_bytes=image_bytes,
             image_name="시선 Calibration 이미지",
+            image_key="calibrationImage",
         )
         detect_faces_response = detect_faces(
             image_bytes=image_bytes,
@@ -188,12 +189,14 @@ def analyze_monitoring_frame(
         validate_image_bytes(
             image_bytes=current_image_bytes,
             image_name="현재 프레임 이미지",
+            image_key="currentImage",
         )
 
         if reference_image_bytes is not None:
             validate_image_bytes(
                 image_bytes=reference_image_bytes,
                 image_name="기준 얼굴 이미지",
+                image_key="referenceImage",
             )
 
         detect_faces_response = detect_faces(
@@ -254,7 +257,8 @@ def analyze_monitoring_frame(
         if run_identity_check and can_run_identity_check:
             if reference_image_bytes is None:
                 raise MonitoringError(
-                    "중간 동일인 검사를 위한 기준 이미지가 없습니다."
+                    "중간 동일인 검사를 위한 기준 이미지가 없습니다.",
+                    code="IDENTITY_REFERENCE_IMAGE_REQUIRED",
                 )
 
             identity_monitor_result = run_identity_monitoring(
@@ -346,5 +350,6 @@ def analyze_monitoring_frame(
 
     except Exception as error:
         raise MonitoringError(
-            "시험 모니터링 프레임 분석 중 오류가 발생했습니다."
+            "시험 모니터링 프레임 분석 중 오류가 발생했습니다.",
+            code="MONITORING_FRAME_ANALYSIS_FAILED",
         ) from error

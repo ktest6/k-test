@@ -16,8 +16,22 @@ exceptions.py
 """
 
 
+from typing import Any
+
+
 class ProctoringError(Exception):
-    """온라인 시험 감독 처리 중 발생하는 기본 예외."""
+    """온라인 시험 감독 처리 중 발생하는 구조화된 기본 예외."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str,
+        params: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params = params
 
 
 class IdentityVerificationError(ProctoringError):
@@ -55,7 +69,7 @@ class UnsupportedDocumentError(DocumentReadError):
     """지원하지 않는 신분증 종류일 때 발생하는 예외."""
 
 
-class ApplicantVerificationError(IdentityVerificationError):
+class ApplicantVerificationError(IdentityVerificationError, ValueError):
     """신청 정보 검증 중 발생하는 예외."""
 
 

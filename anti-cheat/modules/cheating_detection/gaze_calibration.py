@@ -29,17 +29,20 @@ def validate_gaze_calibration_input(
 
     if not isinstance(exam_id, str) or not exam_id.strip():
         raise GazeCalibrationError(
-            "시험 식별자는 비어 있을 수 없습니다."
+            "시험 식별자는 비어 있을 수 없습니다.",
+            code="CALIBRATION_EXAM_ID_EMPTY",
         )
 
     if not isinstance(examinee_id, str) or not examinee_id.strip():
         raise GazeCalibrationError(
-            "응시자 식별자는 비어 있을 수 없습니다."
+            "응시자 식별자는 비어 있을 수 없습니다.",
+            code="CALIBRATION_EXAMINEE_ID_EMPTY",
         )
 
     if not isinstance(face_monitor_results, list) or not face_monitor_results:
         raise GazeCalibrationError(
-            "얼굴 모니터링 결과는 비어 있지 않은 리스트여야 합니다."
+            "얼굴 모니터링 결과는 비어 있지 않은 리스트여야 합니다.",
+            code="CALIBRATION_FACE_RESULTS_INVALID",
         )
 
     if (
@@ -48,7 +51,13 @@ def validate_gaze_calibration_input(
         or not 0 <= minimum_eye_confidence <= 100
     ):
         raise GazeCalibrationError(
-            "Eye Direction 최소 신뢰도는 0 이상 100 이하의 숫자여야 합니다."
+            "Eye Direction 최소 신뢰도는 0 이상 100 이하의 숫자여야 합니다.",
+            code="CALIBRATION_EYE_CONFIDENCE_OUT_OF_RANGE",
+            params={
+                "actual": minimum_eye_confidence,
+                "min": 0,
+                "max": 100,
+            },
         )
 
     if (
@@ -57,7 +66,9 @@ def validate_gaze_calibration_input(
         or minimum_sample_count < 1
     ):
         raise GazeCalibrationError(
-            "Calibration 최소 표본 수는 1 이상의 정수여야 합니다."
+            "Calibration 최소 표본 수는 1 이상의 정수여야 합니다.",
+            code="CALIBRATION_MIN_SAMPLE_COUNT_INVALID",
+            params={"actual": minimum_sample_count, "min": 1},
         )
 
 
@@ -110,7 +121,12 @@ def create_gaze_calibration(
 
     if sample_count < minimum_sample_count:
         raise GazeCalibrationError(
-            "Calibration에 필요한 유효 시선 표본이 부족합니다."
+            "Calibration에 필요한 유효 시선 표본이 부족합니다.",
+            code="CALIBRATION_SAMPLES_INSUFFICIENT",
+            params={
+                "actualCount": sample_count,
+                "requiredCount": minimum_sample_count,
+            },
         )
 
     return {
