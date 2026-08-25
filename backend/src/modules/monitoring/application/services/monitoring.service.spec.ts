@@ -584,7 +584,10 @@ describe('MonitoringService.reportViolation', () => {
       violationType: ClientViolationType.DUAL_MONITOR,
     });
 
-    expect(disqualify).toHaveBeenCalledWith('100');
+    expect(disqualify).toHaveBeenCalledWith(
+      '100',
+      expect.stringContaining('using a dual-monitor setup'),
+    );
     expect(result.sessionStatus).toBe(SessionStatus.DISQUALIFIED);
   });
 
@@ -620,7 +623,10 @@ describe('MonitoringService.reportViolation', () => {
       violationType: ClientViolationType.TAB_SWITCH,
     });
 
-    expect(disqualify).toHaveBeenCalledWith('100');
+    expect(disqualify).toHaveBeenCalledWith(
+      '100',
+      expect.stringContaining('switching to another browser tab'),
+    );
     expect(result.sessionStatus).toBe(SessionStatus.DISQUALIFIED);
   });
 

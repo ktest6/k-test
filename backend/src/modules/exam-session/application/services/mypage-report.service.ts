@@ -3,6 +3,7 @@ import {
   ForbiddenDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import { notFound, notOwnedByUser } from '../../../../common/exceptions/error-messages';
 import { AnswerService } from '../../../answer/application/services/answer.service';
 import { QuestionSectionType } from '../../../question/domain/enums/question-section-type.enum';
 import {
@@ -78,17 +79,15 @@ export class MypageReportService {
   async getReport(examResultId: string, userId: string): Promise<Report> {
     const examResult = await this.examResultService.findById(examResultId);
     if (!examResult) {
-      throw new NotFoundDomainException(`리포트(${examResultId})를 찾을 수 없습니다.`);
+      throw new NotFoundDomainException(notFound('Report', examResultId));
     }
 
     const session = await this.examSessionRepository.findById(examResult.examSessionId);
     if (!session) {
-      throw new NotFoundDomainException(
-        `응시 세션(${examResult.examSessionId})을 찾을 수 없습니다.`,
-      );
+      throw new NotFoundDomainException(notFound('Exam session', examResult.examSessionId));
     }
     if (session.userId !== userId) {
-      throw new ForbiddenDomainException('본인의 리포트가 아닙니다.');
+      throw new ForbiddenDomainException(notOwnedByUser('report'));
     }
 
     const [user, assignedQuestions, answers, skippedIds, events] = await Promise.all([

@@ -17,14 +17,14 @@ export class UserController {
 
   @Get('me')
   @ApiOperation({ summary: '내 프로필 조회' })
-  @ApiStandardResponse(UserResponseDto, { message: '내 프로필 조회 성공' })
+  @ApiStandardResponse(UserResponseDto, { message: 'Profile retrieved' })
   getMyProfile(@CurrentUser() user: AuthenticatedUser): Promise<UserResponseDto> {
     return this.userService.findById(user.id);
   }
 
   @Patch('me')
   @ApiOperation({ summary: '내 프로필 수정' })
-  @ApiStandardResponse(UserResponseDto, { message: '내 프로필 수정 완료' })
+  @ApiStandardResponse(UserResponseDto, { message: 'Profile updated' })
   updateMyProfile(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: UpdateUserDto,

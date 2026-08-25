@@ -20,6 +20,7 @@ from __future__ import annotations
 import time
 from collections import Counter
 
+from ..scoring.messages import Notice, emit, notice
 from ..scoring.schema import Mode
 from .llm import client_for_generation
 from .preprocess import preprocess_document, sha256_of
@@ -57,7 +58,34 @@ class GenerationRequestError(ValueError):
 
     이 예외가 나면 문항을 하나도 만들지 않고 즉시 막는다(HTTP 400).
     메시지는 그대로 관리자에게 보이므로 사람이 읽는 한 문장만 담는다.
+
+    **문구 말고 코드도 함께 들고 다닌다.** 화면에는 영어가 떠야 하는데 우리가 만드는
+    문장은 한국어라서, 백엔드가 영어 문장을 고를 열쇠(`code`)와 그 문장에 끼울
+    값(`params`)을 예외에 같이 담아 창구(api.py)까지 보낸다.
+    `code` 는 안 줘도 되게 해 두어서, 옛날 방식으로 부르던 자리도 그대로 돈다.
     """
+
+    def __init__(self, message: str, code: str = "", params: dict | None = None):
+        super().__init__(message)
+        #: 백엔드가 영어 문구를 찾을 열쇠 (예: "GEN_DOCUMENT_TOO_SHORT")
+        self.code = code
+        #: 그 문구에 끼워 넣을 값 (예: {"chars": 120, "minChars": 300})
+        self.params = dict(params or {})
+
+    @property
+    def notice(self) -> Notice:
+        """이 예외를 백엔드에 나갈 모양(코드 + 값 + 한국어 문장)으로 바꾼다."""
+        return Notice(code=self.code, params=self.params, message=str(self))
+
+    @classmethod
+    def of(cls, code: str, **params) -> "GenerationRequestError":
+        """코드 하나로 예외를 만든다. 한국어 문장은 카탈로그가 만들어 준다."""
+        made = notice(code, **params)
+        return cls(made.message, code=made.code, params=made.params)
+
+
+# 값이 끼지 않는 고정 문구는 한 번만 만들어 두고 돌려 쓴다
+_DUPLICATE_ITEM = notice("GEN_DUPLICATE_ITEM")
 
 
 def _model_name(client: object) -> str:
@@ -86,7 +114,7 @@ def generate_items(
     # 말하기 문항 생성은 아직 만들지 않았다. 조용히 쓰기로 바꿔 처리하면
     # 관리자는 말하기 문항을 받았다고 생각하게 되므로 분명히 막는다
     if request.mode != Mode.WRITING:
-        raise GenerationRequestError("지금은 쓰기 문항만 만든다. 말하기 문항 생성은 아직 없다.")
+        raise GenerationRequestError.of("GEN_SPEAKING_NOT_SUPPORTED")
 
     # ---------------- [1] 전처리 ----------------
     pre = preprocess_document(request.document_text)
@@ -95,14 +123,16 @@ def generate_items(
     # 길이를 넘겼을 때 **조용히 잘라내지 않는다** — 자르면 관리자가 보낸 문서와
     # 문항이 나온 문서가 달라지는데 응답만 보고는 알 수 없다
     if pre.clean_chars < MIN_DOCUMENT_CHARS:
-        raise GenerationRequestError(
-            f"문서가 {pre.clean_chars}자로 너무 짧아 문항을 만들 수 없다"
-            f"(최소 {MIN_DOCUMENT_CHARS}자)."
+        raise GenerationRequestError.of(
+            "GEN_DOCUMENT_TOO_SHORT",
+            chars=pre.clean_chars,
+            minChars=MIN_DOCUMENT_CHARS,
         )
     if pre.clean_chars > MAX_DOCUMENT_CHARS:
-        raise GenerationRequestError(
-            f"문서가 {pre.clean_chars}자로 너무 길다(최대 {MAX_DOCUMENT_CHARS}자). "
-            "장·절 단위로 나눠서 보내야 한다."
+        raise GenerationRequestError.of(
+            "GEN_DOCUMENT_TOO_LONG",
+            chars=pre.clean_chars,
+            maxChars=MAX_DOCUMENT_CHARS,
         )
 
     source_text = pre.text
@@ -135,6 +165,8 @@ def generate_items(
     passed: list[tuple[str, ItemValidation]] = []   # (임시 id, 통과한 문항)
     dropped: list[DroppedItem] = []
     warnings: list[str] = []
+    # warnings 와 짝을 이루는 '코드 + 값' 목록. 두 목록의 길이와 차례는 항상 같다
+    notices: list[Notice] = []
 
     for index, raw in enumerate(raw_items):
         provisional_id = f"{options.item_id_prefix}-{doc6}-임시{index + 1}"
@@ -161,7 +193,8 @@ def generate_items(
                 DroppedItem(
                     index=len(unique) + len(dropped),
                     reason=DropReason.DUPLICATE_ITEM,
-                    detail="앞 문항과 지시문이 대부분 겹쳐 사실상 같은 문항이다.",
+                    detail=_DUPLICATE_ITEM.message,
+                    notice=_DUPLICATE_ITEM,
                     rejected_preview=result.item.prompt[:40],
                     quote_preview=twin.prompt[:40],
                 )
@@ -187,9 +220,9 @@ def generate_items(
             source_text, result.item.reference_keywords
         )
         if removed_keywords:
-            warnings.append(
-                f"[{final_id}] 문서에 없는 핵심어 {', '.join(removed_keywords)} 를 뺐다"
-                "(LLM 을 못 쓸 때의 대체 채점이 엉뚱하게 돌지 않게 하려는 것)."
+            emit(
+                warnings, notices, "GEN_KEYWORD_REMOVED",
+                itemId=final_id, keywords=", ".join(removed_keywords),
             )
 
         items.append(result.item.model_copy(update={
@@ -197,8 +230,14 @@ def generate_items(
             "reference_keywords": kept_keywords,
         }))
 
-        # 관문에서 남긴 경고의 임시 id 를 최종 id 로 바꿔 담는다
+        # 관문에서 남긴 경고의 임시 id 를 최종 id 로 바꿔 담는다.
+        # 문장뿐 아니라 코드 안의 itemId 값도 함께 바꿔야 백엔드가 같은 id 를 보게 된다
         warnings.extend(note.replace(provisional_id, final_id) for note in result.warnings)
+        for made in result.notices:
+            params = dict(made.params)
+            if params.get("itemId") == provisional_id:
+                params["itemId"] = final_id
+            notices.append(notice(made.code, **params))
 
     returned_by_model = len(raw_items)
     counts = GenerationCounts(
@@ -213,25 +252,19 @@ def generate_items(
 
     # --- 사람이 알아야 할 것들 ---
     if returned_by_model == 0:
-        warnings.append("모델이 문항을 하나도 만들지 않았다. 문서 내용을 확인하고 다시 시도해야 한다.")
+        emit(warnings, notices, "GEN_NO_ITEMS_PRODUCED")
     elif not items:
-        warnings.append(
-            f"만들어진 문항 {returned_by_model}개가 모두 검증 관문에서 폐기됐다. "
-            "근거를 댈 수 없는 문항은 내보내지 않는다. 문서를 바꿔 다시 시도해야 한다."
-        )
+        emit(warnings, notices, "GEN_ALL_DROPPED", count=returned_by_model)
     elif len(items) < options.item_count:
-        warnings.append(
-            f"요청한 {options.item_count}개 중 {len(items)}개만 관문을 통과했다. "
-            "더 필요하면 문항 수를 늘려 다시 요청해야 한다."
+        emit(
+            warnings, notices, "GEN_FEWER_THAN_REQUESTED",
+            requested=options.item_count, passed=len(items),
         )
 
     # 유형이 한쪽으로 몰리면 알려만 준다(폐기 아님)
     for item_type, count in Counter(item.item_type for item in items).items():
         if count >= TYPE_CONCENTRATION_WARN:
-            warnings.append(
-                f"'{item_type}' 유형 문항이 {count}개로 몰려 있다. "
-                "시험이 한 가지 상황만 묻게 되지 않는지 확인해야 한다."
-            )
+            emit(warnings, notices, "GEN_TYPE_SKEWED", itemType=item_type, count=count)
 
     elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
 
@@ -243,6 +276,7 @@ def generate_items(
         counts=counts,
         source_text=source_text,
         warnings=warnings,
+        notices=notices,
         meta=GenerationMeta(
             generation_version=GENERATION_VERSION,
             prompt_version=PROMPT_VERSION,
@@ -295,16 +329,14 @@ def verify_items(request: VerifyItemsRequest) -> VerifyItemsResponse:
     승인 화면에서 몇 번을 눌러도 결과가 흔들리지 않는다.
     """
     warnings: list[str] = []
+    notices: list[Notice] = []
 
     # 보내온 문서가 그때 그 문서가 맞는지 지문을 대조한다.
     # 달라도 검증은 계속한다 — 우리가 할 수 있는 말은 "인용이 이 글에 있다/없다"까지이고,
     # 어느 문서가 맞는지는 문서를 보관한 백엔드가 판단할 일이다
     actual_sha = sha256_of(request.source_text)
     if request.source_text_sha256 and request.source_text_sha256 != actual_sha:
-        warnings.append(
-            "보내온 문서가 문항을 만들 때 쓴 문서와 다르다. "
-            "인용 위치가 어긋날 수 있으니 문서를 다시 확인해야 한다."
-        )
+        emit(warnings, notices, "VERIFY_DOCUMENT_MISMATCH")
 
     results: list[ItemVerification] = []
     verified_ok: list[GeneratedItem] = []
@@ -327,11 +359,13 @@ def verify_items(request: VerifyItemsRequest) -> VerifyItemsResponse:
             # 통과한 문항끼리 서로 같아지지는 않았는지도 본다
             twin = find_duplicate(outcome.item, verified_ok)
             if twin is not None:
+                verify_twin = notice("VERIFY_DUPLICATE_ITEM", itemId=twin.item_id)
                 failures.append(
                     DroppedItem(
                         index=index,
                         reason=DropReason.DUPLICATE_ITEM,
-                        detail=f"'{twin.item_id}' 문항과 지시문이 대부분 겹쳐 사실상 같은 문항이 됐다.",
+                        detail=verify_twin.message,
+                        notice=verify_twin,
                         rejected_preview=outcome.item.prompt[:40],
                         quote_preview=twin.prompt[:40],
                     )
@@ -343,9 +377,11 @@ def verify_items(request: VerifyItemsRequest) -> VerifyItemsResponse:
             ItemVerification(item_id=item.item_id, ok=not failures, failures=failures)
         )
         warnings.extend(outcome.warnings)
+        notices.extend(outcome.notices)
 
     return VerifyItemsResponse(
         all_ok=all(result.ok for result in results),
         results=results,
         warnings=warnings,
+        notices=notices,
     )

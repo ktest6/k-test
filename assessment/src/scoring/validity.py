@@ -35,7 +35,14 @@ from dataclasses import dataclass, field
 
 from ..features.lexical import Analysis, analyze
 from ..llm.citation import normalize_for_match
+from .messages import Notice, notice
 from .schema import Evidence, FeatureSource, ScoreArea
+
+# 값이 끼지 않는 근거 문구는 한 번만 만들어 두고 돌려 쓴다.
+# (같은 문구를 자리마다 다시 적으면 한쪽만 고쳐지는 일이 생긴다)
+_NON_HANGUL_RUN = notice("VALIDITY_EVIDENCE_NON_HANGUL_RUN")
+_PROMPT_COPY_RUN = notice("VALIDITY_EVIDENCE_PROMPT_COPY")
+_NO_ENDING_FRAGMENT = notice("VALIDITY_EVIDENCE_NO_ENDING")
 
 # ---------------------------------------------------------------------------
 # 기준값 (전부 임시값이므로 상수로 빼 둔다)
@@ -106,6 +113,8 @@ class ValidityCheck:
     value: float | None = None      # 실제로 잰 값
     threshold: float | None = None  # 비교한 기준값
     reason: str = ""                # 걸렸다면 그 사유(사람이 읽는 한 문장)
+    #: 위 reason 을 '코드 + 값' 으로 담은 것. 백엔드가 이 코드로 영어 문구를 고른다
+    notice: Notice | None = None
     #: 소프트 가드가 걸렸을 때 상태를 낮출 채점 영역. 하드 가드는 None.
     affected_area: ScoreArea | None = None
     components: dict[str, float] = field(default_factory=dict)
@@ -157,11 +166,27 @@ class ValidityReport:
         """걸린 가드들이 남긴 근거를 한 줄로 모은다."""
         return [ev for c in self.failures for ev in c.evidence]
 
+    @property
+    def notices(self) -> list[Notice]:
+        """위 reason 과 짝이 되는 코드 목록. 차례는 reason 을 합친 차례와 같다."""
+        picked = self.hard_failures or self.soft_failures
+        return [c.notice for c in picked if c.notice is not None]
 
-def _ev(text: str, start: int, end: int, comment: str, detail: dict | None = None) -> Evidence:
+
+def _ev(
+    text: str,
+    start: int,
+    end: int,
+    comment: str,
+    detail: dict | None = None,
+    comment_notice: Notice | None = None,
+) -> Evidence:
     """원문의 한 구간을 잘라 근거 한 조각을 만든다.
 
     가드는 규칙 계산이므로 근거의 출처는 언제나 kiwi(규칙)다.
+
+    comment_notice 는 그 설명 문구를 '코드 + 값' 으로도 담아 두는 자리다.
+    화면에 영어로 띄우려면 문장만으로는 안 되고 코드가 있어야 하기 때문이다.
     """
     # 위치가 원문 범위를 벗어나면 엉뚱한 글자를 인용하게 되므로 안쪽으로 당긴다
     start = max(0, min(start, len(text)))
@@ -172,6 +197,7 @@ def _ev(text: str, start: int, end: int, comment: str, detail: dict | None = Non
         start=start,
         end=end,
         comment=comment,
+        notice=comment_notice,
         detail=detail or {},
     )
 
@@ -223,10 +249,10 @@ def check_korean_ratio(text: str, threshold: float = MIN_HANGUL_RATIO) -> Validi
     if passed:
         return check
 
-    check.reason = (
-        f"답안의 한글 비율이 {ratio:.0%}로 기준({threshold:.0%})에 못 미쳐 "
-        "한국어 답안으로 볼 수 없다. 채점을 무효로 처리했다."
+    check.notice = notice(
+        "VALIDITY_HANGUL_RATIO", ratio=f"{ratio:.0%}", threshold=f"{threshold:.0%}"
     )
+    check.reason = check.notice.message
 
     # 근거: 어디가 한국어가 아닌지 실제 구간을 짚어 준다.
     # 로마자가 길게 이어지는 자리가 있으면 그곳을, 없으면 답안 앞부분을 보여 준다
@@ -234,13 +260,16 @@ def check_korean_ratio(text: str, threshold: float = MIN_HANGUL_RATIO) -> Validi
     if latin:
         check.evidence.append(
             _ev(text, latin.start(), min(latin.end(), latin.start() + 60),
-                "한국어가 아닌 글자가 이어지는 구간",
-                {"guard": FLAG_NOT_KOREAN})
+                _NON_HANGUL_RUN.message,
+                {"guard": FLAG_NOT_KOREAN},
+                comment_notice=_NON_HANGUL_RUN)
         )
+    head = notice("VALIDITY_EVIDENCE_HEAD", hangul=hangul_count, counted=total)
     check.evidence.append(
         _ev(text, 0, min(len(text), 60),
-            f"답안 앞부분 (한글 {hangul_count}자 / 센 글자 {total}자)",
-            {"guard": FLAG_NOT_KOREAN, "hangul_ratio": round(ratio, 4)})
+            head.message,
+            {"guard": FLAG_NOT_KOREAN, "hangul_ratio": round(ratio, 4)},
+            comment_notice=head)
     )
     return check
 
@@ -278,14 +307,14 @@ def check_min_length(
     if passed:
         return check
 
-    check.reason = (
-        f"답안이 {count}어절로 기준({threshold}어절)보다 짧아 오류 자질을 신뢰할 수 없다. "
-        "틀릴 기회 자체가 적어 '오류 0건'이 실력의 근거가 되지 못한다."
-    )
+    check.notice = notice("VALIDITY_TOO_SHORT", words=count, minWords=threshold)
+    check.reason = check.notice.message
+    words = notice("VALIDITY_EVIDENCE_WORD_COUNT", words=count)
     check.evidence.append(
         _ev(analysis.text, 0, min(len(analysis.text), 60),
-            f"답안 전체 {count}어절",
-            {"guard": FLAG_TOO_SHORT, "eojeol_count": count})
+            words.message,
+            {"guard": FLAG_TOO_SHORT, "eojeol_count": count},
+            comment_notice=words)
     )
     return check
 
@@ -382,16 +411,17 @@ def check_prompt_overlap(
     if passed:
         return check
 
-    check.reason = (
-        f"답안 글자의 {ratio:.0%}가 지시문과 그대로 겹쳐(기준 {threshold:.0%}) "
-        "응시자가 직접 쓴 글로 볼 수 없다. 채점을 무효로 처리했다."
+    check.notice = notice(
+        "VALIDITY_PROMPT_OVERLAP", ratio=f"{ratio:.0%}", threshold=f"{threshold:.0%}"
     )
+    check.reason = check.notice.message
     # 근거: 지시문과 똑같이 겹친 구간을 긴 것부터 세 곳만 보여 준다
     for start, end in spans[:3]:
         check.evidence.append(
             _ev(answer_text, start, end,
-                "지시문에 그대로 있는 구간",
-                {"guard": FLAG_PROMPT_COPY})
+                _PROMPT_COPY_RUN.message,
+                {"guard": FLAG_PROMPT_COPY},
+                comment_notice=_PROMPT_COPY_RUN)
         )
     return check
 
@@ -469,16 +499,12 @@ def check_sentence_formation(
     if passed:
         return check
 
-    if is_hard_fail:
-        check.reason = (
-            f"어미가 붙은 문장이 {sentence_like}/{total}뿐이라 "
-            "낱말을 나열한 글로 보인다. 채점할 문장이 없어 무효로 처리했다."
-        )
-    else:
-        check.reason = (
-            f"어미가 붙은 문장이 {sentence_like}/{total}에 그쳐 "
-            "온전한 문장으로 보기 어렵다."
-        )
+    check.notice = notice(
+        "VALIDITY_NO_SENTENCE_HARD" if is_hard_fail else "VALIDITY_NO_SENTENCE_SOFT",
+        sentences=sentence_like,
+        total=total,
+    )
+    check.reason = check.notice.message
 
     # 근거: 어미가 없는 문장을 최대 세 개까지 원문 위치와 함께 보여 준다
     shown = 0
@@ -488,8 +514,9 @@ def check_sentence_formation(
             continue
         check.evidence.append(
             _ev(analysis.text, sentence.start, min(sentence.end, sentence.start + 60),
-                "어미(서술어)가 없어 문장으로 보기 어려운 조각",
-                {"guard": FLAG_NOT_SENTENCES})
+                _NO_ENDING_FRAGMENT.message,
+                {"guard": FLAG_NOT_SENTENCES},
+                comment_notice=_NO_ENDING_FRAGMENT)
         )
         shown += 1
         if shown >= 3:

@@ -4,6 +4,11 @@ import {
   ForbiddenDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import {
+  notFound,
+  notOwnedByUser,
+  serviceCommunicationFailed,
+} from '../../../../common/exceptions/error-messages';
 import { describeError } from '../../../../common/utils/describe-error.util';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import {
@@ -68,7 +73,7 @@ export class IdCardVerificationService {
     // 여기서는 그 경로가 그대로 전달됐는지 한 번 더 확인하는 방어 계층이다.
     const expectedPrefix = `${userId}/${dto.examSessionId}/`;
     if (!dto.idCardPath.startsWith(expectedPrefix) || !dto.facePath.startsWith(expectedPrefix)) {
-      throw new ForbiddenDomainException('본인 파일 경로가 아닙니다.');
+      throw new ForbiddenDomainException(notOwnedByUser('file path'));
     }
 
     // 2) 내 소유의 진행중인 세션인지 확인
@@ -78,7 +83,9 @@ export class IdCardVerificationService {
     // 프론트가 아니라 가입 시 등록된 정보를 그대로 쓴다(신청 정보와의 대조가 목적이므로).
     const user = await this.userService.findById(userId);
     if (!user.idNumber) {
-      throw new ConflictDomainException('먼저 여권번호를 등록해야 본인인증을 진행할 수 있습니다.');
+      throw new ConflictDomainException(
+        'You must register a passport number before you can verify your identity.',
+      );
     }
 
     const [idCardImage, faceImage] = await Promise.all([
@@ -104,13 +111,11 @@ export class IdCardVerificationService {
       this.logger.warn(
         `본인인증 서비스 통신 실패 (examSessionId=${dto.examSessionId}, userId=${userId}): ${describeError(err)}`,
       );
-      throw new ConflictDomainException(
-        '본인인증 서비스와 통신에 실패했습니다. 잠시 후 다시 시도해주세요.',
-      );
+      throw new ConflictDomainException(serviceCommunicationFailed('identity verification'));
     }
 
     const matched = result.verified;
-    // similarity(0~100)를 identity_logs.confidence(0~1) 스케일에 맞춘다.
+    // similarity(0~100)를 tb_identity_logs.confidence(0~1) 스케일에 맞춘다.
     const confidence = result.similarity / 100;
 
     // 4) 신분증 사진은 결과를 받은 이 시점부터 더 이상 쓰이지 않으므로 항상 정리한다.
@@ -121,7 +126,7 @@ export class IdCardVerificationService {
     await this.deleteImages(client, pathsToDelete);
 
     // 5) 결과 로그 저장
-    await client.from('identity_logs').insert({
+    await client.from('tb_identity_logs').insert({
       exam_session_id: Number(dto.examSessionId),
       id_card_path: dto.idCardPath,
       face_path: dto.facePath,
@@ -151,7 +156,7 @@ export class IdCardVerificationService {
   async hasVerifiedSession(examSessionId: string): Promise<boolean> {
     const client = this.supabaseService.getAdminClient();
     const { data } = await client
-      .from('identity_logs')
+      .from('tb_identity_logs')
       .select('id')
       .eq('exam_session_id', Number(examSessionId))
       .eq('matched', true)
@@ -165,7 +170,7 @@ export class IdCardVerificationService {
   async getVerifiedFacePath(examSessionId: string): Promise<string | null> {
     const client = this.supabaseService.getAdminClient();
     const { data } = await client
-      .from('identity_logs')
+      .from('tb_identity_logs')
       .select('face_path')
       .eq('exam_session_id', Number(examSessionId))
       .eq('matched', true)
@@ -198,7 +203,7 @@ export class IdCardVerificationService {
   ): Promise<IdentityImageInput> {
     const { data, error } = await client.storage.from(IDENTITY_DOCS_BUCKET).download(path);
     if (error || !data) {
-      throw new NotFoundDomainException(`이미지를 찾을 수 없습니다 (path=${path}).`);
+      throw new NotFoundDomainException(notFound('Image', path));
     }
 
     const buffer = Buffer.from(await data.arrayBuffer());

@@ -36,6 +36,7 @@ from ..features.lexical import analyze, extract_lexical_features
 from ..llm.client import GeminiClient, client_for_errors
 from ..llm.transcript import correct_transcript
 from .combine import combine, get_weights
+from .messages import Notice, emit, join_notices, notice
 from .schema import (
     SCORING_VERSION,
     AreaStatus,
@@ -52,6 +53,12 @@ from .schema import (
     SubScore,
 )
 from .validity import ValidityReport, check_answer_validity
+
+# 값이 끼지 않는 고정 문구는 한 번만 만들어 두고 돌려 쓴다
+_LOW_CONF_REASON = notice("RELIABILITY_LOW_EVIDENCE_DETAIL")
+_CORRECTED_FEATURE_NOTE = notice("TRANSCRIPT_CORRECTED_FEATURE_NOTE")
+_CONTENT_KEYWORD_FALLBACK = notice("RELIABILITY_CONTENT_KEYWORD_FALLBACK")
+_NO_CHECKLIST = notice("RELIABILITY_NO_CHECKLIST")
 
 if TYPE_CHECKING:  # 타입을 적기 위해서만 읽는다. 실행할 때는 speech 를 불러오지 않는다
     from ..speech.intake import AudioResolution
@@ -115,21 +122,30 @@ def _mark_low_confidence_errors(
                 continue
 
             ev.detail["confidence"] = "low"
-            ev.detail["low_confidence_reason"] = (
-                "이 구간은 STT 전사 보정이 일어난 자리다. "
-                "응시자의 문법 오류가 아니라 전사 오류일 수 있다."
+            ev.detail["low_confidence_reason"] = _LOW_CONF_REASON.message
+            ev.detail["low_confidence_reason_code"] = _LOW_CONF_REASON.code
+            # 원래 설명을 겉 문구로 한 번 감싸되, 안쪽 코드도 같이 남긴다
+            wrapped = notice(
+                "RELIABILITY_LOW_EVIDENCE_WRAP",
+                comment=ev.comment,
+                commentNotice=ev.notice,
             )
-            ev.comment = f"[신뢰도 낮음] {ev.comment}"
+            ev.comment = wrapped.message
+            ev.notice = wrapped
             low_confidence_here += 1
             marked += 1
 
         if low_confidence_here:
             feature.components["low_confidence_error_count"] = float(low_confidence_here)
+            low_note = notice("RELIABILITY_LOW_NOTE", count=low_confidence_here)
             feature.note = (
                 (feature.note + " / ") if feature.note else ""
-            ) + (
-                f"이 중 {low_confidence_here}건은 STT 보정 구간에서 나온 지적이라 "
-                "신뢰도가 낮다(전사 오류일 가능성)."
+            ) + low_note.message
+            # 앞에 이미 다른 note 가 있었으면 둘을 묶고, 없으면 이것 하나만 담는다
+            feature.notice = (
+                join_notices([feature.notice, low_note])
+                if feature.notice is not None
+                else low_note
             )
 
     return marked
@@ -159,10 +175,8 @@ def _swap_in_content_features(
 
         # 근거의 글자 위치가 보정본 기준이라는 것을 반드시 밝혀 둔다.
         # 이 표시가 없으면 나중에 원본에서 그 위치를 찾다가 엉뚱한 데를 짚게 된다
-        replacement.note = (
-            "내용·과제 수행 영역에 쓰이는 자질이라 보정본 기준으로 계산했다. "
-            "근거의 글자 위치도 보정본 기준이다."
-        )
+        replacement.note = _CORRECTED_FEATURE_NOTE.message
+        replacement.notice = _CORRECTED_FEATURE_NOTE
         for ev in replacement.evidence:
             ev.detail["text_source"] = "corrected"
         features[index] = replacement
@@ -172,6 +186,7 @@ def _resolve_transcript(
     request: ScoreRequest,
     client: GeminiClient,
     warnings: list[str],
+    notices: list[Notice],
     timings: dict[str, float],
 ) -> TranscriptContext | None:
     """요청에 담긴 전사 보정 설정을 보고 실제로 보정을 수행한다.
@@ -189,10 +204,7 @@ def _resolve_transcript(
     # 쓰기 답안은 응시자가 직접 친 글이라 보정 대상이 아니다.
     # 여기서 보정하면 응시자가 실제로 틀린 맞춤법까지 지워져 점수가 부풀려진다
     if request.mode != Mode.SPEAKING:
-        warnings.append(
-            "쓰기 답안에는 STT 전사 보정을 적용하지 않는다. "
-            "응시자가 직접 입력한 글이므로 보정하면 실제 오류가 지워진다."
-        )
+        emit(warnings, notices, "TRANSCRIPT_SKIPPED_FOR_WRITING")
         return None
 
     started = time.perf_counter()
@@ -207,11 +219,9 @@ def _resolve_transcript(
 
     # 보정을 왜 못 했는지, 무엇을 물렸는지가 결과에 남아야 한다
     warnings.extend(correction.warnings)
+    notices.extend(correction.notices)
     if correction.correction_applied:
-        warnings.append(
-            f"STT 전사 보정을 {correction.change_count}군데 적용했다. "
-            "보정본은 내용·과제 수행에만 쓰이고, 문법·어휘는 전사 원문으로 채점했다."
-        )
+        emit(warnings, notices, "TRANSCRIPT_APPLIED", count=correction.change_count)
 
     return TranscriptContext(
         corrected_text=correction.corrected_text,
@@ -245,6 +255,7 @@ def _invalid_response(
     request: ScoreRequest,
     report: ValidityReport,
     warnings: list[str],
+    notices: list[Notice],
     timings: dict[str, float],
     audio: "AudioResolution | None" = None,
 ) -> ScoreResponse:
@@ -272,7 +283,13 @@ def _invalid_response(
         (ScoreArea.LANGUAGE_USE, "언어 사용"),
         (ScoreArea.DELIVERY, "발화 전달력"),
     ]
-    note = f"답안 유효성 가드에 걸려 채점하지 않았다: {report.reason}"
+    # 겉 문구와 안쪽 사유(가드가 왜 걸렸는지)를 둘 다 코드로 담는다
+    note_notice = notice(
+        "VALIDITY_NOT_SCORED_NOTE",
+        reason=report.reason,
+        reasonNotice=join_notices(report.notices),
+    )
+    note = note_notice.message
     subscores = [
         SubScore(
             area=area,
@@ -285,6 +302,7 @@ def _invalid_response(
             # 영역마다 따로 복사해 둔다(한 곳에서 손댄 것이 다른 영역까지 바뀌면 안 된다)
             evidence=[ev.model_copy(deep=True) for ev in report.evidence[:6]],
             note=note[:300],
+            notice=note_notice,
         )
         for area, label in labels
     ]
@@ -322,6 +340,7 @@ def _invalid_response(
         features=features,
         checklist_results=[],
         warnings=warnings,
+        notices=notices,
         meta=meta,
     )
 
@@ -329,7 +348,7 @@ def _invalid_response(
 def _apply_soft_validity_flags(
     subscores: list[SubScore],
     report: ValidityReport,
-) -> list[str]:
+) -> tuple[list[str], list[Notice]]:
     """무효까지는 아니지만 미덥지 않은 답안에 대해 해당 영역의 상태를 낮춘다.
 
     점수 숫자는 건드리지 않는다. 손대면 그 숫자가 어디서 왔는지 설명할 수 없게 된다.
@@ -337,12 +356,16 @@ def _apply_soft_validity_flags(
     뒤따르는 신뢰도 판정(assess_reliability)이 partial 로 내려가게 만든다.
     """
     messages: list[str] = []
+    made: list[Notice] = []
     by_area = {s.area: s for s in subscores}
 
     for check in report.soft_failures:
         # 낮출 영역이 정해지지 않은 가드는 경고만 남긴다
         target = by_area.get(check.affected_area) if check.affected_area else None
-        messages.append(f"[답안 유효성] {check.reason}")
+        emit(
+            messages, made, "VALIDITY_SOFT_WRAP",
+            reason=check.reason, reasonNotice=check.notice,
+        )
         if target is None or target.score is None:
             continue
 
@@ -351,9 +374,16 @@ def _apply_soft_validity_flags(
             target.status = AreaStatus.PARTIAL
         target.note = ((target.note + " / ") if target.note else "") + check.reason
         target.note = target.note[:300]
+        # 원래 있던 영역 note 와 이번 가드 사유를 코드 목록으로 묶어 둔다
+        if check.notice is not None:
+            target.notice = (
+                join_notices([target.notice, check.notice])
+                if target.notice is not None
+                else check.notice
+            )
         target.evidence.extend(ev.model_copy(deep=True) for ev in check.evidence[:2])
 
-    return messages
+    return messages, made
 
 
 def _run_llm_stages_in_parallel(
@@ -413,7 +443,10 @@ def _run_llm_stages_in_parallel(
                 language_text, mode=request.mode, client=error_client,
                 item_prompt=request.item.prompt, use_llm=False,
             )
-            error_result.warnings.append(f"오류 자질 추출이 예기치 않게 실패했다: {exc}")
+            emit(
+                error_result.warnings, error_result.notices,
+                "ERRORS_UNEXPECTED_FAILURE", reason=str(exc),
+            )
             errors_ms = 0.0
 
         try:
@@ -422,7 +455,10 @@ def _run_llm_stages_in_parallel(
             checklist_result = judge_checklist(
                 content_text, request.item, client=client, use_llm=False,
             )
-            checklist_result.warnings.append(f"체크리스트 판정이 예기치 않게 실패했다: {exc}")
+            emit(
+                checklist_result.warnings, checklist_result.notices,
+                "CHECKLIST_UNEXPECTED_FAILURE", reason=str(exc),
+            )
             checklist_ms = 0.0
 
     # 각 호출이 걸린 시간과, 둘을 겹쳐 실제로 기다린 시간을 따로 남긴다.
@@ -439,7 +475,7 @@ def assess_reliability(
     subscores: list[SubScore],
     checklist_results: list[ChecklistResult],
     had_checklist: bool,
-) -> tuple[Reliability, str]:
+) -> tuple[Reliability, str, Notice | None]:
     """이번 채점을 얼마나 믿을 수 있는지 한 값으로 정리한다.
 
     왜 이 판단이 필요한가:
@@ -456,26 +492,21 @@ def assess_reliability(
     if had_checklist and any(c.source == FeatureSource.KIWI for c in checklist_results):
         return (
             Reliability.FALLBACK,
-            "LLM을 쓰지 못해 내용·과제 수행을 핵심어 일치로만 판정했다. "
-            "이 점수는 내용 판정의 결과가 아니므로 응시자에게 보여주면 안 된다.",
+            _CONTENT_KEYWORD_FALLBACK.message,
+            _CONTENT_KEYWORD_FALLBACK,
         )
 
     # 문항이 체크리스트를 안 준 경우도 내용 영역의 근거가 없는 것은 마찬가지다
     if not had_checklist:
-        return (
-            Reliability.PARTIAL,
-            "문항에 체크리스트가 없어 내용·과제 수행을 판정하지 못했다.",
-        )
+        return (Reliability.PARTIAL, _NO_CHECKLIST.message, _NO_CHECKLIST)
 
     # 채점은 됐지만 자질 일부가 빠진 경우. 점수는 참고할 수 있으나 온전하지는 않다
     partial_areas = [s.label for s in subscores if s.status == AreaStatus.PARTIAL]
     if partial_areas:
-        return (
-            Reliability.PARTIAL,
-            f"{', '.join(partial_areas)} 영역을 일부 자질 없이 계산했다.",
-        )
+        made = notice("SUBSCORE_PARTIAL_AREAS", areas=", ".join(partial_areas))
+        return (Reliability.PARTIAL, made.message, made)
 
-    return Reliability.FULL, ""
+    return Reliability.FULL, "", None
 
 
 #: 'pronouncer 인자를 안 넘겼다'와 '일부러 None 으로 넘겼다'를 구별하는 표식.
@@ -510,6 +541,8 @@ def score_submission(
     """
     timings: dict[str, float] = {}
     warnings: list[str] = []
+    # warnings 와 짝을 이루는 '코드 + 값' 목록. 두 목록의 길이와 차례는 항상 같다
+    notices: list[Notice] = []
 
     # 키가 없으면 available 이 False 인 클라이언트가 만들어진다(예외는 나지 않는다)
     client = client or GeminiClient()
@@ -534,6 +567,7 @@ def score_submission(
             # 우리 때문에 바뀌면 그쪽에서 무슨 일이 일어났는지 알 수 없기 때문이다
             request = request.model_copy(update={"answer_text": audio_resolution.text})
             warnings.extend(audio_resolution.warnings)
+            notices.extend(audio_resolution.notices)
             timings["stt_ms"] = audio_resolution.elapsed_ms
 
     # 오류 자질만 상위 모델로 본다. 나머지(전사 보정·체크리스트)는 기본 모델 그대로다
@@ -553,13 +587,18 @@ def score_submission(
     # 하드 게이트에 걸리면 여기서 끝난다. 점수 대신 무효 사유를 돌려준다
     if not validity.valid:
         for check in validity.hard_failures:
-            warnings.append(f"[채점 무효] {check.reason}")
-        return _invalid_response(request, validity, warnings, timings, audio_resolution)
+            emit(
+                warnings, notices, "VALIDITY_INVALID_WRAP",
+                reason=check.reason, reasonNotice=check.notice,
+            )
+        return _invalid_response(
+            request, validity, warnings, notices, timings, audio_resolution
+        )
 
     # 1단계: 전사 보정. 부르는 쪽이 이미 만들어 넘겼으면 그것을 그대로 쓴다
     # (직접 넘긴 값이 항상 우선이다. 테스트와 데모가 보정 결과를 손으로 지정할 수 있어야 한다)
     if transcript is None:
-        transcript = _resolve_transcript(request, client, warnings, timings)
+        transcript = _resolve_transcript(request, client, warnings, notices, timings)
 
     # 어느 글로 무엇을 채점할지 먼저 정한다.
     # 보정본이 없으면 둘 다 원문이라 지금까지와 동작이 같다
@@ -600,17 +639,16 @@ def score_submission(
     )
     features.extend(error_result.features)
     warnings.extend(error_result.warnings)
+    notices.extend(error_result.notices)
     warnings.extend(checklist_result.warnings)
+    notices.extend(checklist_result.notices)
 
     # 4단계: 보정이 일어난 자리에서 나온 오류 지적에 신뢰도 표시를 단다
     marked = 0
     if transcript and transcript.corrected_spans:
         marked = _mark_low_confidence_errors(features, transcript.corrected_spans)
         if marked:
-            warnings.append(
-                f"오류 지적 {marked}건이 STT 보정 구간과 겹쳐 신뢰도 낮음으로 표시됐다. "
-                "전사 오류를 문법 오류로 잘못 센 것일 수 있으니 감점 근거로 쓸 때 확인이 필요하다."
-            )
+            emit(warnings, notices, "TRANSCRIPT_LOW_CONFIDENCE_OVERLAP", count=marked)
 
     # 5단계: 자질과 판정을 점수로 결합한다
     started = time.perf_counter()
@@ -623,11 +661,14 @@ def score_submission(
     )
     timings["combine_ms"] = round((time.perf_counter() - started) * 1000, 1)
     warnings.extend(combined.warnings)
+    notices.extend(combined.notices)
 
     # 6단계: 무효까지는 아닌 가드(짧은 답안·문장이 덜 갖춰진 답안)를 영역 상태에 반영한다.
     # 결합이 끝난 뒤에 하는 이유는 낮출 대상이 '계산된 영역 점수'이기 때문이다.
     # 여기서 partial 로 내려가면 바로 아래 신뢰도 판정도 따라 내려간다
-    warnings.extend(_apply_soft_validity_flags(combined.subscores, validity))
+    soft_messages, soft_notices = _apply_soft_validity_flags(combined.subscores, validity)
+    warnings.extend(soft_messages)
+    notices.extend(soft_notices)
 
     # 버려진 인용은 두 단계에서 나올 수 있으므로 합쳐서 보고한다.
     # 이 숫자가 크면 LLM이 답안에 없는 말을 지어내고 있다는 신호다
@@ -643,13 +684,18 @@ def score_submission(
 
     # 이 점수를 화면에 띄워도 되는지를 값 하나로 정리한다.
     # 경고 문구를 읽어서 판단하게 두면 프론트가 그냥 숫자만 띄우게 된다
-    reliability, reliability_reason = assess_reliability(
+    reliability, reliability_reason, reliability_notice = assess_reliability(
         combined.subscores,
         checklist_result.results,
         had_checklist=bool(request.item.checklist),
     )
     if reliability != Reliability.FULL and reliability_reason:
-        warnings.append(f"[신뢰도 {reliability.value}] {reliability_reason}")
+        emit(
+            warnings, notices, "RELIABILITY_WRAP",
+            level=reliability.value,
+            reason=reliability_reason,
+            reasonNotice=reliability_notice,
+        )
 
     meta = ScoringMeta(
         scoring_version=SCORING_VERSION,
@@ -698,5 +744,6 @@ def score_submission(
         features=features,
         checklist_results=checklist_result.results,
         warnings=warnings,
+        notices=notices,
         meta=meta,
     )

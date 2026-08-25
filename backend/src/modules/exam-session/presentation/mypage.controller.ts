@@ -30,7 +30,7 @@ export class MypageController {
   })
   @ApiStandardResponse(MyExamStatusResponseDto, {
     isArray: true,
-    message: '내 응시 시험 현황 조회 성공',
+    message: 'Exam status retrieved',
   })
   async listMine(@CurrentUser() user: AuthenticatedUser): Promise<MyExamStatusResponseDto[]> {
     const statuses = await this.examSessionService.listMine(user.id);
@@ -53,7 +53,7 @@ export class MypageController {
       '스킵/미응답 구분 없이 skipped:true로만 표시한다. violations는 프런트 직접 감지 신호와 ' +
       'AI 모니터링 감지 신호가 eventType 하나에 섞여서 종류·심각도별 건수로 집계되어 온다.',
   })
-  @ApiStandardResponse(ReportResponseDto, { message: '최종 리포트 조회 성공' })
+  @ApiStandardResponse(ReportResponseDto, { message: 'Report retrieved' })
   async getReport(
     @Param('examResultId') examResultId: string,
     @CurrentUser() user: AuthenticatedUser,

@@ -47,7 +47,7 @@ export class IdCardUploadUrlService {
 
     if (!ALLOWED_CONTENT_TYPES_BY_FILE_TYPE[dto.fileType].includes(dto.contentType)) {
       throw new ConflictDomainException(
-        `${dto.fileType} 파일에는 ${dto.contentType} 형식을 사용할 수 없습니다.`,
+        `The ${dto.fileType} file cannot use the ${dto.contentType} format.`,
       );
     }
 

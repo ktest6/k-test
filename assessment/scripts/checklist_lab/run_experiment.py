@@ -343,7 +343,7 @@ def run_checklist(client, row: dict, checklist_entry: dict, throttle) -> dict:
                 "attempts": result.get("attempts")}
 
     # 받은 답을 그대로 믿지 않고 인용 검증을 거쳐 최종 판정으로 바꾼다
-    judged, warnings, dropped = results_from_llm_payload(
+    judged, warnings, _notices, dropped = results_from_llm_payload(
         answer_text, item.checklist, result["value"])
 
     # 항목마다 판정과 **근거 위치**를 함께 남긴다. 점수만 남기면 나중에 따질 수가 없다

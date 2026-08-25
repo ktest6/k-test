@@ -9,6 +9,7 @@ import {
   ForbiddenDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import { notFound, notOwnedByUser } from '../../../../common/exceptions/error-messages';
 import { describeError } from '../../../../common/utils/describe-error.util';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import {
@@ -53,6 +54,16 @@ const CLIENT_VIOLATION_SEVERITY: Record<ClientViolationType, ProctoringSeverity>
 
 /** 같은 종류의 프런트 부정행위가 이 횟수만큼 누적되면 자동으로 실격 처리한다(종류 무관, 프런트 부정행위 방지 플로우 기준). */
 const CLIENT_VIOLATION_DISQUALIFY_THRESHOLD = 2;
+
+/** 실격 안내 메일(영문)에 실릴, 위반 종류별 사람이 읽을 수 있는 사유 문구. */
+const CLIENT_VIOLATION_LABEL: Record<ClientViolationType, string> = {
+  [ClientViolationType.TAB_SWITCH]: 'switching to another browser tab',
+  [ClientViolationType.BLUR]: 'leaving the exam window focus',
+  [ClientViolationType.WINDOW_CLOSE_ATTEMPT]: 'attempting to close the exam window',
+  [ClientViolationType.MOUSE_LEAVE]: 'moving the mouse outside the exam screen',
+  [ClientViolationType.PASTE]: 'pasting content into an answer',
+  [ClientViolationType.DUAL_MONITOR]: 'using a dual-monitor setup',
+};
 
 export interface AnalyzeFrameCommand {
   capturedAt: string;
@@ -192,7 +203,7 @@ export class MonitoringService {
       //   const events = await this.proctoringEventRepository.findByExamSessionId(examSessionId);
       //   const highCount = events.filter((e) => e.severity === 'HIGH').length;
       //   if (highCount >= AUTO_DISQUALIFY_HIGH_THRESHOLD) {
-      //     await this.examSessionService.disqualify(examSessionId);
+      //     await this.examSessionService.disqualify(examSessionId, 'AI monitoring — repeated high-risk cheating detected');
       //   }
       // }
     }
@@ -229,7 +240,8 @@ export class MonitoringService {
     const violationEventType: string = dto.violationType;
     const violationCount = events.filter((event) => event.eventType === violationEventType).length;
     if (violationCount >= CLIENT_VIOLATION_DISQUALIFY_THRESHOLD) {
-      const disqualified = await this.examSessionService.disqualify(examSessionId);
+      const reason = `Anti-cheating policy violation — ${CLIENT_VIOLATION_LABEL[dto.violationType]} was detected ${violationCount} times.`;
+      const disqualified = await this.examSessionService.disqualify(examSessionId, reason);
       sessionStatus = disqualified.status;
     }
 
@@ -273,7 +285,7 @@ export class MonitoringService {
 
     const expectedPrefix = `${userId}/${examSessionId}/`;
     if (!clipPath.startsWith(expectedPrefix)) {
-      throw new ForbiddenDomainException('본인 세션의 클립 경로가 아닙니다.');
+      throw new ForbiddenDomainException(notOwnedByUser("session's clip path"));
     }
 
     return this.proctoringEventRepository.updateClipPath(eventId, clipPath);
@@ -289,7 +301,7 @@ export class MonitoringService {
 
     const event = await this.proctoringEventRepository.findById(eventId);
     if (!event || event.examSessionId !== examSessionId) {
-      throw new NotFoundDomainException(`모니터링 이벤트(${eventId})를 찾을 수 없습니다.`);
+      throw new NotFoundDomainException(notFound('Monitoring event', eventId));
     }
   }
 

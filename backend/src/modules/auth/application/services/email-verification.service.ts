@@ -1,6 +1,10 @@
 import { randomInt } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
+import {
+  EMAIL_ALREADY_IN_USE,
+  operationFailed,
+} from '../../../../common/exceptions/error-messages';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import { UserService } from '../../../user/application/services/user.service';
 
@@ -32,7 +36,7 @@ export class EmailVerificationService {
   async sendCode(email: string): Promise<string> {
     const taken = await this.userService.existsByEmail(email);
     if (taken) {
-      throw new ConflictDomainException('이미 사용 중인 이메일입니다.');
+      throw new ConflictDomainException(EMAIL_ALREADY_IN_USE);
     }
 
     const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
@@ -50,7 +54,9 @@ export class EmailVerificationService {
       { onConflict: 'email' },
     );
     if (error) {
-      throw new ConflictDomainException(error.message ?? '인증번호 저장에 실패했습니다.');
+      throw new ConflictDomainException(
+        error.message ?? operationFailed('save the verification code'),
+      );
     }
 
     return code;
@@ -65,17 +71,19 @@ export class EmailVerificationService {
       .maybeSingle<VerificationRow>();
 
     if (!data) {
-      throw new ConflictDomainException('인증번호가 올바르지 않습니다.');
+      throw new ConflictDomainException('Incorrect verification code.');
     }
     if (data.verified_at) {
-      throw new ConflictDomainException('이미 인증된 이메일입니다.');
+      throw new ConflictDomainException('This email is already verified.');
     }
     if (new Date(data.code_expires_at).getTime() < Date.now()) {
-      throw new ConflictDomainException('인증번호가 만료되었습니다. 다시 요청해주세요.');
+      throw new ConflictDomainException(
+        'This verification code has expired. Please request a new one.',
+      );
     }
     if (data.attempts >= MAX_ATTEMPTS) {
       throw new ConflictDomainException(
-        '인증 시도 횟수를 초과했습니다. 인증번호를 다시 요청해주세요.',
+        'Too many verification attempts. Please request a new code.',
       );
     }
     if (data.code !== code) {
@@ -83,7 +91,7 @@ export class EmailVerificationService {
         .from(TABLE)
         .update({ attempts: data.attempts + 1 })
         .eq('email', email);
-      throw new ConflictDomainException('인증번호가 올바르지 않습니다.');
+      throw new ConflictDomainException('Incorrect verification code.');
     }
 
     const { error } = await client
@@ -91,7 +99,9 @@ export class EmailVerificationService {
       .update({ verified_at: new Date().toISOString() })
       .eq('email', email);
     if (error) {
-      throw new ConflictDomainException(error.message ?? '이메일 인증 처리에 실패했습니다.');
+      throw new ConflictDomainException(
+        error.message ?? operationFailed('process email verification'),
+      );
     }
   }
 
@@ -105,7 +115,7 @@ export class EmailVerificationService {
       .maybeSingle<{ verified_at: string | null }>();
 
     if (!data?.verified_at) {
-      throw new ConflictDomainException('이메일 인증을 먼저 완료해주세요.');
+      throw new ConflictDomainException('Please verify your email first.');
     }
 
     const verifiedAt = new Date(data.verified_at);

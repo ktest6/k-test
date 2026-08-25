@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
+import { serviceCommunicationFailed } from '../../../../common/exceptions/error-messages';
 import { describeError } from '../../../../common/utils/describe-error.util';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import {
@@ -52,9 +53,7 @@ export class EarphoneDetectionService {
       this.logger.warn(
         `이어폰 탐지 서비스 통신 실패 (examSessionId=${examSessionId}, userId=${userId}): ${describeError(err)}`,
       );
-      throw new ConflictDomainException(
-        '이어폰 탐지 서비스와 통신에 실패했습니다. 잠시 후 다시 시도해주세요.',
-      );
+      throw new ConflictDomainException(serviceCommunicationFailed('earphone detection'));
     }
 
     const client = this.supabaseService.getAdminClient();

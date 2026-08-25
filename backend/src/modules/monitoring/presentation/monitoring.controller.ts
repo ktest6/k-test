@@ -56,7 +56,10 @@ export class MonitoringController {
       '동일인 검사(runIdentityCheck)용 기준 얼굴 이미지는 프론트가 보내지 않는다 — 본인인증 때 저장된 사진을 서버가 알아서 붙인다. ' +
       '모니터링 서비스가 응답하지 않아도 이 API 자체는 실패하지 않는다(로그만 남기고 이상 없음으로 처리).',
   })
-  @ApiStandardResponse(MonitoringAnalyzeResponseDto, { status: 201, message: '프레임 분석 완료' })
+  @ApiStandardResponse(MonitoringAnalyzeResponseDto, {
+    status: 201,
+    message: 'Frame analysis completed',
+  })
   async analyze(
     @Param('examSessionId') examSessionId: string,
     @UploadedFile() currentImage: Express.Multer.File,
@@ -64,7 +67,7 @@ export class MonitoringController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<MonitoringAnalyzeResponseDto> {
     if (!currentImage) {
-      throw new BadRequestException('current_image 파일이 필요합니다.');
+      throw new BadRequestException('The current_image file is required.');
     }
 
     const result = await this.monitoringService.analyze(examSessionId, user.id, dto, {
@@ -91,7 +94,7 @@ export class MonitoringController {
       '2회부터 자동으로 세션이 실격 처리되고(종류별로 각각 따로 셈), 응답의 sessionStatus로 바로 ' +
       '확인할 수 있다(별도 상태 조회 필요 없음).',
   })
-  @ApiStandardResponse(ReportViolationResponseDto, { status: 201, message: '위반 신고 접수 완료' })
+  @ApiStandardResponse(ReportViolationResponseDto, { status: 201, message: 'Violation reported' })
   async reportViolation(
     @Param('examSessionId') examSessionId: string,
     @Body() dto: ReportViolationDto,
@@ -113,7 +116,7 @@ export class MonitoringController {
       '영상 자체는 프런트가 녹화해서 올려야 한다. 프론트는 이 URL로 Supabase Storage에 직접 업로드한 뒤, 응답의 ' +
       'path를 그대로 클립 첨부(POST .../clip)의 clipPath로 전달하면 된다.',
   })
-  @ApiStandardResponse(ClipUploadUrlResponseDto, { status: 201, message: '업로드 URL 발급 완료' })
+  @ApiStandardResponse(ClipUploadUrlResponseDto, { status: 201, message: 'Upload URL issued' })
   createClipUploadUrl(
     @Param('examSessionId') examSessionId: string,
     @Param('eventId') eventId: string,
@@ -134,7 +137,7 @@ export class MonitoringController {
     description:
       '클립 업로드 URL로 직접 업로드를 마친 뒤, 그 경로를 해당 부정행위 이벤트 로그에 연결한다.',
   })
-  @ApiStandardResponse(ProctoringEventResponseDto, { status: 201, message: '영상 클립 연결 완료' })
+  @ApiStandardResponse(ProctoringEventResponseDto, { status: 201, message: 'Clip attached' })
   async attachClip(
     @Param('examSessionId') examSessionId: string,
     @Param('eventId') eventId: string,

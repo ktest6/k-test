@@ -522,13 +522,17 @@ def base_payload(**overrides) -> dict:
 def test_API_글과_음성이_둘_다_오면_400():
     response = client.post("/score", json=base_payload(answer_text="직접 친 글입니다."))
     assert response.status_code == 400
-    assert "answer_text" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert detail["code"] == "AUDIO_TEXT_AND_AUDIO_BOTH"
+    assert "answer_text" in detail["message"]
 
 
 def test_API_쓰기에_음성을_붙이면_400():
     response = client.post("/score", json=base_payload(mode="writing"))
     assert response.status_code == 400
-    assert "쓰기" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert detail["code"] == "AUDIO_NOT_ALLOWED_FOR_WRITING"
+    assert "쓰기" in detail["message"]
 
 
 def test_API_받아쓰기에_실패하면_503(monkeypatch):
@@ -536,7 +540,11 @@ def test_API_받아쓰기에_실패하면_503(monkeypatch):
     monkeypatch.setattr("src.speech.intake.build_default_stt", lambda: BrokenStt())
     response = client.post("/score", json=base_payload())
     assert response.status_code == 503
-    assert "옮기지 못했다" in response.json()["detail"]
+    # 이 가짜 받아쓰기는 코드를 안 달고 예외를 올린다.
+    # 옛 방식으로 부르는 자리도 그대로 돌아야 하므로 code 는 빈 글자다
+    detail = response.json()["detail"]
+    assert detail["code"] == ""
+    assert "옮기지 못했다" in detail["message"]
 
 
 def test_API_음성으로_채점하면_받아쓴_글이_응답에_있다(monkeypatch):
@@ -600,6 +608,35 @@ def test_받아쓰기_구현은_포트만_지키면_갈아_끼워진다():
     assert result.meta.stt_provider == "fake"
 
 
+def _imported_packages(path) -> set[str]:
+    """이 파일이 실제로 **불러다 쓰는** 모듈 이름을 모은다.
+
+    왜 글자 찾기(substring)가 아니라 import 문을 보는가:
+    예전에는 파일 안에 'speech' 라는 글자가 있기만 해도 위반으로 봤다. 그런데
+    사용자에게 보여줄 문구를 모아 둔 카탈로그(scoring/messages.py)에는
+    'AZURE_SPEECH_KEY 가 설정돼 있지 않다' 같은 **문장**이 들어 있다. 이건 남의
+    모듈을 부르는 것이 아니라 그냥 글자다. 글자만 보면 이런 것까지 위반으로 잡혀서
+    정작 지키려던 규칙(부르는 방향)이 흐려진다.
+
+    그래서 파이썬에게 파일 구조를 직접 물어보고(ast), `import` 로 적힌 모듈 이름만
+    본다. 주석이나 문장 속 글자에는 속지 않고, 진짜로 부르는 자리만 잡아낸다.
+    """
+    import ast
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        # import a.b.c
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                found.update(alias.name.split("."))
+        # from ..a.b import c  (상대 경로도 모듈 이름만 떼어 본다)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                found.update(node.module.split("."))
+    return found
+
+
 def test_채점_코드는_받아쓰기_모델을_직접_부르지_않는다():
     """단방향 의존을 코드로 못 박는다.
 
@@ -613,7 +650,7 @@ def test_채점_코드는_받아쓰기_모델을_직접_부르지_않는다():
     offenders = []
     for folder in ("features", "llm"):
         for path in (src / folder).glob("**/*.py"):
-            if "speech" in path.read_text(encoding="utf-8"):
+            if "speech" in _imported_packages(path):
                 offenders.append(str(path))
     assert offenders == [], f"채점 자질 쪽 파일이 speech 를 참조한다: {offenders}"
 
@@ -621,7 +658,7 @@ def test_채점_코드는_받아쓰기_모델을_직접_부르지_않는다():
     scoring_offenders = [
         path.name
         for path in (src / "scoring").glob("**/*.py")
-        if "speech" in path.read_text(encoding="utf-8")
+        if "speech" in _imported_packages(path)
     ]
     assert scoring_offenders == ["pipeline.py"], (
         f"speech 배선이 pipeline.py 밖으로 번졌다: {scoring_offenders}"
@@ -892,4 +929,6 @@ def test_API_무음_음성은_503_으로_나간다(monkeypatch):
     response = client.post("/score", json=base_payload(options={"use_llm": False}))
 
     assert response.status_code == 503
-    assert "소리를 찾지 못했다" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert detail["code"] == "STT_SILENT_AUDIO"
+    assert "소리를 찾지 못했다" in detail["message"]

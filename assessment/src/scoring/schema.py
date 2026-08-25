@@ -15,6 +15,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from .messages import Notice
+
 # 채점기 버전. 결합 가중치나 자질 정의가 바뀌면 올린다.
 SCORING_VERSION = "0.1.0"
 
@@ -104,6 +106,13 @@ class Evidence(BaseModel):
     start: int | None = Field(default=None, description="원문에서 인용이 시작하는 글자 위치")
     end: int | None = Field(default=None, description="원문에서 인용이 끝나는 글자 위치")
     comment: str = Field(default="", description="이 부분이 왜 근거가 되는지에 대한 설명")
+    notice: Notice | None = Field(
+        default=None,
+        description=(
+            "위 comment 와 같은 내용을 '코드 + 값' 으로 담은 것. 백엔드가 영어로 바꿔 쓴다. "
+            "LLM 이 그때그때 지어낸 설명이라 고정 문구가 없으면 code 가 LLM_FREE_TEXT 다"
+        ),
+    )
     detail: dict[str, Any] = Field(
         default_factory=dict,
         description="숫자 자질의 계산 내역처럼 추가로 남길 값",
@@ -137,6 +146,9 @@ class FeatureValue(BaseModel):
         description="이 값이 원문 어디에서 나왔는지",
     )
     note: str = Field(default="", description="임시 구현 등 알아둘 점")
+    notice: Notice | None = Field(
+        default=None, description="위 note 를 '코드 + 값' 으로 담은 것",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +174,9 @@ class ChecklistResult(BaseModel):
     source: FeatureSource = FeatureSource.LLM
     evidence: list[Evidence] = Field(default_factory=list)
     note: str = ""
+    notice: Notice | None = Field(
+        default=None, description="위 note 를 '코드 + 값' 으로 담은 것",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -196,6 +211,9 @@ class SubScore(BaseModel):
     contributions: list[ScoreContribution] = Field(default_factory=list)
     evidence: list[Evidence] = Field(default_factory=list)
     note: str = ""
+    notice: Notice | None = Field(
+        default=None, description="위 note 를 '코드 + 값' 으로 담은 것",
+    )
 
 
 class ScoringMeta(BaseModel):
@@ -416,6 +434,10 @@ class PronunciationAssessment(BaseModel):
     )
     provider: str = Field(default="", description="어느 회사 기계가 발음을 쟀는지")
     warnings: list[str] = Field(default_factory=list, description="사람이 알아야 할 것")
+    notices: list[Notice] = Field(
+        default_factory=list,
+        description="위 warnings 와 같은 내용을 '코드 + 값' 으로 담은 것",
+    )
 
 
 class ScoreRequest(BaseModel):
@@ -554,6 +576,13 @@ class ScoreResponse(BaseModel):
         default_factory=list,
         description="임시 대체 경로를 탔거나 인용을 버린 경우 등 알아야 할 사항",
     )
+    notices: list[Notice] = Field(
+        default_factory=list,
+        description=(
+            "위 warnings 와 같은 내용을 '코드 + 값' 으로 담은 것. 백엔드는 이 코드로 "
+            "영어 문구를 골라 화면에 띄운다. 두 목록의 길이와 차례는 언제나 같다"
+        ),
+    )
     meta: ScoringMeta
 
 
@@ -611,6 +640,9 @@ class FinalizeItem(BaseModel):
     overall_grade: str | None = None
     subscores: list[SubScore] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    # /score 응답을 그대로 담아 보내는 자리라, 새로 붙은 notices 도 받아 줘야
+    # '모르는 필드'로 조용히 버려지지 않는다
+    notices: list[Notice] = Field(default_factory=list)
 
     # /score 응답을 통째로 담아 보내면 여기에 그대로 들어온다.
     # 문항별 신뢰도를 최종 결과까지 끌고 가기 위해 받는다(안 보내도 동작한다).
@@ -680,6 +712,9 @@ class CrossModeCheck(BaseModel):
     threshold: int = Field(description="이 값 이상 벌어지면 신호를 띄운다(임시값)")
     flagged: bool = Field(default=False, description="검토 권장 신호가 떴는지")
     note: str = ""
+    notice: Notice | None = Field(
+        default=None, description="위 note 를 '코드 + 값' 으로 담은 것",
+    )
 
 
 class ItemCoverage(BaseModel):
@@ -773,6 +808,13 @@ class FinalizeResponse(BaseModel):
     cross_mode_check: CrossModeCheck
     item_coverage: ItemCoverage
     warnings: list[str] = Field(default_factory=list)
+    notices: list[Notice] = Field(
+        default_factory=list,
+        description=(
+            "위 warnings 와 같은 내용을 '코드 + 값' 으로 담은 것. "
+            "두 목록의 길이와 차례는 언제나 같다"
+        ),
+    )
     meta: FinalizeMeta
 
 

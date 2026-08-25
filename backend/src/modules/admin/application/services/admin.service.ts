@@ -5,6 +5,11 @@ import {
   NotFoundDomainException,
   UnauthorizedDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import {
+  EMAIL_ALREADY_IN_USE,
+  INVALID_CREDENTIALS,
+  notFound,
+} from '../../../../common/exceptions/error-messages';
 import { Admin } from '../../domain/entities/admin.entity';
 import { ADMIN_REPOSITORY, AdminRepository } from '../../domain/admin.repository.interface';
 
@@ -25,7 +30,7 @@ export class AdminService {
   async register(input: RegisterAdminRequest): Promise<Admin> {
     const emailTaken = await this.adminRepository.existsByEmail(input.email);
     if (emailTaken) {
-      throw new ConflictDomainException('이미 사용 중인 이메일입니다.');
+      throw new ConflictDomainException(EMAIL_ALREADY_IN_USE);
     }
 
     const passwordHash = await bcrypt.hash(input.password, PASSWORD_SALT_ROUNDS);
@@ -40,14 +45,14 @@ export class AdminService {
     const credentials = await this.adminRepository.findCredentialsByEmail(email);
     if (!credentials) {
       this.logger.warn(`관리자 로그인 실패 (계정 없음): email=${email}`);
-      throw new UnauthorizedDomainException('이메일 또는 비밀번호가 올바르지 않습니다.');
+      throw new UnauthorizedDomainException(INVALID_CREDENTIALS);
     }
 
     const matches = await bcrypt.compare(password, credentials.passwordHash);
     if (!matches) {
       await this.adminRepository.recordLoginFailure(credentials.admin.id);
       this.logger.warn(`관리자 로그인 실패 (비밀번호 불일치): email=${email}`);
-      throw new UnauthorizedDomainException('이메일 또는 비밀번호가 올바르지 않습니다.');
+      throw new UnauthorizedDomainException(INVALID_CREDENTIALS);
     }
 
     await this.adminRepository.recordLoginSuccess(credentials.admin.id);
@@ -57,7 +62,7 @@ export class AdminService {
   async findById(id: string): Promise<Admin> {
     const admin = await this.adminRepository.findById(id);
     if (!admin) {
-      throw new NotFoundDomainException(`관리자(${id})를 찾을 수 없습니다.`);
+      throw new NotFoundDomainException(notFound('Admin', id));
     }
     return admin;
   }

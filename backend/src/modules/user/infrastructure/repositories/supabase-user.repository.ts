@@ -3,6 +3,7 @@ import {
   ConflictDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
+import { notFound, operationFailed } from '../../../../common/exceptions/error-messages';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import { User } from '../../domain/entities/user.entity';
 import { IdentityDocumentType } from '../../domain/enums/identity-document-type.enum';
@@ -46,7 +47,7 @@ export class SupabaseUserRepository implements UserRepository {
       .single<UserRow>();
 
     if (error || !data) {
-      throw new ConflictDomainException(error?.message ?? '회원가입에 실패했습니다.');
+      throw new ConflictDomainException(error?.message ?? operationFailed('sign up'));
     }
     return UserMapper.toDomain(data);
   }
@@ -142,7 +143,7 @@ export class SupabaseUserRepository implements UserRepository {
       .single<UserRow>();
 
     if (error || !data) {
-      throw new NotFoundDomainException(`사용자(${id})를 찾을 수 없습니다.`);
+      throw new NotFoundDomainException(notFound('User', id));
     }
     return UserMapper.toDomain(data);
   }

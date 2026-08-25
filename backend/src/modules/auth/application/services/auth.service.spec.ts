@@ -385,3 +385,29 @@ describe('AuthService.signUp', () => {
     expect(secondCall[0].voiceDataAiTrainingAgreedAt).toBeNull();
   });
 });
+
+describe('AuthService.issueTestAccessToken', () => {
+  it('issues a USER-role token for the given account without touching userService/adminService', () => {
+    const userService = {} as unknown as UserService;
+    const adminService = {} as unknown as AdminService;
+    const service = new AuthService(
+      userService,
+      adminService,
+      buildJwtService(),
+      buildMailService(),
+      buildEmailVerificationService(),
+      buildConfig('secret'),
+    );
+
+    const result = service.issueTestAccessToken('42', 'quick-start@ktest.local');
+
+    expect(result).toEqual({
+      accessToken: 'signed-token',
+      refreshToken: 'signed-token',
+      expiresIn: 3600,
+      userId: '42',
+      email: 'quick-start@ktest.local',
+      role: Role.USER,
+    });
+  });
+});

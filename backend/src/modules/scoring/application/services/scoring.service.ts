@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { NotFoundDomainException } from '../../../../common/exceptions/domain.exception';
+import { notFound } from '../../../../common/exceptions/error-messages';
 import { Score } from '../../domain/entities/score.entity';
 import {
   RecordScoreInput,
@@ -18,7 +19,7 @@ export class ScoringService {
   async getByAnswerId(answerId: string): Promise<Score> {
     const score = await this.scoringRepository.findByAnswerId(answerId);
     if (!score) {
-      throw new NotFoundDomainException(`답안(${answerId})의 채점 결과를 찾을 수 없습니다.`);
+      throw new NotFoundDomainException(notFound('Score for answer', answerId));
     }
     return score;
   }

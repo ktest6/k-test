@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { NotFoundDomainException } from '../../../../common/exceptions/domain.exception';
+import { notFound } from '../../../../common/exceptions/error-messages';
 import { AnswerService } from '../../../answer/application/services/answer.service';
 import { QuestionService } from '../../../question/application/services/question.service';
 import { Question } from '../../../question/domain/entities/question.entity';
@@ -19,7 +20,7 @@ const SECTION_ORDER: QuestionSectionType[] = [
 ];
 
 /** 회차(Exam) 개념이 없어져서, 파트마다 이 개수만큼 문항 풀에서 뽑아 세션에 배정한다. */
-const QUESTIONS_PER_PART = 3;
+const QUESTIONS_PER_PART = 2;
 
 /** examSessionId를 시드로 한 결정적 해시 — 선택("이 세션엔 어떤 문항")과 정렬(같은 섹션 안 순서) 둘 다 이걸로 한다. 같은 세션은 새로고침해도 항상 같은 결과, 세션마다는 다른 결과. */
 function shuffleKey(examSessionId: string, questionId: string): string {
@@ -44,7 +45,7 @@ export class ExamSessionQuestionService {
   ) {}
 
   /**
-   * 세션에 배정된 문항 9개(파트별 3개, 문항 풀에서 세션별 결정적 랜덤으로 선택) —
+   * 세션에 배정된 문항 6개(파트별 2개, 문항 풀에서 세션별 결정적 랜덤으로 선택) —
    * 섹션 순서(SECTION_ORDER) 그대로 묶여서 나온다. 회차(Exam)가 없어졌으므로
    * "이 세션엔 어떤 문항인가" 자체가 examSessionId 하나로 매번 재현 가능하게
    * 계산된다 — 별도로 저장하지 않는다.
@@ -99,7 +100,7 @@ export class ExamSessionQuestionService {
     const questions = await this.getAssignedQuestions(examSessionId);
     const question = questions.find((q) => q.id === questionId);
     if (!question) {
-      throw new NotFoundDomainException(`문항(${questionId})을 찾을 수 없습니다.`);
+      throw new NotFoundDomainException(notFound('Question', questionId));
     }
 
     const [answeredIds, skippedIds] = await Promise.all([

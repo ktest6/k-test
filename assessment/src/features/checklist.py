@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 
 from ..llm.citation import filter_by_citation, verify_citation
 from ..llm.client import GeminiClient, LLMUnavailable
+from ..scoring.messages import Notice, emit, notice, notice_or_free_text
 from ..scoring.schema import (
     ChecklistItem,
     ChecklistResult,
@@ -26,6 +27,16 @@ from ..scoring.schema import (
     FeatureSource,
     ItemInfo,
 )
+
+# 값이 끼지 않는 고정 근거 문구는 한 번만 만들어 두고 돌려 쓴다.
+# 같은 문장을 자리마다 다시 적으면 한쪽만 고쳐져서 문구가 어긋나기 때문이다.
+_NO_VERDICT_COMMENT = notice("CHECKLIST_COMMENT_NO_VERDICT")
+_NO_VERDICT_NOTE = notice("CHECKLIST_NOTE_NO_VERDICT")
+_UNMET_FALLBACK = notice("CHECKLIST_COMMENT_UNMET_FALLBACK")
+_MET_FALLBACK = notice("CHECKLIST_COMMENT_MET_FALLBACK")
+_CITATION_DISCARDED_NOTE = notice("CHECKLIST_NOTE_CITATION_DISCARDED")
+_FALLBACK_NOTE = notice("CHECKLIST_NOTE_FALLBACK")
+_FALLBACK_UNMET = notice("CHECKLIST_COMMENT_FALLBACK_UNMET")
 
 SYSTEM_INSTRUCTION = """\
 당신은 한국어 시험 답안이 문항의 요구 사항을 충족했는지 확인하는 판정 도구다.
@@ -97,6 +108,8 @@ class ChecklistJudgeResult:
 
     results: list[ChecklistResult] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    #: 위 warnings 와 같은 내용을 '코드 + 값' 으로 담은 것. 백엔드가 영어로 바꿔 쓴다
+    notices: list[Notice] = field(default_factory=list)
     dropped_citations: int = 0
     llm_used: bool = False
 
@@ -118,20 +131,21 @@ def results_from_llm_payload(
     answer_text: str,
     checklist: list[ChecklistItem],
     payload: dict,
-) -> tuple[list[ChecklistResult], list[str], int]:
+) -> tuple[list[ChecklistResult], list[str], list[Notice], int]:
     """LLM이 준 판정 결과를 검증해서 최종 판정으로 바꾼다.
 
     LLM 호출과 분리해 두어서, 가짜 응답을 넣어 폐기 동작을 검증할 수 있다.
     핵심 규칙: 충족(1)인데 근거 인용이 원문에 없으면 0으로 내린다.
     """
     warnings: list[str] = []
+    notices: list[Notice] = []
     dropped = 0
 
     # 형식이 깨졌으면 빈 목록으로 두고 아래에서 전 항목을 미충족 처리한다
     raw_results = payload.get("results")
     if not isinstance(raw_results, list):
         raw_results = []
-        warnings.append("LLM 응답에 results 목록이 없어 전 항목을 미충족으로 처리했다.")
+        emit(warnings, notices, "CHECKLIST_NO_RESULTS_LIST")
 
     # LLM이 항목 순서를 바꿔 보낼 수 있으므로 id로 찾아 쓸 수 있게 정리해 둔다
     by_id = {str(r.get("id")): r for r in raw_results if isinstance(r, dict)}
@@ -153,13 +167,15 @@ def results_from_llm_payload(
                     evidence=[
                         Evidence(
                             source=FeatureSource.LLM,
-                            comment="LLM이 이 항목을 판정하지 않아 미충족으로 처리했다.",
+                            comment=_NO_VERDICT_COMMENT.message,
+                            notice=_NO_VERDICT_COMMENT,
                         )
                     ],
-                    note="LLM 응답 누락",
+                    note=_NO_VERDICT_NOTE.message,
+                    notice=_NO_VERDICT_NOTE,
                 )
             )
-            warnings.append(f"체크리스트 '{item.id}' 에 대한 LLM 판정이 없어 0으로 처리했다.")
+            emit(warnings, notices, "CHECKLIST_ITEM_MISSING_VERDICT", itemId=item.id)
             continue
 
         # 모델이 1, "1", true 등 여러 모양으로 답할 수 있어 넉넉하게 받아 준다
@@ -178,7 +194,14 @@ def results_from_llm_payload(
                     evidence=[
                         Evidence(
                             source=FeatureSource.LLM,
-                            comment=reason or "답안에서 해당 내용을 찾지 못했다.",
+                            comment=reason or _UNMET_FALLBACK.message,
+                            # LLM 이 직접 쓴 이유에는 정해진 문구가 없다.
+                            # 그래서 '번역할 고정 문장이 없는 자유문' 이라는 표시를 붙인다
+                            notice=(
+                                notice_or_free_text(None, reason)
+                                if reason
+                                else _UNMET_FALLBACK
+                            ),
                         )
                     ],
                 )
@@ -191,9 +214,18 @@ def results_from_llm_payload(
         check = verify_citation(answer_text, quote)
         if not check.ok:
             dropped += 1
-            warnings.append(
-                f"체크리스트 '{item.id}': 충족 판정의 근거 인용이 원문에 없어 폐기하고 "
-                f"미충족(0)으로 내렸다 — {check.reason}"
+            emit(
+                warnings,
+                notices,
+                "CHECKLIST_CITATION_DISCARDED",
+                itemId=item.id,
+                reason=check.reason,
+                reasonNotice=check.notice,
+            )
+            discarded = notice(
+                "CHECKLIST_COMMENT_CITATION_DISCARDED",
+                reason=check.reason,
+                reasonNotice=check.notice,
             )
             final.append(
                 ChecklistResult(
@@ -204,14 +236,13 @@ def results_from_llm_payload(
                     evidence=[
                         Evidence(
                             source=FeatureSource.LLM,
-                            comment=(
-                                "LLM은 충족이라고 했으나 근거 인용이 답안 원문에 없어 폐기했다. "
-                                f"({check.reason})"
-                            ),
+                            comment=discarded.message,
+                            notice=discarded,
                             detail={"discarded_quote": quote},
                         )
                     ],
-                    note="근거 인용 폐기로 미충족 처리",
+                    note=_CITATION_DISCARDED_NOTE.message,
+                    notice=_CITATION_DISCARDED_NOTE,
                 )
             )
             continue
@@ -230,29 +261,32 @@ def results_from_llm_payload(
                         quote=check.matched_text,
                         start=check.start,
                         end=check.end,
-                        comment=reason or "답안에서 해당 내용을 확인했다.",
+                        comment=reason or _MET_FALLBACK.message,
+                        # LLM 이 직접 쓴 이유에는 정해진 문구가 없다(자유문 표시를 붙인다)
+                        notice=(
+                            notice_or_free_text(None, reason) if reason else _MET_FALLBACK
+                        ),
                     )
                 ],
             )
         )
 
-    return final, warnings, dropped
+    return final, warnings, notices, dropped
 
 
 def _keyword_fallback(
     answer_text: str,
     item: ItemInfo,
-) -> tuple[list[ChecklistResult], list[str]]:
+) -> tuple[list[ChecklistResult], list[str], list[Notice]]:
     """※ 임시 대체 경로 ※ LLM을 못 쓸 때 핵심어가 답안에 있는지로만 0/1을 매긴다.
 
     이것은 진짜 내용 판정이 아니다. 말만 겹치고 뜻이 달라도 충족으로 잡히고,
     다른 표현으로 잘 말해도 미충족으로 잡힌다.
     운영 채점에 쓰면 안 되고, 키가 들어오면 반드시 LLM 판정으로 돌아가야 한다.
     """
-    warnings = [
-        "※ 임시 ※ LLM을 쓸 수 없어 체크리스트를 핵심어 일치로만 판정했다. "
-        "이 결과는 내용 판정이 아니라 대체값이며 운영 채점에 쓸 수 없다."
-    ]
+    warnings: list[str] = []
+    notices: list[Notice] = []
+    emit(warnings, notices, "CHECKLIST_FALLBACK_USED")
     # 응시자가 띄어쓰기를 다르게 했어도 찾을 수 있도록 공백을 뗀 형태로 비교한다
     normalized_answer = re.sub(r"\s+", "", answer_text)
 
@@ -272,13 +306,15 @@ def _keyword_fallback(
         if hit_word:
             # 임시 판정이라도 근거 위치는 남긴다. 근거 없는 점수를 만들지 않는다는 원칙은 같다
             check = verify_citation(answer_text, hit_word)
+            hit_comment = notice("CHECKLIST_COMMENT_FALLBACK_MET", keyword=hit_word)
             evidence = [
                 Evidence(
                     source=FeatureSource.KIWI,
                     quote=check.matched_text if check.ok else hit_word,
                     start=check.start,
                     end=check.end,
-                    comment=f"※ 임시 판정 ※ 핵심어 '{hit_word}' 가 답안에 나타남",
+                    comment=hit_comment.message,
+                    notice=hit_comment,
                     detail={"matched_keyword": hit_word},
                 )
             ]
@@ -290,7 +326,8 @@ def _keyword_fallback(
                     weight=c.weight,
                     source=FeatureSource.KIWI,
                     evidence=evidence,
-                    note="※ 임시 ※ 핵심어 일치 기반 대체 판정(LLM 미사용)",
+                    note=_FALLBACK_NOTE.message,
+                    notice=_FALLBACK_NOTE,
                 )
             )
         else:
@@ -304,13 +341,15 @@ def _keyword_fallback(
                     evidence=[
                         Evidence(
                             source=FeatureSource.KIWI,
-                            comment="※ 임시 판정 ※ 관련 핵심어가 답안에서 발견되지 않음",
+                            comment=_FALLBACK_UNMET.message,
+                            notice=_FALLBACK_UNMET,
                         )
                     ],
-                    note="※ 임시 ※ 핵심어 일치 기반 대체 판정(LLM 미사용)",
+                    note=_FALLBACK_NOTE.message,
+                    notice=_FALLBACK_NOTE,
                 )
             )
-    return results, warnings
+    return results, warnings, notices
 
 
 def judge_checklist(
@@ -324,16 +363,24 @@ def judge_checklist(
 
     # 문항이 체크리스트를 안 넘겨줬다면 판정할 것 자체가 없다
     if not item.checklist:
-        out.warnings.append("문항에 체크리스트가 없어 내용·과제 수행을 판정할 수 없다.")
+        emit(out.warnings, out.notices, "CHECKLIST_NONE")
         return out
 
     # 키가 없거나 LLM을 껐으면 임시 대체 판정으로 넘어간다(채점을 멈추지 않는다)
     client = client or GeminiClient()
     if not use_llm or not client.available:
-        reason = "옵션에서 LLM 사용을 껐다" if not use_llm else "GEMINI_API_KEY 없음"
-        results, warnings = _keyword_fallback(answer_text, item)
+        inner = notice(
+            "CHECKLIST_LLM_DISABLED_OPTION" if not use_llm else "CHECKLIST_API_KEY_MISSING"
+        )
+        results, warnings, notices = _keyword_fallback(answer_text, item)
         out.results = results
-        out.warnings = [f"LLM 미사용 사유: {reason}"] + warnings
+        # 겉 문구(LLM 미사용 사유)와 안쪽 사유를 둘 다 코드로 담아 맨 앞에 세운다.
+        # 그래야 백엔드가 겉과 속을 각각 영어로 바꿔 조립할 수 있다
+        head = notice(
+            "CHECKLIST_LLM_UNUSED_WRAP", reason=inner.message, reasonNotice=inner
+        )
+        out.warnings = [head.message] + warnings
+        out.notices = [head] + notices
         return out
 
     prompt = build_prompt(answer_text, item)
@@ -345,15 +392,22 @@ def judge_checklist(
         )
     except LLMUnavailable as exc:
         # 호출은 시도했지만 실패한 경우에도 같은 임시 경로로 빠진다
-        results, warnings = _keyword_fallback(answer_text, item)
+        results, warnings, notices = _keyword_fallback(answer_text, item)
         out.results = results
-        out.warnings = [f"LLM 체크리스트 판정 실패: {exc}"] + warnings
+        head = notice(
+            "CHECKLIST_JUDGE_FAILED", reason=str(exc), reasonNotice=exc.notice
+        )
+        out.warnings = [head.message] + warnings
+        out.notices = [head] + notices
         return out
 
     # 받은 답을 그대로 믿지 않고 인용 검증을 거쳐 최종 판정으로 바꾼다
-    results, warnings, dropped = results_from_llm_payload(answer_text, item.checklist, payload)
+    results, warnings, notices, dropped = results_from_llm_payload(
+        answer_text, item.checklist, payload
+    )
     out.results = results
     out.warnings = warnings
+    out.notices = notices
     out.dropped_citations = dropped
     out.llm_used = True
     return out

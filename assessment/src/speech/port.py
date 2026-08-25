@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 # 발음 평가 결과의 모양은 채점 쪽과 함께 쓰는 파일(scoring/schema.py)에 있다.
 # 발음 자질을 만드는 features/pronunciation.py 도 같은 것을 읽으므로,
 # 두 폴더가 서로를 직접 부르지 않고도 같은 값을 주고받을 수 있다.
+from ..scoring.messages import Notice, notice
 from ..scoring.schema import AudioInput, PronouncedWord, PronunciationAssessment
 
 if TYPE_CHECKING:
@@ -53,12 +54,45 @@ class SttUnavailable(RuntimeError):
     점수를 받게 되므로, 실패하면 실패했다고 말한다(창구가 503 으로 바꿔 알린다).
 
     메시지는 그대로 백엔드에 전달되므로 사람이 읽는 한 문장만 담는다.
+
+    **문구 말고 코드도 함께 들고 다닌다.** 응시자 화면에는 영어가 떠야 하는데 우리가
+    만드는 문장은 한국어라서, 백엔드가 영어 문장을 고를 열쇠(`code`)와 그 문장에 끼울
+    값(`params`)을 예외에 같이 담아 창구(api.py)까지 보낸다.
+    `code` 는 안 줘도 되게 해 두어서, 옛날 방식으로 부르던 자리도 그대로 돈다.
     """
 
-    def __init__(self, message: str, detail: str = ""):
+    def __init__(
+        self,
+        message: str,
+        detail: str = "",
+        code: str = "",
+        params: dict | None = None,
+    ):
         super().__init__(message)
         # 개발자가 원인을 찾을 때 쓰는 자리. 응답에는 실리지 않는다
         self.detail = detail
+        #: 백엔드가 영어 문구를 찾을 열쇠 (예: "STT_LORA_TIMEOUT")
+        self.code = code
+        #: 그 문구에 끼워 넣을 값 (예: {"timeoutSec": 120})
+        self.params = dict(params or {})
+
+    @property
+    def notice(self) -> Notice:
+        """이 예외를 백엔드에 나갈 모양(코드 + 값 + 한국어 문장)으로 바꾼다."""
+        return Notice(code=self.code, params=self.params, message=str(self))
+
+    @classmethod
+    def of(cls, code: str, *, detail: str = "", **params) -> "SttUnavailable":
+        """코드 하나로 예외를 만든다. 한국어 문장은 카탈로그가 만들어 준다."""
+        return cls.from_notice(notice(code, **params), detail=detail)
+
+    @classmethod
+    def from_notice(cls, made: Notice, *, detail: str = "") -> "SttUnavailable":
+        """이미 만들어 둔 Notice 로 예외를 만든다.
+
+        무음 판정처럼 문장을 먼저 조립해 두는 자리(loudness.py)를 위한 입구다.
+        """
+        return cls(made.message, detail=detail, code=made.code, params=made.params)
 
 
 @dataclass
@@ -86,6 +120,8 @@ class Transcription:
     elapsed_ms: float = 0.0
     #: 사람이 알아야 할 것(예: 길이를 재지 못했다)
     warnings: list[str] = field(default_factory=list)
+    #: 위 warnings 와 같은 내용을 '코드 + 값' 으로 담은 것. 백엔드가 영어로 바꿔 쓴다
+    notices: list[Notice] = field(default_factory=list)
     #: 발음 평가 결과. 발음을 잴 수 있는 제공자(Azure)만 채우고,
     #: 못 재는 제공자(Gemini)는 None 으로 둔다. None 이면 발화 전달력은 채점되지 않는다
     pronunciation: PronunciationAssessment | None = None

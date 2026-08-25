@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
+import { operationFailed } from '../../../../common/exceptions/error-messages';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import { SkippedQuestion } from '../../domain/entities/skipped-question.entity';
 import { SkippedQuestionRepository } from '../../domain/skipped-question.repository.interface';
@@ -38,7 +39,9 @@ export class SupabaseSkippedQuestionRepository implements SkippedQuestionReposit
       .single<SkippedQuestionRow>();
 
     if (error || !data) {
-      throw new ConflictDomainException(error?.message ?? '문항 건너뛰기 저장에 실패했습니다.');
+      throw new ConflictDomainException(
+        error?.message ?? operationFailed('save the skipped question'),
+      );
     }
     return toDomain(data);
   }
