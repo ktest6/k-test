@@ -13,12 +13,29 @@ declare const module: {
   };
 };
 
+/** 로컬 프런트 개발 서버(포트 무관, http만)는 CORS_ORIGIN 설정과 무관하게 항상 허용한다. */
+const LOCALHOST_ORIGIN_PATTERN = /^http:\/\/localhost:\d+$/;
+
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
   const config = configService.getOrThrow<AppConfig>('app');
 
-  app.enableCors({ origin: config.corsOrigin });
+  app.enableCors({
+    origin: (origin, callback) => {
+      if (config.corsOrigin === '*') {
+        callback(null, true);
+        return;
+      }
+      // 브라우저가 아닌 요청(서버 간 호출, curl, Postman 등)엔 Origin 헤더가 없다 — 막을 이유가 없다.
+      if (!origin || LOCALHOST_ORIGIN_PATTERN.test(origin)) {
+        callback(null, true);
+        return;
+      }
+      const allowedOrigins = config.corsOrigin.split(',').map((value) => value.trim());
+      callback(null, allowedOrigins.includes(origin));
+    },
+  });
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
   );
