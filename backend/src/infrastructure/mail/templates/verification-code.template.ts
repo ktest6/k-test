@@ -6,13 +6,13 @@ interface VerificationCodeEmailContent {
 
 /** 이메일 클라이언트 호환성 때문에 <style> 대신 인라인 스타일 + 테이블 레이아웃을 쓴다. */
 export function buildVerificationCodeEmail(code: string): VerificationCodeEmailContent {
-  const subject = '[K-TEST] 이메일 인증번호';
-  const text = `[K-TEST] 이메일 인증번호\n\n${code}\n\n10분 이내에 입력해주세요.\n본인이 요청하지 않았다면 이 메일을 무시하셔도 됩니다.`;
+  const subject = '[K-TEST] Email verification code';
+  const text = `[K-TEST] Email verification code\n\n${code}\n\nPlease enter it within 10 minutes.\nIf you did not request this, you can safely ignore this email.`;
 
   const html = `
 <!doctype html>
-<html lang="ko">
-  <body style="margin:0; padding:0; background-color:#f4f5f7; font-family:'Apple SD Gothic Neo','Malgun Gothic',Helvetica,Arial,sans-serif;">
+<html lang="en">
+  <body style="margin:0; padding:0; background-color:#f4f5f7; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7; padding:32px 16px;">
       <tr>
         <td align="center">
@@ -24,9 +24,9 @@ export function buildVerificationCodeEmail(code: string): VerificationCodeEmailC
             </tr>
             <tr>
               <td style="padding:32px;">
-                <p style="margin:0 0 8px; color:#111827; font-size:16px; font-weight:600;">이메일 인증번호</p>
+                <p style="margin:0 0 8px; color:#111827; font-size:16px; font-weight:600;">Email verification code</p>
                 <p style="margin:0 0 24px; color:#6b7280; font-size:14px; line-height:1.5;">
-                  아래 인증번호를 입력해 이메일 인증을 완료해주세요.
+                  Enter the code below to complete email verification.
                 </p>
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                   <tr>
@@ -36,14 +36,14 @@ export function buildVerificationCodeEmail(code: string): VerificationCodeEmailC
                   </tr>
                 </table>
                 <p style="margin:20px 0 0; color:#9ca3af; font-size:13px; line-height:1.5;">
-                  인증번호는 <strong style="color:#6b7280;">10분간</strong> 유효합니다.<br />
-                  본인이 요청하지 않았다면 이 메일을 무시하셔도 됩니다.
+                  This code is valid for <strong style="color:#6b7280;">10 minutes</strong>.<br />
+                  If you did not request this, you can safely ignore this email.
                 </p>
               </td>
             </tr>
             <tr>
               <td style="padding:16px 32px; background-color:#f9fafb; border-top:1px solid #f0f0f0;">
-                <p style="margin:0; color:#9ca3af; font-size:12px;">© K-TEST. 본 메일은 발신 전용입니다.</p>
+                <p style="margin:0; color:#9ca3af; font-size:12px;">© K-TEST. This is an automated message; please do not reply.</p>
               </td>
             </tr>
           </table>

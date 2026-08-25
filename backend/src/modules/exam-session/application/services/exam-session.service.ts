@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { appConfig } from '../../../../config/configuration';
 import {
   ConflictDomainException,
@@ -16,6 +17,10 @@ import {
   EXAM_SESSION_REPOSITORY,
   ExamSessionRepository,
 } from '../../domain/exam-session.repository.interface';
+import {
+  SESSION_DISQUALIFIED_EVENT,
+  SessionDisqualifiedEvent,
+} from '../../domain/events/session-disqualified.event';
 import { ExamSessionAccessService } from './exam-session-access.service';
 
 /** 재개(재시작) 시도가 이 횟수에 도달하면 세션을 BLOCKED로 전환하고 더 이상 진행을 막는다. */
@@ -47,6 +52,7 @@ export class ExamSessionService {
     private readonly earphoneDetectionService: EarphoneDetectionService,
     private readonly examResultService: ExamResultService,
     @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   /**
@@ -186,9 +192,11 @@ export class ExamSessionService {
    * 자동으로 부르기도 하고, 관리자가 검토 후 수동으로 부르기도 한다(관리자 전용
    * 엔드포인트 참고). 이미 끝난 세션(SUBMITTED)은 실격으로 덮어쓰지 않는다 —
    * 이미 제출된 응시 결과를 뒤집을 이유가 없다. BLOCKED/이미 DISQUALIFIED된
-   * 세션에 다시 걸어도 멱등하게 처리한다.
+   * 세션에 다시 걸어도 멱등하게 처리한다. reason은 실격 안내 메일 본문에
+   * 그대로 실린다(SessionDisqualifiedListener 참고) — 이미 실격된 세션에
+   * 다시 호출된 경우(멱등 반환)는 상태 변화가 없으므로 메일도 다시 보내지 않는다.
    */
-  async disqualify(examSessionId: string): Promise<ExamSession> {
+  async disqualify(examSessionId: string, reason: string): Promise<ExamSession> {
     const session = await this.examSessionRepository.findById(examSessionId);
     if (!session) {
       throw new NotFoundDomainException(notFound('Exam session', examSessionId));
@@ -202,6 +210,16 @@ export class ExamSessionService {
       );
     }
 
-    return this.examSessionRepository.updateStatus(examSessionId, SessionStatus.DISQUALIFIED);
+    const disqualified = await this.examSessionRepository.updateStatus(
+      examSessionId,
+      SessionStatus.DISQUALIFIED,
+    );
+
+    this.eventEmitter.emit(
+      SESSION_DISQUALIFIED_EVENT,
+      new SessionDisqualifiedEvent(examSessionId, session.userId, reason, session.startedAt),
+    );
+
+    return disqualified;
   }
 }

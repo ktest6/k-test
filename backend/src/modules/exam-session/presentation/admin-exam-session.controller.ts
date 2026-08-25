@@ -29,7 +29,10 @@ export class AdminExamSessionController {
   async disqualify(
     @Param('examSessionId') examSessionId: string,
   ): Promise<ExamSessionStatusResponseDto> {
-    const session = await this.examSessionService.disqualify(examSessionId);
+    const session = await this.examSessionService.disqualify(
+      examSessionId,
+      'Disqualified following admin review.',
+    );
     // 실격 처리된 세션은 어차피 문항 조회·답안 제출이 불가능하므로 verified는 항상 false로 내려준다.
     return { id: session.id, status: session.status, verified: false };
   }
