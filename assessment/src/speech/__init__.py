@@ -6,8 +6,10 @@
 
 Azure 로 갈아 끼울 자리:
     port.py       꽂는 자리(계약). 여기는 안 바뀐다
-    gemini_stt.py 지금 꽂혀 있는 임시 구현 (Azure 계정이 없어서 넣은 것)
-    intake.py     build_default_stt() — 갈아 끼울 때 고치는 곳은 이 함수다
+    azure_stt.py  Azure 구현. 받아쓰기 + **발음 평가**를 한 번에 한다 (2026-08-22 합류)
+    gemini_stt.py 예전 임시 구현. 글자만 주고 발음은 못 잰다
+    intake.py     build_default_stt() — 어느 것을 쓸지 고르는 곳
+                  (KTEST_STT_PROVIDER 환경변수, 안 정하면 Azure 열쇠가 있을 때 azure)
     loudness.py   무음 관문. **여기는 LLM 과 무관해서 Azure 로 바꿔도 그대로 쓴다**
 
 **받아쓰기는 채점의 전제이지 대체 가능한 부품이 아니다.**
@@ -25,8 +27,19 @@ from .audio import (
     fetch_audio,
     load_local_audio,
 )
+from .azure_stt import AzureStt, is_read_aloud
 from .gemini_stt import DEFAULT_STT_MODEL, GeminiStt
-from .intake import AudioResolution, build_default_stt, resolve_audio_answer
+from .intake import (
+    LORA_STT_URL_ENV,
+    STT_PROVIDER_ENV,
+    AudioResolution,
+    azure_pronunciation_available,
+    build_default_pronouncer,
+    build_default_stt,
+    choose_stt_provider,
+    resolve_audio_answer,
+)
+from .lora_stt import DEFAULT_LORA_MODEL, LoraStt
 from .loudness import (
     SILENCE_RMS,
     SPEECH_FLOOR_RMS,
@@ -35,24 +48,43 @@ from .loudness import (
     is_too_quiet_for_speech,
     measure_wav_loudness,
 )
-from .port import SttPort, SttUnavailable, Transcription
+from .port import (
+    PronouncedWord,
+    PronouncerPort,
+    PronunciationAssessment,
+    SttPort,
+    SttUnavailable,
+    Transcription,
+)
 
 __all__ = [
+    "DEFAULT_LORA_MODEL",
     "DEFAULT_STT_MODEL",
     "DOWNLOAD_TIMEOUT_S",
     "FORMAT_TO_MIME",
+    "LORA_STT_URL_ENV",
     "MAX_AUDIO_BYTES",
     "SILENCE_RMS",
     "SPEECH_FLOOR_RMS",
+    "STT_PROVIDER_ENV",
     "AudioRequestError",
     "AudioResolution",
+    "AzureStt",
     "GeminiStt",
+    "LoraStt",
     "Loudness",
+    "PronouncedWord",
+    "PronouncerPort",
+    "PronunciationAssessment",
     "SttPort",
     "SttUnavailable",
     "Transcription",
+    "azure_pronunciation_available",
+    "build_default_pronouncer",
     "build_default_stt",
+    "choose_stt_provider",
     "fetch_audio",
+    "is_read_aloud",
     "is_silent",
     "is_too_quiet_for_speech",
     "load_local_audio",

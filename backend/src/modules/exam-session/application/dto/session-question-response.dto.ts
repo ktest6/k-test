@@ -16,6 +16,9 @@ export class SessionQuestionResponseDto {
   @ApiProperty({ description: '이 세션에서 이미 답안을 저장했는지 여부' })
   answered: boolean;
 
+  @ApiProperty({ description: '이 세션에서 이 문항을 건너뛰었는지 여부(답안 없이 넘어감)' })
+  skipped: boolean;
+
   @ApiProperty({ description: '준비시간(초)' })
   preparationSeconds: number;
 

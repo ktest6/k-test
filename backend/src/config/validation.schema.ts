@@ -8,6 +8,7 @@ export const validationSchema = Joi.object({
   REQUIRE_IDENTITY_VERIFICATION: Joi.string().valid('true', 'false').default('true'),
   REQUIRE_EARPHONE_CHECK: Joi.string().valid('true', 'false').default('true'),
   REQUIRE_MONITORING_SERVICE: Joi.string().valid('true', 'false').default('true'),
+  ENABLE_REPORT_RETRY_SCHEDULER: Joi.string().valid('true', 'false').default('true'),
 
   SUPABASE_URL: Joi.string().uri().required(),
   SUPABASE_ANON_KEY: Joi.string().required(),

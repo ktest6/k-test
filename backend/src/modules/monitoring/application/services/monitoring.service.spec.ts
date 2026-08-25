@@ -25,7 +25,6 @@ import { MonitoringService } from './monitoring.service';
 function buildSession(): ExamSession {
   return new ExamSession(
     '100',
-    '7',
     '9',
     SessionStatus.INPROGRESS,
     0,
@@ -50,7 +49,9 @@ function buildAdminClient(
     updateGazeState?: jest.Mock;
   } = {},
 ) {
-  const upload = overrides.upload ?? jest.fn().mockResolvedValue({ data: { path: 'snapshot.jpg' }, error: null });
+  const upload =
+    overrides.upload ??
+    jest.fn().mockResolvedValue({ data: { path: 'snapshot.jpg' }, error: null });
   const download = overrides.download ?? jest.fn();
   const maybeSingle = jest
     .fn()
@@ -93,6 +94,7 @@ function buildService(overrides: {
 }) {
   const examSessionService = {
     assertActiveSession: jest.fn().mockResolvedValue(buildSession()),
+    assertVerifiedSession: jest.fn().mockResolvedValue(buildSession()),
     getStatus: jest
       .fn()
       .mockResolvedValue({ session: buildSession(), status: SessionStatus.INPROGRESS }),
@@ -124,7 +126,7 @@ function buildService(overrides: {
   const proctoringEventRepository = {
     create: jest.fn(),
     findById: jest.fn(),
-    findByExamSessionId: jest.fn(),
+    findByExamSessionId: jest.fn().mockResolvedValue([]),
     updateClipPath: jest.fn(),
     ...overrides.proctoringEventRepository,
   };
@@ -141,11 +143,11 @@ function buildService(overrides: {
 }
 
 describe('MonitoringService.analyze', () => {
-  it('gates on assertActiveSession before calling the provider', async () => {
-    const assertActiveSession = jest.fn().mockResolvedValue(buildSession());
+  it('gates on assertVerifiedSession before calling the provider', async () => {
+    const assertVerifiedSession = jest.fn().mockResolvedValue(buildSession());
     const analyze = jest.fn().mockResolvedValue(buildAnalyzedResult());
     const service = buildService({
-      examSessionService: { assertActiveSession },
+      examSessionService: { assertVerifiedSession },
       monitoringProvider: { analyze },
     });
 
@@ -156,9 +158,10 @@ describe('MonitoringService.analyze', () => {
       buildFrame(),
     );
 
-    expect(assertActiveSession).toHaveBeenCalledWith('100', '9');
+    expect(assertVerifiedSession).toHaveBeenCalledWith('100', '9');
+    // AI팀 외부 계약상 필드명은 examId지만, 회차가 없어져서 세션 id(session.id === '100')를 그대로 싣는다.
     expect(analyze).toHaveBeenCalledWith(
-      expect.objectContaining({ examId: '7', examineeId: '9', runIdentityCheck: false }),
+      expect.objectContaining({ examId: '100', examineeId: '9', runIdentityCheck: false }),
     );
   });
 
@@ -323,7 +326,7 @@ describe('MonitoringService.analyze', () => {
       buildFrame(),
     );
 
-    expect(getVerifiedFacePath).toHaveBeenCalledWith('7', '9');
+    expect(getVerifiedFacePath).toHaveBeenCalledWith('100');
     expect(download).toHaveBeenCalledWith('9/7/face.jpg');
     const calledWith = analyze.mock.calls[0][0];
     expect(calledWith.runIdentityCheck).toBe(true);
@@ -372,7 +375,7 @@ describe('MonitoringService.analyze', () => {
       buildFrame(),
     );
 
-    expect(getLatestCalibration).toHaveBeenCalledWith('7', '9');
+    expect(getLatestCalibration).toHaveBeenCalledWith('100');
     expect(analyze).toHaveBeenCalledWith(
       expect.objectContaining({ eyeYawCenter: -2.1937, eyePitchCenter: -20.7994 }),
     );
@@ -426,9 +429,7 @@ describe('MonitoringService.analyze', () => {
       buildFrame(),
     );
 
-    expect(analyze).toHaveBeenCalledWith(
-      expect.objectContaining({ previousGazeState: undefined }),
-    );
+    expect(analyze).toHaveBeenCalledWith(expect.objectContaining({ previousGazeState: undefined }));
   });
 
   it('saves the gaze state returned by the provider for the next call', async () => {
@@ -532,7 +533,7 @@ describe('MonitoringService.reportViolation', () => {
     expect(result.sessionStatus).toBe(SessionStatus.INPROGRESS);
   });
 
-  it('does not auto-disqualify on the first DUAL_MONITOR occurrence', async () => {
+  it('does not auto-disqualify on the first occurrence of a violation type', async () => {
     const create = jest.fn().mockResolvedValue(buildEvent({ eventType: 'DUAL_MONITOR' }));
     const findByExamSessionId = jest
       .fn()
@@ -561,7 +562,6 @@ describe('MonitoringService.reportViolation', () => {
       ]);
     const disqualifiedSession = new ExamSession(
       '100',
-      '7',
       '9',
       SessionStatus.DISQUALIFIED,
       0,
@@ -588,7 +588,43 @@ describe('MonitoringService.reportViolation', () => {
     expect(result.sessionStatus).toBe(SessionStatus.DISQUALIFIED);
   });
 
-  it('does not count other violation types toward the DUAL_MONITOR threshold', async () => {
+  it('auto-disqualifies the session on the 2nd occurrence of a non-dual-monitor type too (e.g. TAB_SWITCH)', async () => {
+    const create = jest.fn().mockResolvedValue(buildEvent({ eventType: 'TAB_SWITCH' }));
+    const findByExamSessionId = jest
+      .fn()
+      .mockResolvedValue([
+        buildEvent({ eventType: 'TAB_SWITCH', severity: 'MEDIUM' }),
+        buildEvent({ eventType: 'TAB_SWITCH', severity: 'MEDIUM' }),
+      ]);
+    const disqualifiedSession = new ExamSession(
+      '100',
+      '9',
+      SessionStatus.DISQUALIFIED,
+      0,
+      new Date('2026-08-04T00:00:00.000Z'),
+      null,
+      null,
+      null,
+      new Date(),
+    );
+    const disqualify = jest.fn().mockResolvedValue(disqualifiedSession);
+    const service = buildService({
+      proctoringEventRepository: { create, findByExamSessionId },
+      examSessionService: {
+        assertActiveSession: jest.fn().mockResolvedValue(buildSession()),
+        disqualify,
+      },
+    });
+
+    const result = await service.reportViolation('100', '9', {
+      violationType: ClientViolationType.TAB_SWITCH,
+    });
+
+    expect(disqualify).toHaveBeenCalledWith('100');
+    expect(result.sessionStatus).toBe(SessionStatus.DISQUALIFIED);
+  });
+
+  it('does not count other violation types toward this type’s threshold', async () => {
     const create = jest.fn().mockResolvedValue(buildEvent({ eventType: 'DUAL_MONITOR' }));
     const findByExamSessionId = jest
       .fn()

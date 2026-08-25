@@ -81,6 +81,14 @@ FEATURE_NORMALIZERS: dict[str, Normalizer] = {
     # 내용·과제 수행
     "response_length": Normalizer(15.0, 70.0, True, "응답 길이"),
     "words_per_sentence": Normalizer(4.0, 13.0, True, "문장당 어절 수"),
+    # 발화 전달력 (Azure 발음평가). 원래 값이 0~100 이라 그대로 쓰지 않고 다시 편다.
+    # ※ 임시값 ※ 100점을 만점으로 그대로 쓰면 안 되는 이유:
+    # 비원어민 학습자에게 90점대는 거의 나오지 않는다. 실측 예에서 실제 응시자
+    # 낭독의 정확도가 57점이었다. 0~100을 그대로 점수로 쓰면 전원이 낮게 깔린다.
+    # 실제 응시자 분포가 모이면 백분위로 다시 잡아야 한다.
+    "pron_accuracy": Normalizer(40.0, 95.0, True, "발음 정확도"),
+    "pron_fluency": Normalizer(30.0, 95.0, True, "발화 유창성"),
+    "pron_completeness": Normalizer(50.0, 100.0, True, "발화 완전성"),
 }
 
 # '반말 혼입 횟수'는 formality 자질의 components 에 들어 있는 값이라
@@ -104,12 +112,20 @@ class ScoringWeights:
     profile: str = "provisional_v0"
     provisional: bool = True  # True = 아직 학습된 값이 아님
 
-    # 영역 가중치. delivery 는 Azure 발음평가가 붙기 전까지 0이다.
+    # 영역 가중치. ※ 전부 임시값 ※
+    #
+    # delivery(발화 전달력) 0.20 은 Azure 발음평가가 붙으면서 새로 생긴 값이다.
+    # 나머지 0.80 을 예전 비율(내용 0.45 : 언어 0.55)로 나눠서 0.36 : 0.44 로 두었다.
+    #
+    # **이렇게 두면 발음 점수가 없을 때 예전과 완전히 같은 점수가 나온다.**
+    # 점수를 못 낸 영역은 빠지고 남은 영역끼리 다시 100%가 되게 나누므로(combine 참고),
+    # delivery 가 빠지면 0.36/0.80 = 0.45, 0.44/0.80 = 0.55 로 되돌아간다.
+    # 쓰기 답안과 Gemini 로 받아쓴 말하기 답안이 여기에 해당한다.
     area_weights: dict[ScoreArea, float] = field(
         default_factory=lambda: {
-            ScoreArea.CONTENT_TASK: 0.45,
-            ScoreArea.LANGUAGE_USE: 0.55,
-            ScoreArea.DELIVERY: 0.0,
+            ScoreArea.CONTENT_TASK: 0.36,
+            ScoreArea.LANGUAGE_USE: 0.44,
+            ScoreArea.DELIVERY: 0.20,
         }
     )
 
@@ -141,6 +157,23 @@ class ScoringWeights:
             # 쓰기에서만 켜지는 자질 (말하기에서는 자동으로 빠지고 나머지가 재정규화된다)
             "error_spelling": 0.06,
             "spacing_error_rate": 0.06,
+        }
+    )
+
+    # 발화 전달력 영역 안에서의 자질 비중. ※ 임시값 ※
+    #
+    # 발음 종합(pron_overall)을 넣지 않은 이유:
+    # 그것은 Azure 가 아래 셋을 자기 방식으로 합친 값이라, 함께 넣으면
+    # 같은 것을 두 번 세게 된다. 결과에는 남기되 계산에는 안 쓴다.
+    #
+    # 완전성(pron_completeness)은 낭독형 문항에서만 값이 살아 있다.
+    # 자유 발화에서는 자질이 not_applicable 로 와서 조용히 빠지고,
+    # 정확도·유창성이 다시 100%가 되게 나뉜다.
+    delivery_feature_weights: dict[str, float] = field(
+        default_factory=lambda: {
+            "pron_accuracy": 0.50,
+            "pron_fluency": 0.30,
+            "pron_completeness": 0.20,
         }
     )
 
@@ -387,22 +420,78 @@ def _language_use_subscore(
     )
 
 
-def _delivery_subscore() -> SubScore:
-    """발화 전달력 자리.
+def _delivery_subscore(
+    features: dict[str, FeatureValue],
+    weights: ScoringWeights,
+) -> SubScore:
+    """발화 전달력 점수. 발음 평가(Azure)가 준 값으로만 계산한다.
 
-    발음 정확도·유창성은 Azure Pronunciation Assessment 결과가 있어야 계산할 수 있다.
-    지금은 도입 전이라 채점하지 않고 자리만 남긴다.
-    이렇게 해 두면 나중에 Azure 를 붙여도 백엔드가 받는 응답 구조가 바뀌지 않는다.
+    이 영역만 유일하게 '글'이 아니라 '소리'를 본 값으로 매겨진다.
+    받아쓴 글로는 발음을 알 수 없기 때문이다(scoring-design 참고).
+
+    발음 자질이 하나도 없으면 — 쓰기 답안이거나, 발음을 못 재는 제공자(Gemini)로
+    받아썼거나, 발음 평가가 실패한 경우다 — 예전과 똑같이 채점하지 않고 자리만 남긴다.
+    이때 종합 점수는 내용·언어 두 영역만으로 예전 비율 그대로 계산된다.
     """
+    parts: list[tuple[str, str, float | None, float, float]] = []
+    evidence: list[Evidence] = []
+    notes: list[str] = []
+    partial = False
+
+    for fid, w in weights.delivery_feature_weights.items():
+        f = features.get(fid)
+        if not _usable(f):
+            # 이 문항에서 애초에 쓰지 않는 자질(자유 발화의 완전성)은 '부족'이 아니다.
+            # 조용히 빼기만 하고 영역 상태를 낮추지 않는다
+            if f is not None and f.status == FeatureStatus.NOT_APPLICABLE:
+                continue
+            # 자질이 아예 없으면 발음 평가 자체가 없었던 것이다.
+            # 그 경우는 아래에서 '채점 안 함'으로 빠지므로 여기서는 표시만 남긴다
+            if f is not None:
+                partial = True
+                notes.append(f"자질 '{fid}' 를 쓸 수 없어 가중치를 다시 나눴다.")
+            continue
+
+        normalizer = FEATURE_NORMALIZERS[fid]
+        parts.append((fid, f.name, f.value, normalizer.normalize(f.value), w))
+        # 어느 낱말 때문에 깎였는지를 영역 근거로 끌어올린다.
+        # 이것이 없으면 응시자에게 "발음 몇 점"이라는 숫자밖에 줄 것이 없다
+        evidence.extend(f.evidence[:6])
+
+    # 발음 평가가 아예 없었던 경우. 예전과 똑같은 모양으로 자리만 남긴다
+    if not parts:
+        return SubScore(
+            area=ScoreArea.DELIVERY,
+            label="발화 전달력",
+            score=None,
+            weight=0.0,
+            status=AreaStatus.NOT_EVALUATED,
+            contributions=[],
+            evidence=[],
+            note=(
+                "발음 평가 결과가 없어 채점하지 않았다(종합 점수에서 제외). "
+                "쓰기 답안이거나, 발음을 재지 못하는 받아쓰기로 채점한 경우다."
+            ),
+        )
+
+    score, contributions, calc_notes = _weighted_average(parts)
+    notes.extend(calc_notes)
+
+    status = AreaStatus.SCORED
+    if score is None:
+        status = AreaStatus.NOT_EVALUATED
+    elif partial:
+        status = AreaStatus.PARTIAL
+
     return SubScore(
         area=ScoreArea.DELIVERY,
         label="발화 전달력",
-        score=None,
-        weight=0.0,
-        status=AreaStatus.NOT_EVALUATED,
-        contributions=[],
-        evidence=[],
-        note="Azure 발음평가 미도입으로 이번 범위에서 채점하지 않는다(종합 점수에서 제외).",
+        score=score,
+        weight=0.0,  # 종합 계산 단계에서 채운다
+        status=status,
+        contributions=contributions,
+        evidence=evidence[:12],
+        note=" / ".join(notes),
     )
 
 
@@ -456,7 +545,8 @@ def combine(
     subscores = [
         _content_task_subscore(fmap, checklist_results, weights),
         _language_use_subscore(fmap, weights),
-        _delivery_subscore(),
+        # 발음 자질이 있으면 채점되고, 없으면 예전처럼 자리만 남는다
+        _delivery_subscore(fmap, weights),
     ]
 
     # 실제로 점수가 나온 영역만 종합에 넣는다.

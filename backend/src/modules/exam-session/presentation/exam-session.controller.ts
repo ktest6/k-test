@@ -38,24 +38,47 @@ export class ExamSessionController {
     private readonly storagePublicUrlService: StoragePublicUrlService,
   ) {}
 
-  @Post('exams/:id/sessions')
+  @Get('exam-sessions/current')
   @ApiOperation({
-    summary: '시험 시작 (세션 생성)',
+    summary: '지금 진행중인 세션 조회',
     description:
-      '신청하지 않았거나 응시 기간이 아니면 409/403. 중단됐던 진행중 세션이 있으면 새로 만들지 않고 그 세션을 그대로 돌려준다(재개).',
+      '회차(Exam) 선택이 없어져서 "응시 가능한 시험 목록" 같은 게 없다 — 홈 화면은 이걸로 ' +
+      '"이어서 풀기" 버튼을 보여줄지(진행중인 세션이 있음) "응시하기" 버튼을 보여줄지(없음, ' +
+      'data:null) 결정하면 된다.',
+  })
+  @ApiStandardResponse(ExamSessionStatusResponseDto, {
+    message: '지금 진행중인 세션 조회 성공',
+  })
+  async getCurrent(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ExamSessionStatusResponseDto | null> {
+    const session = await this.examSessionService.getCurrentInProgress(user.id);
+    if (!session) {
+      return null;
+    }
+    const verified = await this.examSessionService.isVerified(session.id);
+    return { id: session.id, status: session.status, verified };
+  }
+
+  @Post('exam-sessions')
+  @ApiOperation({
+    summary: '시험 시작 (세션 생성 · 재개)',
+    description:
+      '회차(Exam) 선택이 없다 — 이 API 하나가 처음 시작·재개·이어서 풀기를 전부 커버한다. ' +
+      '이미 진행중인 세션이 있으면 새로 만들지 않고 그 세션을 그대로 돌려준다(재개). 세션 생성 ' +
+      '자체는 본인인증/이어폰 확인과 무관하게 항상 허용된다 — 응답의 verified가 false면 검증부터 ' +
+      '진행해야 한다(문항 조회·답안 제출 둘 다 verified:true가 될 때까지 403). 반복 재접속 3회째면 403.',
   })
   @ApiStandardResponse(StartExamSessionResponseDto, { status: 201, message: '시험 시작' })
-  async start(
-    @Param('id') examId: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<StartExamSessionResponseDto> {
-    const session = await this.examSessionService.start(examId, user.id);
+  async start(@CurrentUser() user: AuthenticatedUser): Promise<StartExamSessionResponseDto> {
+    const session = await this.examSessionService.start(user.id);
+    const verified = await this.examSessionService.isVerified(session.id);
     return {
       id: session.id,
       examSessionId: session.id,
-      examId: session.examId,
       status: session.status,
       startedAt: session.startedAt,
+      verified,
     };
   }
 
@@ -63,8 +86,9 @@ export class ExamSessionController {
   @ApiOperation({
     summary: '세션 상태 조회',
     description:
-      '진행중/제출됨/만료/차단 상태를 반환한다. INPROGRESS가 아니면 더 이상 진행할 수 없다는 뜻이다 — ' +
-      '문항별 진행 상황(다음에 풀 문항)은 문항 목록 조회의 answered 필드로 프런트가 직접 계산한다.',
+      '진행중/제출됨/차단 상태를 반환한다. INPROGRESS가 아니면 더 이상 진행할 수 없다는 뜻이다 — ' +
+      '문항별 진행 상황(다음에 풀 문항)은 문항 목록 조회의 answered 필드로 프런트가 직접 계산한다. ' +
+      'verified가 false면 아직 본인인증/이어폰 확인이 끝나지 않아 문항 조회·답안 제출이 막힌 상태다.',
   })
   @ApiStandardResponse(ExamSessionStatusResponseDto, { message: '세션 상태 조회 성공' })
   async getStatus(
@@ -72,11 +96,8 @@ export class ExamSessionController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<ExamSessionStatusResponseDto> {
     const result = await this.examSessionService.getStatus(examSessionId, user.id);
-    return {
-      id: result.session.id,
-      examId: result.session.examId,
-      status: result.status,
-    };
+    const verified = await this.examSessionService.isVerified(result.session.id);
+    return { id: result.session.id, status: result.status, verified };
   }
 
   @Get('exam-sessions/:examSessionId/questions')
@@ -173,13 +194,36 @@ export class ExamSessionController {
     return this.toAnswerResponse(result);
   }
 
+  @Post('exam-sessions/:examSessionId/questions/:questionId/skip')
+  @ApiOperation({
+    summary: '문항 건너뛰기',
+    description:
+      '답안 없이 이 문항을 건너뛴다. 이미 답안을 저장한 문항은 건너뛸 수 없다(409). ' +
+      '진행중인 세션이 아니면 409. 건너뛴 문항에 나중에 답안을 저장하면 건너뛰기 기록은 자동으로 취소된다.',
+  })
+  @ApiStandardResponse(SessionQuestionResponseDto, { status: 201, message: '문항 건너뛰기 완료' })
+  async skipQuestion(
+    @Param('examSessionId') examSessionId: string,
+    @Param('questionId') questionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<SessionQuestionResponseDto> {
+    await this.examSessionAnswerService.skip(examSessionId, questionId, user.id);
+    const sessionQuestion = await this.examSessionQuestionService.getQuestion(
+      examSessionId,
+      questionId,
+      user.id,
+    );
+    return this.toQuestionResponse(sessionQuestion);
+  }
+
   private toQuestionResponse(sessionQuestion: SessionQuestion): SessionQuestionResponseDto {
-    const { question, answered } = sessionQuestion;
+    const { question, answered, skipped } = sessionQuestion;
     const { content } = question;
     return {
       id: question.id,
       part: question.part,
       answered,
+      skipped,
       preparationSeconds: content.preparationSeconds,
       responseSeconds: content.responseSeconds,
       guideTexts: content.guideTexts,

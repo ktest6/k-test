@@ -51,8 +51,8 @@ const CLIENT_VIOLATION_SEVERITY: Record<ClientViolationType, ProctoringSeverity>
   [ClientViolationType.MOUSE_LEAVE]: 'LOW',
 };
 
-/** 듀얼 모니터가 이 횟수만큼 누적되면 자동으로 실격 처리한다(프런트 부정행위 방지 플로우 기준). */
-const DUAL_MONITOR_DISQUALIFY_THRESHOLD = 2;
+/** 같은 종류의 프런트 부정행위가 이 횟수만큼 누적되면 자동으로 실격 처리한다(종류 무관, 프런트 부정행위 방지 플로우 기준). */
+const CLIENT_VIOLATION_DISQUALIFY_THRESHOLD = 2;
 
 export interface AnalyzeFrameCommand {
   capturedAt: string;
@@ -109,15 +109,12 @@ export class MonitoringService {
     command: AnalyzeFrameCommand,
     currentImage: { buffer: Buffer; filename: string; contentType: string },
   ): Promise<AnalyzeFrameResult> {
-    const session = await this.examSessionService.assertActiveSession(examSessionId, userId);
+    const session = await this.examSessionService.assertVerifiedSession(examSessionId, userId);
 
     let runIdentityCheck = command.runIdentityCheck ?? false;
     let referenceImage: MonitoringImageInput | undefined;
     if (runIdentityCheck) {
-      const facePath = await this.idCardVerificationService.getVerifiedFacePath(
-        session.examId,
-        userId,
-      );
+      const facePath = await this.idCardVerificationService.getVerifiedFacePath(session.id);
       if (facePath) {
         referenceImage = await this.downloadReferenceImage(facePath);
       }
@@ -129,10 +126,7 @@ export class MonitoringService {
       }
     }
 
-    const calibration = await this.gazeCalibrationService.getLatestCalibration(
-      session.examId,
-      userId,
-    );
+    const calibration = await this.gazeCalibrationService.getLatestCalibration(session.id);
     const previousGazeState = await this.getGazeState(examSessionId);
 
     let result: {
@@ -141,7 +135,8 @@ export class MonitoringService {
     };
     try {
       const analyzed = await this.monitoringProvider.analyze({
-        examId: session.examId,
+        // AI팀 외부 계약상 필드명은 examId지만, 회차가 없어져서 세션 id를 그대로 싣는다.
+        examId: session.id,
         examineeId: userId,
         requestId: randomUUID(),
         capturedAt: command.capturedAt,
@@ -208,11 +203,11 @@ export class MonitoringService {
   /**
    * AI 모니터링(analyze)과 별개로, 프런트가 브라우저 이벤트(탭 이탈/포커스
    * 이탈/붙여넣기/듀얼 모니터 등)로 직접 감지한 위반을 기록한다. 웹캠 프레임이
-   * 없는 신호라 스냅샷은 남기지 않는다. DUAL_MONITOR는 누적 2회부터 자동
-   * 실격(프런트 부정행위 방지 플로우 기준) — 그 외 종류는 기록만 하고 별도
-   * 자동 조치는 없다. 응답에 처리 직후의 세션 상태를 같이 실어줘서, 프런트가
-   * 이 호출 하나로 "방금 실격됐는지"까지 바로 알 수 있게 한다(별도 상태 조회
-   * 필요 없음).
+   * 없는 신호라 스냅샷은 남기지 않는다. 종류 무관하게 같은 violationType이
+   * 누적 2회부터 자동 실격(프런트 부정행위 방지 플로우 기준) — 종류별로 각각
+   * 따로 센다(예: TAB_SWITCH 1회 + BLUR 1회는 합산되지 않음). 응답에 처리
+   * 직후의 세션 상태를 같이 실어줘서, 프런트가 이 호출 하나로 "방금
+   * 실격됐는지"까지 바로 알 수 있게 한다(별도 상태 조회 필요 없음).
    */
   async reportViolation(
     examSessionId: string,
@@ -230,16 +225,12 @@ export class MonitoringService {
     });
 
     let sessionStatus = session.status;
-    if (dto.violationType === ClientViolationType.DUAL_MONITOR) {
-      const events = await this.proctoringEventRepository.findByExamSessionId(examSessionId);
-      const dualMonitorEventType: string = ClientViolationType.DUAL_MONITOR;
-      const dualMonitorCount = events.filter(
-        (event) => event.eventType === dualMonitorEventType,
-      ).length;
-      if (dualMonitorCount >= DUAL_MONITOR_DISQUALIFY_THRESHOLD) {
-        const disqualified = await this.examSessionService.disqualify(examSessionId);
-        sessionStatus = disqualified.status;
-      }
+    const events = await this.proctoringEventRepository.findByExamSessionId(examSessionId);
+    const violationEventType: string = dto.violationType;
+    const violationCount = events.filter((event) => event.eventType === violationEventType).length;
+    if (violationCount >= CLIENT_VIOLATION_DISQUALIFY_THRESHOLD) {
+      const disqualified = await this.examSessionService.disqualify(examSessionId);
+      sessionStatus = disqualified.status;
     }
 
     return { event: saved, sessionStatus };

@@ -27,6 +27,12 @@ export interface AppConfig {
    * 때문에 이건 배포 여부와 상관없는 영구적인 설계 원칙이다.
    */
   requireMonitoringService: boolean;
+  /**
+   * 미완료 최종 리포트(/finalize) 재시도 스케줄러(5분 주기) 동작 여부. assessment
+   * 서비스가 로컬에 항상 떠 있는 게 아닌 개발 환경에서는 매 5분마다 실패 로그만
+   * 반복해서 쌓이는 걸 막기 위해 false로 꺼둘 수 있다. 기본값 true(운영 기준 항상 켜짐).
+   */
+  reportRetrySchedulerEnabled: boolean;
   supabase: {
     url: string;
     anonKey: string;
@@ -76,6 +82,7 @@ export const appConfig = registerAs('app', (): AppConfig => ({
   requireIdentityVerification: (process.env.REQUIRE_IDENTITY_VERIFICATION ?? 'true') === 'true',
   requireEarphoneCheck: (process.env.REQUIRE_EARPHONE_CHECK ?? 'true') === 'true',
   requireMonitoringService: (process.env.REQUIRE_MONITORING_SERVICE ?? 'true') === 'true',
+  reportRetrySchedulerEnabled: (process.env.ENABLE_REPORT_RETRY_SCHEDULER ?? 'true') === 'true',
   supabase: {
     url: process.env.SUPABASE_URL ?? '',
     anonKey: process.env.SUPABASE_ANON_KEY ?? '',

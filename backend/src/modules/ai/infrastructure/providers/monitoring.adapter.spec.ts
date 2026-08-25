@@ -14,6 +14,7 @@ function buildConfig(url = 'https://monitoring.internal'): AppConfig {
     requireIdentityVerification: true,
     requireEarphoneCheck: true,
     requireMonitoringService: true,
+    reportRetrySchedulerEnabled: true,
     supabase: { url: '', anonKey: '', serviceRoleKey: '' },
     identityVerification: {
       minIntervalMinutes: 5,
@@ -109,7 +110,10 @@ describe('MonitoringAdapter.analyze', () => {
     expect(raw).toContain(JSON.stringify(previousGazeState));
 
     const post2 = jest.fn().mockReturnValue(of({ data: RAW_RESPONSE }));
-    const adapter2 = new MonitoringAdapter({ post: post2 } as unknown as HttpService, buildConfig());
+    const adapter2 = new MonitoringAdapter(
+      { post: post2 } as unknown as HttpService,
+      buildConfig(),
+    );
     await adapter2.analyze(buildInput());
     const [, body2] = post2.mock.calls[0] as [string, FormData];
     expect(body2.getBuffer().toString('utf-8')).not.toContain('name="previous_gaze_state"');

@@ -24,7 +24,6 @@ function buildSession(overrides: Partial<{ currentQuestionId: string | null }> =
   return new ExamSession(
     '1',
     '1',
-    '1',
     SessionStatus.INPROGRESS,
     0,
     new Date('2026-06-01T00:00:00.000Z'),
@@ -51,8 +50,8 @@ function buildQuestion(id: string): Question {
   );
 }
 
-function buildSessionQuestion(id: string, answered = false): SessionQuestion {
-  return { question: buildQuestion(id), answered };
+function buildSessionQuestion(id: string, answered = false, skipped = false): SessionQuestion {
+  return { question: buildQuestion(id), answered, skipped };
 }
 
 function buildAnswer(overrides: Partial<{ id: string; questionId: string }> = {}): Answer {
@@ -81,6 +80,8 @@ function buildController(
   sessionOverrides: Partial<{
     start: jest.Mock;
     getStatus: jest.Mock;
+    getCurrentInProgress: jest.Mock;
+    isVerified: jest.Mock;
   }> = {},
   questionOverrides: Partial<{
     listQuestions: jest.Mock;
@@ -89,11 +90,14 @@ function buildController(
   answerOverrides: Partial<{
     save: jest.Mock;
     get: jest.Mock;
+    skip: jest.Mock;
   }> = {},
 ) {
   const sessionService = {
     start: jest.fn(),
     getStatus: jest.fn(),
+    getCurrentInProgress: jest.fn(),
+    isVerified: jest.fn().mockResolvedValue(true),
     ...sessionOverrides,
   } as unknown as ExamSessionService;
   const questionService = {
@@ -104,6 +108,7 @@ function buildController(
   const answerService = {
     save: jest.fn(),
     get: jest.fn(),
+    skip: jest.fn(),
     ...answerOverrides,
   } as unknown as ExamSessionAnswerService;
   return new ExamSessionController(
@@ -114,41 +119,69 @@ function buildController(
   );
 }
 
+describe('ExamSessionController.getCurrent', () => {
+  it('returns null when nothing is in progress', async () => {
+    const getCurrentInProgress = jest.fn().mockResolvedValue(null);
+    const controller = buildController({ getCurrentInProgress });
+
+    const result = await controller.getCurrent(buildUser());
+
+    expect(getCurrentInProgress).toHaveBeenCalledWith('1');
+    expect(result).toBeNull();
+  });
+
+  it('maps the in-progress session including the verified flag', async () => {
+    const session = buildSession();
+    const getCurrentInProgress = jest.fn().mockResolvedValue(session);
+    const isVerified = jest.fn().mockResolvedValue(false);
+    const controller = buildController({ getCurrentInProgress, isVerified });
+
+    const result = await controller.getCurrent(buildUser());
+
+    expect(isVerified).toHaveBeenCalledWith('1');
+    expect(result).toEqual({ id: '1', status: SessionStatus.INPROGRESS, verified: false });
+  });
+});
+
 describe('ExamSessionController.start', () => {
-  it('delegates to ExamSessionService.start and maps the response', async () => {
+  it('delegates to ExamSessionService.start and maps the response, including the verified flag', async () => {
     const session = buildSession();
     const start = jest.fn().mockResolvedValue(session);
-    const controller = buildController({ start });
+    const isVerified = jest.fn().mockResolvedValue(false);
+    const controller = buildController({ start, isVerified });
 
-    const result = await controller.start('1', buildUser());
+    const result = await controller.start(buildUser());
 
-    expect(start).toHaveBeenCalledWith('1', '1');
+    expect(start).toHaveBeenCalledWith('1');
+    expect(isVerified).toHaveBeenCalledWith('1');
     expect(result).toEqual({
       id: '1',
       examSessionId: '1',
-      examId: '1',
       status: SessionStatus.INPROGRESS,
       startedAt: session.startedAt,
+      verified: false,
     });
   });
 });
 
 describe('ExamSessionController.getStatus', () => {
-  it('delegates to ExamSessionService.getStatus and maps the response', async () => {
+  it('delegates to ExamSessionService.getStatus and maps the response, including the verified flag', async () => {
     const session = buildSession();
     const getStatus = jest.fn().mockResolvedValue({
       session,
       status: SessionStatus.INPROGRESS,
     });
-    const controller = buildController({ getStatus });
+    const isVerified = jest.fn().mockResolvedValue(true);
+    const controller = buildController({ getStatus, isVerified });
 
     const result = await controller.getStatus('1', buildUser());
 
     expect(getStatus).toHaveBeenCalledWith('1', '1');
+    expect(isVerified).toHaveBeenCalledWith('1');
     expect(result).toEqual({
       id: '1',
-      examId: '1',
       status: SessionStatus.INPROGRESS,
+      verified: true,
     });
   });
 });
@@ -168,6 +201,7 @@ describe('ExamSessionController.listQuestions', () => {
         id: '1',
         part: QuestionSectionType.SITUATION_DESCRIPTION,
         answered: true,
+        skipped: false,
         preparationSeconds: 40,
         responseSeconds: 60,
         guideTexts: ['안내문구'],
@@ -181,6 +215,7 @@ describe('ExamSessionController.listQuestions', () => {
         id: '2',
         part: QuestionSectionType.SITUATION_DESCRIPTION,
         answered: false,
+        skipped: false,
         preparationSeconds: 40,
         responseSeconds: 60,
         guideTexts: ['안내문구'],
@@ -211,6 +246,7 @@ describe('ExamSessionController.getQuestion', () => {
       id: '3',
       part: QuestionSectionType.SITUATION_DESCRIPTION,
       answered: true,
+      skipped: false,
       preparationSeconds: 40,
       responseSeconds: 60,
       guideTexts: ['안내문구'],
@@ -239,7 +275,7 @@ describe('ExamSessionController.getQuestion', () => {
       [],
       new Date(),
     );
-    const getQuestion = jest.fn().mockResolvedValue({ question, answered: false });
+    const getQuestion = jest.fn().mockResolvedValue({ question, answered: false, skipped: false });
     const controller = buildController({}, { getQuestion });
 
     const result = await controller.getQuestion('1', '4', buildUser());
@@ -319,5 +355,20 @@ describe('ExamSessionController.getAnswer', () => {
     expect(get).toHaveBeenCalledWith('1', '1', '1');
     expect(result.graded).toBe(true);
     expect(result.score).toEqual({ total: 90 });
+  });
+});
+
+describe('ExamSessionController.skipQuestion', () => {
+  it('delegates to ExamSessionAnswerService.skip then returns the updated question', async () => {
+    const skip = jest.fn().mockResolvedValue(undefined);
+    const getQuestion = jest.fn().mockResolvedValue(buildSessionQuestion('1', false, true));
+    const controller = buildController({}, { getQuestion }, { skip });
+
+    const result = await controller.skipQuestion('1', '1', buildUser());
+
+    expect(skip).toHaveBeenCalledWith('1', '1', '1');
+    expect(getQuestion).toHaveBeenCalledWith('1', '1', '1');
+    expect(result.skipped).toBe(true);
+    expect(result.answered).toBe(false);
   });
 });

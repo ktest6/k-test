@@ -63,7 +63,7 @@ describe('AnswerSavedListener.handle', () => {
       item: {
         itemId: '50',
         prompt: '그림을 보고 상황을 설명하세요.',
-        expectedRegister: '',
+        expectedRegister: 'any',
         checklist: [{ id: 'c1', description: '상황을 정확히 묘사했는가', weight: 1.5 }],
       },
     });

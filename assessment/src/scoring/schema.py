@@ -341,6 +341,83 @@ class ScoringMeta(BaseModel):
     )
 
 
+# ---------------------------------------------------------------------------
+# 발음 평가 결과 (나중에 추가한 모델)
+#
+# 여기 두는 이유:
+# 이 값은 음성을 직접 들은 기계(Azure 발음평가)가 만들고, 발음 자질을 만드는
+# features/pronunciation.py 가 받아 쓴다. 두 쪽이 서로를 직접 부르지 않도록
+# **양쪽이 다 아는 이 파일**에 모양만 정해 둔다(AudioInput 과 같은 이유다).
+#
+# 이 모델은 /score 응답에 그대로 실리지 않는다. 발음 점수는 자질(FeatureValue)과
+# 영역 점수(SubScore)로 바뀌어 나가므로 백엔드가 받는 형식은 바뀌지 않는다.
+# ---------------------------------------------------------------------------
+
+
+class PronouncedWord(BaseModel):
+    """발음 평가가 낱말 하나에 매긴 결과.
+
+    낱말 단위로 남기는 이유:
+    "발음 62점"만 주면 응시자는 무엇을 고쳐야 할지 알 수 없다.
+    어느 낱말이 몇 점이었는지가 있어야 점수를 설명할 수 있고,
+    그 낱말을 채점 근거(Evidence)의 인용으로 그대로 쓸 수 있다.
+    """
+
+    word: str = ""
+    accuracy: float | None = Field(default=None, description="이 낱말의 발음 정확도(0~100)")
+    error_type: str = Field(
+        default="",
+        description=(
+            "평가가 붙인 표시. None(정상) / Mispronunciation(잘못 발음) / "
+            "Omission(빠뜨림) / Insertion(없는 말을 넣음)"
+        ),
+    )
+    offset_ms: int | None = Field(default=None, description="녹음에서 이 낱말이 나온 자리(밀리초)")
+    duration_ms: int | None = Field(default=None, description="이 낱말을 말한 길이(밀리초)")
+
+
+class PronunciationAssessment(BaseModel):
+    """발음 평가 한 번의 결과. **음성을 직접 들은 기계만 만들 수 있는 값이다.**
+
+    받아쓴 '글'로는 발음을 알 수 없어서 이 값은 받아쓰기와 같은 호출에서 함께 받아 온다
+    (scoring-design: 발화 전달력은 음성 원본을 본다).
+    발음을 못 재는 제공자(Gemini)는 이 값을 만들지 않고 None 으로 둔다.
+    그러면 발화 전달력 영역은 지금까지처럼 채점하지 않고 자리만 남는다.
+
+    네 점수의 뜻 (전부 0~100):
+      accuracy     소리를 얼마나 정확히 냈는가
+      fluency      끊김·머뭇거림 없이 이어 말했는가
+      completeness 읽어야 할 말 중 얼마나 말했는가 (제시문을 주고 읽힐 때만 뜻이 있다)
+      overall      위 셋을 제공자가 자기 방식으로 합친 종합값
+    """
+
+    accuracy: float | None = None
+    fluency: float | None = None
+    completeness: float | None = None
+    overall: float | None = None
+    prosody: float | None = Field(
+        default=None,
+        description=(
+            "억양·강세 점수. 제공자가 그 언어에 대해 주지 않으면 null 이다"
+            "(한국어는 2026-08-22 실측에서 값이 오지 않았다)"
+        ),
+    )
+    scripted: bool = Field(
+        default=False,
+        description=(
+            "낭독형 문항이라 제시문을 정답지로 주고 평가했는지. "
+            "자유 발화(false)에서는 completeness 를 점수로 쓰지 않는다 — "
+            "읽어야 할 원문이 없어서 '얼마나 말했는가'의 기준이 없기 때문이다"
+        ),
+    )
+    reference_text: str = Field(default="", description="정답지로 준 제시문. 자유 발화면 빈 문자열")
+    words: list[PronouncedWord] = Field(
+        default_factory=list, description="낱말별 결과. 낮은 점수 낱말이 채점 근거의 인용이 된다",
+    )
+    provider: str = Field(default="", description="어느 회사 기계가 발음을 쟀는지")
+    warnings: list[str] = Field(default_factory=list, description="사람이 알아야 할 것")
+
+
 class ScoreRequest(BaseModel):
     """백엔드 -> 채점 모델 입력. (고정 계약)"""
 

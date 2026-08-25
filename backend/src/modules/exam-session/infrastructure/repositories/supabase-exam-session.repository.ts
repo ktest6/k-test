@@ -12,7 +12,6 @@ const TABLE = 'tb_exam_session';
 
 interface ExamSessionRow {
   exam_session_id: number;
-  exam_id: number;
   user_id: number;
   status: SessionStatus;
   resume_count: number;
@@ -26,7 +25,6 @@ interface ExamSessionRow {
 function toDomain(row: ExamSessionRow): ExamSession {
   return new ExamSession(
     String(row.exam_session_id),
-    String(row.exam_id),
     String(row.user_id),
     row.status,
     row.resume_count,
@@ -46,7 +44,7 @@ export class SupabaseExamSessionRepository implements ExamSessionRepository {
     const client = this.supabaseService.getAdminClient();
     const { data, error } = await client
       .from(TABLE)
-      .insert({ exam_id: Number(input.examId), user_id: Number(input.userId) })
+      .insert({ user_id: Number(input.userId) })
       .select()
       .single<ExamSessionRow>();
 
@@ -67,16 +65,28 @@ export class SupabaseExamSessionRepository implements ExamSessionRepository {
     return data ? toDomain(data) : null;
   }
 
-  async findByUserAndExam(userId: string, examId: string): Promise<ExamSession | null> {
+  async findInProgressByUser(userId: string): Promise<ExamSession | null> {
     const client = this.supabaseService.getAdminClient();
     const { data } = await client
       .from(TABLE)
       .select('*')
       .eq('user_id', Number(userId))
-      .eq('exam_id', Number(examId))
+      .eq('status', SessionStatus.INPROGRESS)
       .is('deleted_at', null)
       .maybeSingle<ExamSessionRow>();
     return data ? toDomain(data) : null;
+  }
+
+  async findAllByUser(userId: string): Promise<ExamSession[]> {
+    const client = this.supabaseService.getAdminClient();
+    const { data } = await client
+      .from(TABLE)
+      .select('*')
+      .eq('user_id', Number(userId))
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .returns<ExamSessionRow[]>();
+    return (data ?? []).map(toDomain);
   }
 
   async updateResumeCount(id: string, resumeCount: number): Promise<ExamSession> {
@@ -107,5 +117,40 @@ export class SupabaseExamSessionRepository implements ExamSessionRepository {
       throw new ConflictDomainException(error?.message ?? '응시 세션 갱신에 실패했습니다.');
     }
     return toDomain(data);
+  }
+
+  async markSubmitted(id: string): Promise<ExamSession> {
+    const client = this.supabaseService.getAdminClient();
+    const { data, error } = await client
+      .from(TABLE)
+      .update({ status: SessionStatus.SUBMITTED, submitted_at: new Date().toISOString() })
+      .eq('exam_session_id', Number(id))
+      .select()
+      .single<ExamSessionRow>();
+
+    if (error || !data) {
+      throw new ConflictDomainException(error?.message ?? '응시 세션 갱신에 실패했습니다.');
+    }
+    return toDomain(data);
+  }
+
+  async findAllSubmitted(): Promise<ExamSession[]> {
+    const client = this.supabaseService.getAdminClient();
+    const { data } = await client
+      .from(TABLE)
+      .select('*')
+      .eq('status', SessionStatus.SUBMITTED)
+      .is('deleted_at', null);
+    return (data ?? []).map((row: ExamSessionRow) => toDomain(row));
+  }
+
+  async findAllInProgress(): Promise<ExamSession[]> {
+    const client = this.supabaseService.getAdminClient();
+    const { data } = await client
+      .from(TABLE)
+      .select('*')
+      .eq('status', SessionStatus.INPROGRESS)
+      .is('deleted_at', null);
+    return (data ?? []).map((row: ExamSessionRow) => toDomain(row));
   }
 }

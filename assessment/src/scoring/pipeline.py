@@ -478,11 +478,17 @@ def assess_reliability(
     return Reliability.FULL, ""
 
 
+#: 'pronouncer 인자를 안 넘겼다'와 '일부러 None 으로 넘겼다'를 구별하는 표식.
+#: 안 넘기면 speech 쪽 기본 발음 평가기를 쓰고, None 을 넘기면 발음을 재지 않는다.
+_PRONOUNCER_UNSET = object()
+
+
 def score_submission(
     request: ScoreRequest,
     client: GeminiClient | None = None,
     transcript: TranscriptContext | None = None,
     stt: "SttPort | None" = None,
+    pronouncer=_PRONOUNCER_UNSET,
 ) -> ScoreResponse:
     """답안 하나를 채점해서 종합 점수 + 영역별 점수 + 근거를 돌려준다.
 
@@ -516,7 +522,12 @@ def score_submission(
     if request.audio is not None:
         from ..speech.intake import resolve_audio_answer
 
-        audio_resolution = resolve_audio_answer(request, stt=stt)
+        # 발음 평가기는 전사와 따로 정한다. 안 넘겼으면 speech 쪽 기본 규칙에 맡기고
+        # (그쪽이 stt 주입 여부까지 보고 판단한다), 명시적으로 넘겼으면 그대로 전달한다
+        if pronouncer is _PRONOUNCER_UNSET:
+            audio_resolution = resolve_audio_answer(request, stt=stt)
+        else:
+            audio_resolution = resolve_audio_answer(request, stt=stt, pronouncer=pronouncer)
         if audio_resolution is not None:
             # 받아쓴 글을 answer_text 자리에 넣은 요청으로 바꿔 든다.
             # 원래 요청을 고치지 않고 사본을 만드는 이유는, 부르는 쪽이 넘긴 값이
@@ -562,6 +573,19 @@ def score_submission(
         # 내용·과제 수행이 쓰는 자질만 보정본 기준으로 바꿔 끼운다
         _swap_in_content_features(features, content_text, request.mode)
     timings["lexical_ms"] = round((time.perf_counter() - started) * 1000, 1)
+
+    # 2-1단계: 발음 자질. 음성을 직접 들은 기계(Azure)가 준 값이 있을 때만 붙는다.
+    # 이 자질이 붙으면 발화 전달력(delivery) 영역이 채점되고, 없으면 예전처럼
+    # 그 영역이 비어 있는 채로 내용·언어 두 영역만으로 종합 점수가 나온다.
+    # (발음은 규칙으로도 LLM으로도 셀 수 없어서 features/ 안에 따로 자리를 두었다)
+    if audio_resolution is not None and audio_resolution.pronunciation is not None:
+        from ..features.pronunciation import extract_pronunciation_features
+
+        features.extend(
+            extract_pronunciation_features(
+                audio_resolution.pronunciation, request.answer_text
+            )
+        )
 
     # 3단계: LLM이 하는 두 가지 일을 동시에 보낸다.
     # 오류 자질은 원본으로, 체크리스트는 보정본으로 각각 다른 글을 본다

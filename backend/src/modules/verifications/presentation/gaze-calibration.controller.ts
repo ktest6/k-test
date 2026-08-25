@@ -40,9 +40,9 @@ export class GazeCalibrationController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['examId', 'calibration_images'],
+      required: ['examSessionId', 'calibration_images'],
       properties: {
-        examId: { type: 'string', example: '1' },
+        examSessionId: { type: 'string', example: '1' },
         calibration_images: {
           type: 'array',
           items: { type: 'string', format: 'binary' },
@@ -73,7 +73,7 @@ export class GazeCalibrationController {
 
     return this.gazeCalibrationService.calibrate(
       user.id,
-      dto.examId,
+      dto.examSessionId,
       files.map((file) => ({
         buffer: file.buffer,
         filename: file.originalname,
