@@ -21,7 +21,7 @@ import re
 from dataclasses import dataclass, field
 
 from ..llm.citation import filter_by_citation
-from ..llm.client import GeminiClient, LLMUnavailable
+from ..llm.client import GeminiClient, LLMUnavailable, answered_model
 from ..scoring.messages import Notice, emit
 from ..scoring.schema import Evidence, FeatureSource, FeatureStatus, FeatureValue, Mode
 
@@ -123,6 +123,11 @@ class ErrorExtractionResult:
     notices: list[Notice] = field(default_factory=list)
     dropped_citations: int = 0
     llm_used: bool = False
+    #: 이 판정에 **실제로 답한 모델** 이름. 부르려던 모델과 다를 수 있다
+    #: (원 모델이 붐벼서 못 받으면 대체 모델로 갈아타기 때문이다). 호출을 안 했으면 None
+    llm_model_used: str | None = None
+    #: 대체 모델로 갈아탄 경우 원래 부르려던 모델 이름. 안 갈아탔으면 None
+    llm_fallback_from: str | None = None
 
 
 def _eojeol_count(text: str) -> int:
@@ -334,4 +339,7 @@ def extract_error_features(
 
     result.features = features_from_error_items(answer_text, filtered.kept, active_types) + result.features
     result.llm_used = True
+    # 누가 답했는지를 남긴다. 붐비는 모델 대신 다른 모델이 답한 경우가 있어서,
+    # 부르려던 이름을 그대로 적으면 나중에 이 판정을 재현할 수 없다
+    result.llm_model_used, result.llm_fallback_from = answered_model(client)
     return result

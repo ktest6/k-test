@@ -1,0 +1,37 @@
+# 채점 서버 (8001) — 백엔드가 부르는 곳. POST /score · POST /finalize · GET /health.
+#
+# 이 서버는 **바깥에 연다.** 백엔드가 다른 서버에서 부르기 때문이다.
+# 그래서 --host 를 0.0.0.0 으로 둔다. 대신 GCP 방화벽에서 8001 만 열고,
+# ktest.env 의 KTEST_API_KEY 를 채워 열쇠 없는 요청을 막는 것을 권한다.
+#
+# 놓는 자리:  /etc/systemd/system/ktest-api.service   (setup.sh 가 복사해 준다)
+# 켜기:       sudo systemctl restart ktest-api
+# 로그 보기:  journalctl -u ktest-api -f
+#
+# 아래 경로는 setup.sh 의 VENV_API · ASSESS_DIR · ENV_FILE 과 **글자까지 같아야 한다.**
+# WorkingDirectory 가 assessment 폴더여야 `src.api:app` 을 찾을 수 있다.
+
+[Unit]
+Description=K-TEST scoring API (port 8001)
+After=network-online.target ktest-stt.service
+Wants=network-online.target
+# 받아쓰기 서버보다 나중에 뜨게만 하고, 그것이 실패해도 이 서버는 뜬다.
+# Requires 를 쓰지 않은 까닭: 받아쓰기가 죽어도 **쓰기 채점은 멀쩡히 된다.**
+# 둘을 묶어 버리면 말하기 하나 때문에 쓰기까지 못 쓰게 된다.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=ktest
+Group=ktest
+WorkingDirectory=/opt/ktest/repo/assessment
+EnvironmentFile=/opt/ktest/env/ktest.env
+ExecStart=/opt/ktest/venv-api/bin/python -m uvicorn src.api:app --host 0.0.0.0 --port 8001
+Restart=always
+RestartSec=5
+TimeoutStartSec=180
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

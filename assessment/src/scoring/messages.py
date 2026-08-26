@@ -483,6 +483,25 @@ MESSAGE_CATALOG: dict[str, MessageSpec] = {
         endpoint="/score, /generate-items",
         situation="서버 일시 오류",
     ),
+    # 원 모델이 붐벼서 못 받을 때, 대신 다른 모델이 답한 경우.
+    # 실패가 아니라 '이 판정은 평소와 다른 모델이 했다'는 알림이다.
+    # 채점 결과를 나중에 다시 볼 때 값이 왜 달라졌는지 설명하려면 이 사실이 남아야 한다.
+    "LLM_FALLBACK_MODEL_USED": _spec(
+        "{stage} 단계에서 모델 {from} 이(가) 응답하지 못해 대체 모델 {to} 로 판정했습니다.",
+        "Stage {stage}: model {from} did not respond, so the fallback model {to} was used.",
+        params={
+            "from": "str(원래 부르려던 모델)",
+            "to": "str(실제로 답한 대체 모델)",
+            "stage": "str(errors | checklist | transcript)",
+        },
+        examples={
+            "from": "gemini-3-flash-preview",
+            "to": "gemini-3.1-flash-lite",
+            "stage": "errors",
+        },
+        endpoint="/score",
+        situation="원 모델이 503(일시적으로 못 받음)이라 대체 모델로 갈아탄 경우",
+    ),
     "LLM_CONNECTION_FAILED": _spec(
         "LLM 서버에 연결하지 못했다. 네트워크를 확인해야 한다.",
         "Could not connect to the LLM server. Check the network.",

@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -55,6 +56,32 @@ DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 # 모델 이름 주의: 'gemini-3-flash' 가 아니라 'gemini-3-flash-preview' 다.
 # 이 키로 실제 호출이 되는 것을 확인한 이름이다.
 DEFAULT_ERROR_MODEL = os.getenv("GEMINI_MODEL_ERRORS", "gemini-3-flash-preview")
+
+# 원래 쓰려던 모델이 "지금 사람이 몰려서 못 받는다"(503 UNAVAILABLE)고 할 때
+# 대신 물어볼 모델.
+#
+# 왜 필요한가 (2026-08-26 GCP 실측):
+# 오류 판정 모델(gemini-3-flash-preview)이 503 을 내면서 한 건에 55~113초가 걸렸다.
+# 정상일 때는 4~7초다. 응시자는 그동안 아무 답도 못 받고 기다리다가 결국
+# '오류 자질 없음'으로 채점된다. 같은 순간에도 lite 모델은 멀쩡히 답했다.
+# 그래서 붐비는 모델 하나 때문에 채점이 통째로 비는 일이 없도록 갈아탈 자리를 둔다.
+#
+# **google-genai SDK 는 이 상황에서 스스로 재시도하지 않는다** (2026-08-26 확인).
+# SDK 2.14.0 의 `_api_client.retry_args()` 는 `HttpOptions.retry_options` 가
+# 비어 있으면 `stop_after_attempt(1)`, 즉 '한 번 부르고 끝'을 쓴다.
+# 우리는 retry_options 를 준 적이 없으므로 55~113초는 SDK 가 여러 번 부른 시간이 아니라
+# **한 번의 호출이 그만큼 오래 매달려 있던 시간**이다.
+# (retry_options 를 켜면 기본 5회·1초부터 배로 늘어나는 대기가 붙어서 오히려 더 오래 걸린다.
+#  그래서 SDK 재시도는 계속 끈 채로 두고, 우리가 모델을 갈아타는 쪽을 택했다.)
+#
+# 바꾸려면 코드가 아니라 .env 의 GEMINI_MODEL_FALLBACK 을 고친다.
+# 원래 모델과 같은 이름을 적으면 갈아탈 곳이 없으므로 대체하지 않는다.
+DEFAULT_FALLBACK_MODEL = os.getenv("GEMINI_MODEL_FALLBACK", "gemini-3.1-flash-lite")
+
+# 어떤 실패일 때 대체 모델로 갈아탈지. '남의 서버가 지금 못 받는다'는 경우 하나뿐이다.
+# 사용량 초과(429)나 키 오류(403)는 모델을 바꿔도 똑같이 실패하므로 갈아타지 않는다
+# (429 는 모델마다 한도가 따로지만, 바꿔 부르면 그쪽 한도까지 태워 버리게 되므로 뺐다).
+FALLBACK_TRIGGER_CODES: frozenset[str] = frozenset({"LLM_SERVER_ERROR"})
 
 
 class LLMUnavailable(RuntimeError):
@@ -194,6 +221,26 @@ class GeminiConfig:
     # 잘린 답을 그냥 버리면 그 응시자만 오류 자질 없이 채점되므로, 값을 못 얻는 것보다
     # 한 번 더 부르는 쪽이 낫다고 보고 기본값을 2로 둔다(실제로 부르는 일은 드물다).
     retry_budget_multiplier: int = 2
+    # 원 모델이 503(지금 못 받는다)을 낼 때 대신 물어볼 모델.
+    # None 이거나 위 model 과 같은 이름이면 갈아타지 않고 지금까지처럼 그대로 실패한다.
+    fallback_model: str | None = DEFAULT_FALLBACK_MODEL
+
+
+@dataclass
+class _CallState:
+    """generate_json 한 번이 도는 동안 '지금 어느 모델로 부르고 있는지'를 들고 다니는 쪽지.
+
+    호출 한 번 안에서 모델이 바뀔 수 있어서(503 이면 대체 모델로 갈아탄다) 필요하다.
+    클라이언트 자체에 적어 두지 않는 이유: 같은 클라이언트를 여러 스레드가 동시에 쓰므로
+    호출별로 따로 들고 다니는 쪽지여야 서로 값을 덮어쓰지 않는다.
+    """
+
+    #: 지금 부르고 있는 모델
+    model: str
+    #: 갈아탄 것이라면 원래 부르려던 모델(안 갈아탔으면 None)
+    fallback_from: str | None = None
+    #: 이번 호출에서 이미 갈아탔는지(두 번은 갈아타지 않는다)
+    fallback_used: bool = False
 
 
 class GeminiClient:
@@ -206,6 +253,10 @@ class GeminiClient:
         self._api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         # 실제 접속 객체는 처음 쓸 때 만든다(키가 없으면 끝까지 안 만들어도 된다)
         self._client = None
+        # 마지막 호출에서 '실제로 답한 모델'을 적어 두는 자리.
+        # 스레드마다 따로 적는 이유: 채점은 오류 판정과 체크리스트 판정을 동시에 보내는데,
+        # 한 곳에 적으면 나중에 끝난 쪽이 앞쪽 기록을 덮어써서 엉뚱한 모델 이름이 결과에 실린다
+        self._last_call = threading.local()
 
     @property
     def available(self) -> bool:
@@ -214,7 +265,49 @@ class GeminiClient:
 
     @property
     def model_name(self) -> str:
+        """부르려고 정해 둔 모델 이름(실제로 답한 모델이 아니다)."""
         return self.config.model
+
+    @property
+    def fallback_model(self) -> str | None:
+        """원 모델이 못 받을 때 대신 부르기로 설정해 둔 모델 이름.
+
+        설정값을 그대로 돌려준다(상태 확인용). 이 이름이 지금 모델과 같으면
+        갈아탈 곳이 없다는 뜻이고, 그때 실제로 쓰이는 값은 None 이다
+        (실제로 갈아탈 이름을 고르는 것은 `_effective_fallback`).
+        """
+        return self.config.fallback_model
+
+    @property
+    def last_model_used(self) -> str | None:
+        """이 스레드에서 **마지막으로 성공한 호출에 실제로 답한 모델** 이름.
+
+        채점 결과에 "어떤 모델이 이 판정을 했는가"를 적으려면 부르려던 이름이 아니라
+        답한 이름이 필요하다. 503 때문에 대체 모델로 갈아탔는데 결과에는 원 모델이
+        적혀 있으면, 나중에 같은 답안을 다시 채점했을 때 값이 왜 다른지 설명할 수 없다.
+
+        호출이 실패했거나 아직 한 번도 안 불렀으면 None 이다.
+        """
+        return getattr(self._last_call, "model", None)
+
+    @property
+    def last_fallback_from(self) -> str | None:
+        """마지막 성공한 호출이 대체 모델로 갈아탄 것이라면, 원래 부르려던 모델 이름.
+
+        갈아타지 않았으면 None 이다. 호출한 쪽은 이 값이 있는지만 보고
+        "대체가 실제로 쓰였다"를 판단하면 된다.
+        """
+        return getattr(self._last_call, "fallback_from", None)
+
+    def _effective_fallback(self) -> str | None:
+        """이번 설정에서 실제로 갈아탈 수 있는 모델 이름을 고른다.
+
+        설정이 비었거나 원 모델과 같은 이름이면 갈아탈 곳이 없는 것이라 None 이다.
+        """
+        candidate = (self.config.fallback_model or "").strip()
+        if not candidate or candidate == self.config.model:
+            return None
+        return candidate
 
     def for_model(self, model: str) -> "GeminiClient":
         """같은 키를 쓰면서 모델만 바꾼 클라이언트를 만든다.
@@ -254,9 +347,14 @@ class GeminiClient:
         system_instruction: str,
         response_schema: Any | None,
         max_output_tokens: int,
+        model: str | None = None,
     ):
-        """실제로 한 번 부르는 자리. 예산만 바꿔 다시 부를 수 있도록 떼어 두었다."""
+        """실제로 한 번 부르는 자리. 예산·모델만 바꿔 다시 부를 수 있도록 떼어 두었다."""
         from google.genai import types
+
+        # 부를 모델. 따로 지정하지 않으면 설정에 적힌 기본 모델이다
+        # (대체 모델로 갈아탈 때만 다른 이름이 들어온다)
+        called_model = model or self.config.model
 
         # 채점 신뢰도를 지키는 설정을 여기서 못 박는다
         config = types.GenerateContentConfig(
@@ -270,17 +368,85 @@ class GeminiClient:
 
         try:
             return client.models.generate_content(
-                model=self.config.model,
+                model=called_model,
                 contents=prompt,
                 config=config,
             )
         except Exception as exc:
             # 네트워크 끊김, 키 오류, 사용량 초과 등 실패 이유는 여러 가지지만
             # 파이프라인 입장에서는 "LLM을 못 썼다"는 하나의 상황이므로 한 갈래로 모은다.
-            # 서버가 준 원문은 로그로만 남기고, 채점 결과에는 짧은 사유만 올린다
-            reason = classify_failure(exc)
-            logger.warning("Gemini 호출 실패 [%s]: %s", self.config.model, exc)
-            raise LLMUnavailable(reason, detail=str(exc)) from exc
+            # 서버가 준 원문은 로그로만 남기고, 채점 결과에는 짧은 사유만 올린다.
+            # 사유는 문장뿐 아니라 코드(LLM_SERVER_ERROR 등)까지 함께 들려 보낸다 —
+            # 위쪽에서 "이 실패는 모델을 갈아타면 될 실패인가"를 그 코드로 판단한다
+            made = classify_failure_notice(exc)
+            logger.warning("Gemini 호출 실패 [%s]: %s", called_model, exc)
+            raise LLMUnavailable(
+                made.message, detail=str(exc), code=made.code, params=made.params
+            ) from exc
+
+    def _call_with_fallback(
+        self,
+        client,
+        state: "_CallState",
+        prompt: str,
+        system_instruction: str,
+        response_schema: Any | None,
+        max_output_tokens: int,
+    ):
+        """한 번 부르고, 503(지금 못 받는다)이면 대체 모델로 **딱 한 번만** 다시 부른다.
+
+        갈아타는 조건을 좁게 잡은 이유:
+        사용량 초과나 키 오류는 모델을 바꿔도 똑같이 실패하므로 두 번 부르는 만큼
+        응시자를 더 기다리게 할 뿐이다. '남의 서버가 지금 붐빈다'일 때만 갈아탄다.
+
+        한 번만 갈아타는 이유:
+        대체 모델까지 못 받는 상황이면 더 부르는 것은 시간 낭비이고, 그때는
+        규칙 자질만으로 채점하는 기존 대체 경로로 넘어가는 편이 응시자에게 빠르다.
+        """
+        try:
+            return self._call_once(
+                client, prompt, system_instruction, response_schema,
+                max_output_tokens, model=state.model,
+            )
+        except LLMUnavailable as first_failure:
+            fallback = self._effective_fallback()
+            # 갈아탈 곳이 없거나(설정 없음·같은 모델), 갈아타도 소용없는 실패거나,
+            # 이번 호출에서 이미 한 번 갈아탔으면 그대로 실패를 올린다
+            if (
+                fallback is None
+                or state.fallback_used
+                or first_failure.code not in FALLBACK_TRIGGER_CODES
+            ):
+                raise
+
+            logger.warning(
+                "Gemini 가 응답하지 못해 대체 모델로 다시 부른다: %s -> %s (%s)",
+                state.model, fallback, first_failure.code,
+            )
+            original_model = state.model
+            state.model = fallback
+            state.fallback_from = original_model
+            state.fallback_used = True
+
+            try:
+                return self._call_once(
+                    client, prompt, system_instruction, response_schema,
+                    max_output_tokens, model=fallback,
+                )
+            except LLMUnavailable as second_failure:
+                # 대체까지 실패하면 지금까지와 똑같이 실패로 끝낸다.
+                # 이때 결과에 실리는 사유는 **원래 실패의 코드와 문장** 그대로다.
+                # 채점 결과를 읽는 사람에게 필요한 것은 '무엇이 안 됐나'이지
+                # 우리가 몇 번 시도했는가가 아니기 때문이다(시도 내역은 detail 과 로그로 남긴다)
+                raise LLMUnavailable(
+                    str(first_failure),
+                    detail=(
+                        f"{first_failure.detail} | 대체 모델({fallback}) 도 실패: "
+                        f"{second_failure.detail or second_failure}"
+                    ),
+                    code=first_failure.code,
+                    params=first_failure.params,
+                ) from second_failure
 
     def generate_json(
         self,
@@ -297,12 +463,22 @@ class GeminiClient:
         둘 다 결과적으로는 'JSON 을 못 읽었다'지만 원인과 대처가 다르다.
         잘린 것은 예산을 키우면 살아나고, 형식이 깨진 것은 키워도 소용이 없다.
         구분하지 않았더니 8/6 사고에서 원인을 찾는 데 시간이 걸렸다.
+
+        원 모델이 503(지금 붐벼서 못 받는다)을 내면 대체 모델로 한 번 갈아탄다.
+        실제로 답한 모델 이름은 `last_model_used` 에서 확인할 수 있다.
         """
         # 접속 준비. 키가 없으면 여기서 LLMUnavailable 이 나고 호출은 시도조차 하지 않는다
         client = self._ensure_client()
 
-        response = self._call_once(
-            client, prompt, system_instruction, response_schema,
+        # 지난 호출의 기록이 남아 있으면, 이번에 실패했을 때 옛날 모델 이름이
+        # 이번 결과에 실려 나간다. 시작할 때 지워 둔다
+        self._forget_last_call()
+
+        # 이번 호출 동안 어느 모델로 부르고 있는지 들고 다닐 쪽지
+        state = _CallState(model=self.config.model)
+
+        response = self._call_with_fallback(
+            client, state, prompt, system_instruction, response_schema,
             self.config.max_output_tokens,
         )
 
@@ -319,10 +495,10 @@ class GeminiClient:
                 )
             logger.warning(
                 "Gemini 답이 잘려 예산을 키워 다시 부른다 [%s]: %d -> %d",
-                self.config.model, self.config.max_output_tokens, bigger,
+                state.model, self.config.max_output_tokens, bigger,
             )
-            response = self._call_once(
-                client, prompt, system_instruction, response_schema, bigger
+            response = self._call_with_fallback(
+                client, state, prompt, system_instruction, response_schema, bigger
             )
             # 예산을 두 배로 줬는데도 잘렸다면 이 답안은 이 설정으로 감당이 안 되는 것이다.
             # 반쪽짜리 결과를 지어내지 않고 실패로 두고, 사유를 그대로 밝힌다
@@ -337,7 +513,22 @@ class GeminiClient:
         if not text:
             raise LLMUnavailable.of("LLM_EMPTY_RESPONSE")
 
-        return _parse_json_object(text)
+        parsed = _parse_json_object(text)
+
+        # 여기까지 왔으면 답을 제대로 받아 읽은 것이다.
+        # 이 자리에서만 '누가 답했는지'를 적어 둔다(실패한 호출은 남기지 않는다)
+        self._remember_last_call(state)
+        return parsed
+
+    def _remember_last_call(self, state: "_CallState") -> None:
+        """방금 성공한 호출에 실제로 답한 모델을 이 스레드의 기록에 적는다."""
+        self._last_call.model = state.model
+        self._last_call.fallback_from = state.fallback_from
+
+    def _forget_last_call(self) -> None:
+        """이 스레드의 지난 호출 기록을 지운다(호출을 시작할 때 부른다)."""
+        self._last_call.model = None
+        self._last_call.fallback_from = None
 
 
 def _is_truncated(response: Any) -> bool:
@@ -397,6 +588,23 @@ def _parse_json_object(text: str) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise LLMUnavailable.of("LLM_JSON_NOT_OBJECT", detail=text[:500])
     return parsed
+
+
+def answered_model(client: Any) -> tuple[str | None, str | None]:
+    """방금 그 클라이언트에 **실제로 답한 모델**과, 갈아탄 것이라면 원래 모델을 돌려준다.
+
+    돌려주는 값은 (실제로 답한 모델, 갈아타기 전 모델) 두 개다.
+    갈아타지 않았으면 두 번째가 None 이다.
+
+    왜 함수로 빼는가:
+    이 값을 읽는 자리가 세 군데(오류 판정·체크리스트 판정·전사 보정)인데,
+    테스트와 데모가 넘기는 **가짜 클라이언트에는 이 기록이 아예 없다.**
+    그래서 "없으면 부르려던 이름을 쓴다"는 규칙이 필요한데, 그것을 세 군데에
+    각각 적어 두면 한 곳만 고쳐지는 일이 생긴다. 한 곳으로 모아 둔다.
+    """
+    # 기록이 있으면 그것이 정답이다. 없으면(가짜 클라이언트) 부르려던 이름으로 대신한다
+    used = getattr(client, "last_model_used", None) or getattr(client, "model_name", None)
+    return used, getattr(client, "last_fallback_from", None)
 
 
 def get_default_client() -> GeminiClient:
