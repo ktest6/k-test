@@ -89,6 +89,7 @@
 - [x] C-1 `Notice{code, params, message}` 모델 + 코드 카탈로그(`src/scoring/messages.py`). 계약은 **추가만** — `warnings: list[str]`·`note`·`comment` 는 그대로 두고 `notices` / `notice` 필드를 나란히 붙인다. HTTP 오류 `detail` 만 `{code, params, message}` 객체로 바뀐다(백엔드 요청 형태)
 - [x] C-2 `outputs/api_messages_ko.md` 의 사용자 대면 문구 전부에 코드 부여 (내부용 7절 제외, STT 전사 조각은 한국어 유지)
 - [x] C-3 백엔드 전달용 카탈로그 `outputs/api_message_codes.md` (code · params · 한국어 원문 · 영어 초안)
+- [ ] C-4 (8/26 추가) 리포트 화면의 "Required Points" 용 체크리스트 영어 문장. 문항 JSON `checklist[].description_en` 추가(한국어 `description` 은 LLM 채점 기준이라 유지) → `ChecklistItem`/`ChecklistResult` 에 `description_en` 필드(선택, 기본 "") → `/score` 응답에 그대로 실림 → 백엔드 시드 재등록 요청. 생성 문항(`/generate-items`)도 영어 문장을 함께 뽑는다
 
 ## 궁극 목표 — [난이도: 불가능] 도전 (8/1 선언, 8/2 갱신)
 

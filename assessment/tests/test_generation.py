@@ -302,6 +302,62 @@ def test_근거는_문서에서_잘라낸_구간으로_나간다():
     assert citation.matched_text in DOCUMENT
 
 
+def test_모델이_적어_낸_영어_문장이_문항에_실린다():
+    """리포트 화면의 'Required Points' 칸에 뜰 영어 한 문장이다.
+
+    채점 기준은 어디까지나 한국어 description 이고, 영어는 화면 표시용이다.
+    """
+    english = "Tell him to wear a safety helmet."
+    response = run([raw_item(checklist=[
+        {
+            "id": "c1", "description": "한 작업을 적었는가", "description_en": english,
+            "weight": 1.0, "quote": QUOTE_HELMET,
+        },
+        {"id": "c2", "description": "발견한 문제를 적었는가", "weight": 1.5, "quote": QUOTE_SHELF},
+    ])])
+
+    checklist = response.items[0].checklist
+    assert checklist[0].description_en == english
+    # 영어를 안 적어 냈다고 문항을 버리지는 않는다. 채점에 쓰이지 않는 값이기 때문이다
+    assert checklist[1].description_en == ""
+    assert response.counts.dropped == 0
+
+
+def test_재검증을_돌려도_영어_문장이_사라지지_않는다():
+    """관리자가 승인 화면에서 검증 버튼을 눌러도 화면에 띄울 문장이 남아 있어야 한다."""
+    english = "Say where the dangerous place is."
+    generated = run([raw_item(checklist=[
+        {
+            "id": "c1", "description": "한 작업을 적었는가", "description_en": english,
+            "weight": 1.0, "quote": QUOTE_HELMET,
+        },
+        {"id": "c2", "description": "발견한 문제를 적었는가", "weight": 1.5, "quote": QUOTE_SHELF},
+    ])])
+
+    result = verify_items(
+        VerifyItemsRequest(
+            source_text=generated.source_text,
+            source_text_sha256=generated.meta.source_text_sha256,
+            items=generated.items,
+        )
+    )
+
+    assert result.all_ok is True
+    # 재검증은 문항을 그대로 다시 관문에 태우는 것이라 원본 문항이 그대로 남는다
+    assert generated.items[0].checklist[0].description_en == english
+
+
+def test_생성_프롬프트는_영어_문장을_함께_요구한다():
+    """프롬프트가 영어를 안 시키면 모델은 빈 채로 내놓는다. 그 자리를 못 박아 둔다."""
+    from src.generation.prompt import RESPONSE_SCHEMA as GEN_SCHEMA
+    from src.generation.prompt import SYSTEM_INSTRUCTION as GEN_SYSTEM
+
+    assert "description_en" in GEN_SYSTEM
+    entry = GEN_SCHEMA["properties"]["items"]["items"]["properties"]["checklist"]["items"]
+    assert "description_en" in entry["properties"]
+    assert "description_en" in entry["required"]
+
+
 def test_생성_문항은_채점_계약으로_그대로_바뀐다():
     """관문 G5. 이 확인이 '채점기가 이 문항을 받을 수 있다'를 코드로 증명한다."""
     response = run([raw_item()])

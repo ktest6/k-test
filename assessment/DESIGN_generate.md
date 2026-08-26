@@ -260,7 +260,7 @@ class VerifyItemsResponse(BaseModel):
 
 ## 5. 생성 프롬프트 (`src/generation/prompt.py`)
 
-`PROMPT_VERSION = "gen_writing_v1"`. 프롬프트를 고치면 이 값을 올리고,
+`PROMPT_VERSION = "gen_writing_v2"`. 프롬프트를 고치면 이 값을 올리고,
 응답 `meta.prompt_version` 으로 나간다. 어떤 프롬프트로 만든 문항인지 추적하기 위해서다.
 
 B1 에서 **실측으로 폐기율 100% → 0%** 를 만든 인용 규칙(규칙 1)이 이 프롬프트의 핵심이며,

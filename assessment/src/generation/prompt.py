@@ -18,7 +18,7 @@ from .preprocess import CUT_MARKER
 from .schema import GeneratedItemType
 
 # 프롬프트 판(版) 번호. 문구를 고치면 올린다.
-PROMPT_VERSION = "gen_writing_v1"
+PROMPT_VERSION = "gen_writing_v2"
 
 
 # ---------------------------------------------------------------------------
@@ -60,6 +60,15 @@ SYSTEM_INSTRUCTION = f"""\
    - weight 는 0.5 이상 1.5 이하만 쓴다
    - "무엇이 / 어디서 / 어떤 조치가" 처럼 전달되어야 할 정보 단위로 쪼갠다
    - 문법이 아니라 내용이 전달되었는지를 묻는 문장으로 쓴다
+   - description 은 채점 기준이므로 반드시 한국어 "…했는가" 판정문으로 쓴다
+
+4-1. [영어 문장] 항목마다 description_en 을 하나씩 더 적는다.
+   이것은 채점에 쓰지 않는다. 응시자가 결과 화면에서 읽을 안내 문장이다.
+   - 영어로만 쓴다. 한국어를 섞지 않는다
+   - "…했는가" 판정문이 아니라, 응시자에게 시키는 말로 쓴다
+     (예: "Tell him to wear a safety helmet.", "Say where the dangerous place is.")
+   - 지시문에서 누구에게 말하는(쓰는) 상황인지 읽고 그 상대에 맞춰 쓴다
+   - 짧고 쉬운 낱말만 쓴다. 첫 글자는 대문자, 끝에는 마침표를 찍는다
 
 5. [금지] 지식 암기 문제를 만들지 않는다.
    - "~은 무엇입니까?", "~는 몇 개입니까?", "~의 정의를 쓰시오" 같은 문항 금지
@@ -97,7 +106,7 @@ USER_PROMPT_TEMPLATE = """\
       "prompt": "응시자에게 보여줄 지시문 (쉬운 한국어, ①②③ 형식)",
       "expected_register": "formal 또는 polite",
       "checklist": [
-        {{"id": "c1", "description": "…했는가", "weight": 1.0,
+        {{"id": "c1", "description": "…했는가", "description_en": "Tell him to …", "weight": 1.0,
          "quote": "이 항목의 근거가 된 문서 구절 (그대로 복사)"}}
       ],
       "reference_keywords": ["핵심어", "3~5개"],
@@ -166,10 +175,15 @@ RESPONSE_SCHEMA = {
                             "properties": {
                                 "id": {"type": "string"},
                                 "description": {"type": "string"},
+                                # 결과 화면에 뜰 영어 안내 문장. 채점에는 쓰지 않는다.
+                                # required 에 넣어야 모델이 빠뜨리지 않는다
+                                "description_en": {"type": "string"},
                                 "weight": {"type": "number"},
                                 "quote": {"type": "string"},
                             },
-                            "required": ["id", "description", "weight", "quote"],
+                            "required": [
+                                "id", "description", "description_en", "weight", "quote",
+                            ],
                         },
                     },
                     "reference_keywords": {"type": "array", "items": {"type": "string"}},

@@ -13,16 +13,19 @@
         {
           "id": "c1",
           "description": "무슨 작업을 했는지 기록했는가",
+          "description_en": "Write which work you did today.",
           "weight": 1.0
         },
         {
           "id": "c2",
           "description": "발생한 문제를 기록했는가",
+          "description_en": "Write what problem happened.",
           "weight": 1.5
         },
         {
           "id": "c3",
           "description": "문제를 어떻게 처리했는지(결과 포함) 기록했는가",
+          "description_en": "Write how you handled the problem and what the result was.",
           "weight": 1.5
         }
       ],
@@ -42,21 +45,25 @@
         {
           "id": "c1",
           "description": "내일 출근하지 못한다는 사실을 알렸는가",
+          "description_en": "Tell your team leader that you cannot come to work tomorrow.",
           "weight": 1.5
         },
         {
           "id": "c2",
           "description": "출근하지 못하는 이유를 말했는가",
+          "description_en": "Say why you cannot come to work.",
           "weight": 1.0
         },
         {
           "id": "c3",
           "description": "언제 다시 출근할 수 있는지(또는 모르면 알리겠다는 것)를 말했는가",
+          "description_en": "Say when you can come back to work.",
           "weight": 1.0
         },
         {
           "id": "c4",
           "description": "반장님에게 맞는 높임 표현을 사용했는가",
+          "description_en": "Use polite forms when you write to your team leader.",
           "weight": 0.5
         }
       ],
@@ -76,16 +83,19 @@
         {
           "id": "c1",
           "description": "무엇이 어떻게 위험한지 구체적으로 알렸는가",
+          "description_en": "Describe what is dangerous and how.",
           "weight": 1.5
         },
         {
           "id": "c2",
           "description": "위험한 곳이 어디인지 위치를 알렸는가",
+          "description_en": "Say where the dangerous place is.",
           "weight": 1.5
         },
         {
           "id": "c3",
           "description": "필요한 조치를 요청했는가",
+          "description_en": "Ask for the action that is needed.",
           "weight": 1.0
         }
       ],
@@ -106,16 +116,19 @@
         {
           "id": "c1",
           "description": "완료한 작업을 알렸는가",
+          "description_en": "Write which work you finished.",
           "weight": 1.0
         },
         {
           "id": "c2",
           "description": "아직 끝나지 않은 작업(다음 근무자가 해야 할 일)을 알렸는가",
+          "description_en": "Write which work is not finished yet.",
           "weight": 1.5
         },
         {
           "id": "c3",
           "description": "주의할 점이나 특이사항을 알렸는가",
+          "description_en": "Write what the next worker should be careful about.",
           "weight": 1.5
         }
       ],
@@ -136,16 +149,19 @@
         {
           "id": "c1",
           "description": "무엇이 필요한지 알렸는가",
+          "description_en": "Say what you need.",
           "weight": 1.5
         },
         {
           "id": "c2",
           "description": "필요한 수량을 알렸는가",
+          "description_en": "Say how many you need.",
           "weight": 1.0
         },
         {
           "id": "c3",
           "description": "언제까지 필요한지(또는 왜 급한지)를 알렸는가",
+          "description_en": "Say by when you need them.",
           "weight": 1.0
         }
       ],

@@ -464,10 +464,15 @@ def validate_item(
 
     # --- 문항 모양으로 조립 (근거는 전부 확인된 상태다) ---
     item_citation = citations[0]
+    # description 은 LLM 이 읽을 채점 기준(한국어)이고,
+    # description_en 은 응시자 결과 화면에 뜰 안내 문장(영어)이다.
+    # 영어를 안 적어 냈어도 문항을 버리지 않는다 — 채점에 쓰이지 않는 표시용 값이라
+    # 없다고 해서 점수가 달라지지 않기 때문이다. 빈 문자열로 두고 사람 검수에 맡긴다.
     checklist_items = [
         GeneratedChecklistItem(
             id=str(entry.get("id") or f"c{order + 1}"),
             description=str(entry["description"]).strip(),
+            description_en=str(entry.get("description_en") or "").strip(),
             weight=float(entry["weight"]),
             citation=citations[order + 1],
         )

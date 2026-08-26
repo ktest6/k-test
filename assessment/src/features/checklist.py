@@ -167,6 +167,7 @@ def results_from_llm_payload(
                 ChecklistResult(
                     id=item.id,
                     description=item.description,
+                    description_en=item.description_en,
                     met=0,
                     weight=item.weight,
                     evidence=[
@@ -194,6 +195,7 @@ def results_from_llm_payload(
                 ChecklistResult(
                     id=item.id,
                     description=item.description,
+                    description_en=item.description_en,
                     met=0,
                     weight=item.weight,
                     evidence=[
@@ -236,6 +238,7 @@ def results_from_llm_payload(
                 ChecklistResult(
                     id=item.id,
                     description=item.description,
+                    description_en=item.description_en,
                     met=0,
                     weight=item.weight,
                     evidence=[
@@ -258,6 +261,7 @@ def results_from_llm_payload(
             ChecklistResult(
                 id=item.id,
                 description=item.description,
+                description_en=item.description_en,
                 met=1,
                 weight=item.weight,
                 evidence=[
@@ -327,6 +331,7 @@ def _keyword_fallback(
                 ChecklistResult(
                     id=c.id,
                     description=c.description,
+                    description_en=c.description_en,
                     met=1,
                     weight=c.weight,
                     source=FeatureSource.KIWI,
@@ -340,6 +345,7 @@ def _keyword_fallback(
                 ChecklistResult(
                     id=c.id,
                     description=c.description,
+                    description_en=c.description_en,
                     met=0,
                     weight=c.weight,
                     source=FeatureSource.KIWI,

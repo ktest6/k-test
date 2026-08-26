@@ -161,6 +161,15 @@ class ChecklistItem(BaseModel):
 
     id: str
     description: str = Field(description="예: '지각한 이유를 말했는가'")
+    description_en: str = Field(
+        default="",
+        description=(
+            "같은 항목을 응시자에게 보여 줄 영어 한 문장 (예: 'Tell him to wear a safety "
+            "helmet.'). 리포트 화면의 'Required Points' 칸에 그대로 뜬다. "
+            "**채점에는 쓰지 않는다** — LLM 이 읽는 채점 기준은 위 description(한국어)이다. "
+            "선택 필드라서 백엔드가 안 보내도 채점은 그대로 돈다"
+        ),
+    )
     weight: float = Field(default=1.0, ge=0.0, description="항목별 비중")
 
 
@@ -169,6 +178,8 @@ class ChecklistResult(BaseModel):
 
     id: str
     description: str
+    #: 요청에 실려 온 영어 문장을 그대로 되돌려준다. 안 보냈으면 빈 문자열이다
+    description_en: str = ""
     met: int = Field(ge=0, le=1, description="충족했으면 1, 아니면 0")
     weight: float = 1.0
     source: FeatureSource = FeatureSource.LLM
