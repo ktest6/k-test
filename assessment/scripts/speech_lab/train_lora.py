@@ -15,6 +15,13 @@ Whisper 는 수억 개의 숫자로 이뤄져 있고 그걸 다 새로 가르치
     (여기서 확인만)  python train_lora.py --data ../../../data/labels/flagship.jsonl --dry-run
     (GPU 서버에서)   pip install -r requirements-lab.txt
                      python train_lora.py --data labels/flagship.jsonl --out adapters/flagship-v1
+    (2단 마무리)     python train_lora.py --data extra/team2000_train_stage2.jsonl --init-adapter adapters/v2 --lr 3e-6 --epochs 1 --out adapters/v3-stage2
+
+'2단 마무리'가 무엇인가:
+이미 대량 데이터로 배운 판(v2 어댑터)을 그대로 얹고, 그 위에 사람이 직접 검수한
+소량의 고품질 데이터를 **아주 낮은 학습률로** 조금만 더 배우게 하는 것이다.
+많이 배운 것을 지우지 않으면서 마지막 다듬기만 하려는 것이라, `--lr` 을 1단보다
+훨씬 작게(예: 1e-5 → 3e-6) 주고 `--epochs` 도 1 정도로 짧게 준다.
 
 ────────────────────────────────────────────────────────────────────────────
 GPU 서버에서 돌릴 때 (RunPod 기준) — 학습이 끝나면 반드시 서버를 꺼야 한다
@@ -52,29 +59,51 @@ SAMPLE_RATE = 16_000
 #: 여기만 손대도 말투·표기 습관이 바뀐다는 것이 여러 연구에서 확인된 관행이다.
 LORA_TARGETS = ["q_proj", "v_proj"]
 
+#: 정답 전사(사람이 정한 '이렇게 들린다'는 문장)가 들어 있을 수 있는 칸 이름들.
+#: make_labels.py 가 만든 파일은 `text`, 감사 회수본에서 만든 학습용 목록은 `ref` 를 쓴다.
+#: 앞에 있는 이름부터 찾아서 먼저 걸리는 것을 정답으로 삼는다.
+TEXT_KEYS = ("text", "ref")
+
 
 def load_rows(path: Path, max_n: int = 0) -> list[dict]:
-    """라벨 파일을 읽고, 소리 파일이 실제로 있는 줄만 남긴다.
+    """라벨 파일을 읽고, 학습에 바로 쓸 수 있는 줄만 (소리, 정답) 짝으로 남긴다.
 
     학습 도중에 파일이 없다고 멈추면 GPU 시간을 그냥 버리게 된다.
     그래서 시작 전에 전부 확인하고, 없는 줄은 이유와 함께 세어서 보고한다.
+
+    파일마다 칸 이름과 개수가 다르다(`text` 냐 `ref` 냐, `grade`·`auditor` 같은
+    학습에 안 쓰는 칸이 붙어 있느냐). 그런 차이는 **여기서 전부 흡수해서**
+    audio·text 두 칸만 남긴 채 내보낸다. 뒤쪽 코드가 칸 이름을 신경 쓰지 않아도
+    되고, 줄마다 칸 구성이 달라서 생기는 사고도 여기서 막힌다.
     """
-    rows, missing = [], 0
+    rows, missing, no_text = [], 0, 0
     with path.open("r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
             r = json.loads(line)
+
+            # 소리 파일이 실제로 있어야 학습에 쓸 수 있다
             if not Path(r["audio"]).exists():
                 missing += 1
                 continue
-            rows.append(r)
+
+            # 정답 전사를 찾는다. 이름이 무엇이든(text/ref) 먼저 걸리는 것을 쓴다
+            text = next((str(r[k]) for k in TEXT_KEYS if r.get(k)), "").strip()
+            if not text:
+                no_text += 1
+                continue
+
+            # 여분 칸(id·grade·auditor 등)은 버리고 학습에 쓰는 두 칸만 남긴다
+            rows.append({"audio": r["audio"], "text": text})
             if max_n and len(rows) >= max_n:
                 break
 
     if missing:
         print(f"  주의: 소리 파일이 없어 뺀 줄 {missing}개")
+    if no_text:
+        print(f"  주의: 정답 전사({'/'.join(TEXT_KEYS)})가 비어서 뺀 줄 {no_text}개")
     return rows
 
 
@@ -157,8 +186,47 @@ def build_dataset(rows: list[dict], processor):
     return ds.map(prepare, remove_columns=ds.column_names)
 
 
-def build_model(model_name: str, lora_r: int):
-    """Whisper 를 불러와 LoRA 판을 덧댄다."""
+def attach_existing_adapter(model, adapter_dir: str, lora_r: int):
+    """이미 배운 어댑터를 얹고, **그 판을 계속 학습할 수 있게** 열어 둔다.
+
+    `is_trainable=True` 가 핵심이다. 이 값을 빼면 어댑터가 '읽기 전용'으로 얹혀서,
+    학습이 도는 것처럼 보이는데 실제로는 아무것도 배우지 않는다(손실값만 찍히고
+    어댑터는 그대로다). 2단 마무리 학습에서 제일 조용하게 시간을 버리는 사고라
+    여기서 못 박아 둔다.
+    """
+    from peft import PeftModel
+
+    adapter_path = Path(adapter_dir)
+    if not adapter_path.exists():
+        # 없는 폴더를 주면 새 판으로 조용히 넘어가지 않고 여기서 멈춘다.
+        # (v2 위에 얹은 줄 알았는데 맨바닥부터 배운 결과가 나오는 것을 막으려는 것)
+        raise SystemExit(f"이어서 배울 어댑터 폴더를 찾지 못했다: {adapter_path}")
+
+    # 어댑터가 어떤 설정으로 만들어졌는지 먼저 확인한다. 판 크기(r)와 덧댄 자리
+    # (target_modules)는 어댑터 파일에 이미 박혀 있어서 지금 와서 바꿀 수 없다
+    config_file = adapter_path / "adapter_config.json"
+    saved = json.loads(config_file.read_text(encoding="utf-8")) if config_file.exists() else {}
+    saved_r, saved_targets = saved.get("r"), saved.get("target_modules")
+
+    # 명령줄 값과 다르면 따르는 쪽은 언제나 어댑터다. 다만 사용자가 --lora-r 을
+    # 잘못 준 채로 '내 설정대로 돌았겠지' 하고 넘어가지 않도록 한 줄 알린다
+    if saved_r is not None and saved_r != lora_r:
+        print(f"  경고: 어댑터의 판 크기는 r={saved_r} 인데 --lora-r {lora_r} 로 주었다 "
+              f"→ 어댑터 설정(r={saved_r})을 따른다")
+    if saved_targets and sorted(saved_targets) != sorted(LORA_TARGETS):
+        print(f"  경고: 어댑터가 덧댄 자리는 {sorted(saved_targets)} 인데 이 스크립트 "
+              f"기본값은 {sorted(LORA_TARGETS)} 이다 → 어댑터 설정을 따른다")
+
+    print(f"  이어서 배울 어댑터 얹는 중: {adapter_path}")
+    return PeftModel.from_pretrained(model, str(adapter_path), is_trainable=True)
+
+
+def build_model(model_name: str, lora_r: int, init_adapter: str | None = None):
+    """Whisper 를 불러와 LoRA 판을 덧댄다.
+
+    `init_adapter` 를 주면 **새 판을 만들지 않고 이미 배운 판을 얹어** 그 위에
+    이어서 배운다(2단 마무리 학습). 안 주면 지금까지처럼 빈 판을 새로 덧댄다.
+    """
     from peft import LoraConfig, get_peft_model
     from transformers import WhisperForConditionalGeneration, WhisperProcessor
 
@@ -174,14 +242,19 @@ def build_model(model_name: str, lora_r: int):
     model.generation_config.task = "transcribe"
     model.generation_config.forced_decoder_ids = None
 
-    config = LoraConfig(
-        r=lora_r,                 # 덧대는 판의 크기. 클수록 많이 배우지만 무거워진다
-        lora_alpha=lora_r * 2,    # 배운 것을 얼마나 세게 반영할지 (관행상 r 의 2배)
-        target_modules=LORA_TARGETS,
-        lora_dropout=0.05,        # 일부러 조금 흘려 외워 버리는 것을 막는다
-        bias="none",
-    )
-    model = get_peft_model(model, config)
+    if init_adapter:
+        # 이미 배운 판을 얹어 그 위에 이어서 배운다
+        model = attach_existing_adapter(model, init_adapter, lora_r)
+    else:
+        # 빈 판을 새로 덧댄다 (지금까지의 기본 동작)
+        config = LoraConfig(
+            r=lora_r,                 # 덧대는 판의 크기. 클수록 많이 배우지만 무거워진다
+            lora_alpha=lora_r * 2,    # 배운 것을 얼마나 세게 반영할지 (관행상 r 의 2배)
+            target_modules=LORA_TARGETS,
+            lora_dropout=0.05,        # 일부러 조금 흘려 외워 버리는 것을 막는다
+            bias="none",
+        )
+        model = get_peft_model(model, config)
 
     # 실제로 몇 개만 배우는지 눈으로 확인하는 자리 (보통 전체의 1% 아래로 나온다)
     model.print_trainable_parameters()
@@ -205,8 +278,10 @@ def dry_run(args) -> int:
         return 1
     print(f"① 데이터 {len(rows)}건 읽음 · 예시 정답: {rows[0]['text'][:50]}")
 
-    model, processor = build_model(args.model, args.lora_r)
-    print("② 모델 조립 완료")
+    model, processor = build_model(args.model, args.lora_r, args.init_adapter)
+    # 어느 판 위에서 도는지 눈으로 확인시켜 준다 (2단인데 새 판으로 도는 사고 방지)
+    base_note = f"{args.init_adapter} 위에 이어서" if args.init_adapter else "새 LoRA 판"
+    print(f"② 모델 조립 완료 ({base_note})")
 
     ds = build_dataset(rows, processor)
     collator = WhisperCollator(processor)
@@ -238,8 +313,12 @@ def train(args) -> int:
 
     rows = load_rows(Path(args.data))
     print(f"학습 데이터 {len(rows)}건")
+    if args.init_adapter:
+        # 2단 마무리는 '적은 데이터 · 낮은 학습률'이 전제다. 무엇 위에서 도는지 남긴다
+        print(f"2단 마무리 학습: {args.init_adapter} 위에 이어서 배운다 "
+              f"(학습률 {args.lr} · {args.epochs} 바퀴)")
 
-    model, processor = build_model(args.model, args.lora_r)
+    model, processor = build_model(args.model, args.lora_r, args.init_adapter)
 
     ds = build_dataset(rows, processor)
     # 학습 중에 성적을 보기 위해 10%를 떼어 둔다. 씨앗값을 고정해 매번 같게 나눈다
@@ -280,8 +359,8 @@ def train(args) -> int:
     return 0
 
 
-def main() -> int:
-    enable_utf8_output()
+def build_parser() -> argparse.ArgumentParser:
+    """명령줄 옵션표. 테스트에서 학습을 돌리지 않고 이것만 따로 확인할 수 있게 떼어 뒀다."""
     ap = argparse.ArgumentParser(description="Whisper 오류 보존 LoRA 학습")
     ap.add_argument("--data", required=True, help="make_labels 가 만든 라벨(.jsonl)")
     ap.add_argument("--model", default="openai/whisper-small",
@@ -292,10 +371,19 @@ def main() -> int:
     ap.add_argument("--lr", type=float, default=1e-5)
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--lora-r", type=int, default=16)
+    ap.add_argument("--init-adapter", default=None,
+                    help="이미 배운 어댑터 폴더. 주면 새 판을 만들지 않고 그 판 위에 "
+                         "이어서 배운다(2단 고품질 마무리). 어댑터에 박힌 r·덧댄 자리가 "
+                         "--lora-r 과 다르면 어댑터 쪽을 따른다")
     ap.add_argument("--dry-run", action="store_true",
                     help="학습하지 않고 한 걸음만 굴려 파이프라인을 확인한다")
     ap.add_argument("--dry-n", type=int, default=4, help="dry-run 에 쓸 건수")
-    args = ap.parse_args()
+    return ap
+
+
+def main() -> int:
+    enable_utf8_output()
+    args = build_parser().parse_args()
 
     return dry_run(args) if args.dry_run else train(args)
 
