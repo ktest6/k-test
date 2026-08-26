@@ -38,6 +38,7 @@ class Settings:
     identity_similarity_threshold: float
     identity_similarity_retrieval_threshold: float
     earphone_confidence_threshold: float
+    pre_exam_earphone_confidence_threshold: float
     gaze_eye_yaw_threshold: float
     gaze_eye_pitch_threshold: float
     gaze_head_yaw_threshold: float
@@ -225,6 +226,12 @@ settings = Settings(
         get_similarity_retrieval_threshold()
     ),
     earphone_confidence_threshold=get_earphone_confidence_threshold(),
+    pre_exam_earphone_confidence_threshold=get_float_env(
+        name="PRE_EXAM_EARPHONE_CONFIDENCE_THRESHOLD",
+        default="55.0",
+        minimum=0.0,
+        maximum=100.0,
+    ),
     gaze_eye_yaw_threshold=get_float_env(
         name="GAZE_EYE_YAW_THRESHOLD",
         default="15.0",
