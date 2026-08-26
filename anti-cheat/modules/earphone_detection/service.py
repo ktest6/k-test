@@ -15,9 +15,12 @@ service.py
 
 from typing import Any
 
+from app.core.config import settings
+from modules.cheating_detection.face_detection import detect_faces
 from modules.common.image_validation import validate_image_bytes
 from modules.earphone_detection.analyzer import (
     analyze_earphone_detection,
+    analyze_ear_visibility,
 )
 from modules.earphone_detection.detector import (
     detect_earphone,
@@ -37,6 +40,21 @@ def analyze_earphone_image(
         image_key=image_key,
     )
 
+    face_detection_result = detect_faces(image_bytes=image_bytes)
+    visibility_result = analyze_ear_visibility(
+        detection_response=face_detection_result,
+    )
+
+    if not visibility_result["ear_visible"]:
+        return {
+            **visibility_result,
+            "earphone_detected": False,
+            "label": None,
+            "confidence": 0.0,
+            "threshold": settings.earphone_confidence_threshold,
+            "message": "얼굴을 옆으로 돌려 귀를 보여 주세요.",
+        }
+
     detection_result = detect_earphone(
         image_bytes=image_bytes,
     )
@@ -45,4 +63,4 @@ def analyze_earphone_image(
         detection_result=detection_result,
     )
 
-    return analysis_result
+    return {**visibility_result, **analysis_result}

@@ -80,9 +80,15 @@ async def detect_earphone_api(
             left_result["earphone_detected"]
             or right_result["earphone_detected"]
         )
+        inspection_complete = (
+            left_result["ear_visible"]
+            and right_result["ear_visible"]
+        )
 
         if earphone_detected:
             message = "시험 시작 전에 이어폰을 제거해 주세요."
+        elif not inspection_complete:
+            message = "얼굴을 옆으로 돌려 양쪽 귀를 모두 보여 주세요."
         else:
             message = "이어폰이 탐지되지 않았습니다."
 
@@ -92,6 +98,12 @@ async def detect_earphone_api(
             earphone_detected=earphone_detected,
             left_ear_detected=left_result["earphone_detected"],
             right_ear_detected=right_result["earphone_detected"],
+            inspection_complete=inspection_complete,
+            left_ear_visible=left_result["ear_visible"],
+            right_ear_visible=right_result["ear_visible"],
+            left_yaw=left_result["yaw"],
+            right_yaw=right_result["yaw"],
+            yaw_threshold=left_result["yaw_threshold"],
             left_label=left_result["label"],
             right_label=right_result["label"],
             left_confidence=left_result["confidence"],

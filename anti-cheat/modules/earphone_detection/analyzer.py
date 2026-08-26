@@ -19,6 +19,37 @@ from typing import Any
 from app.core.config import settings
 
 
+def analyze_ear_visibility(
+    detection_response: dict[str, Any],
+) -> dict[str, Any]:
+    """얼굴 yaw를 기준으로 귀가 충분히 보이는 자세인지 판단한다."""
+
+    face_details = detection_response.get("FaceDetails", [])
+
+    if len(face_details) != 1:
+        return {
+            "ear_visible": False,
+            "face_count": len(face_details),
+            "yaw": None,
+            "yaw_threshold": (
+                settings.pre_exam_earphone_head_yaw_threshold
+            ),
+        }
+
+    pose = face_details[0].get("Pose", {})
+    yaw = float(pose.get("Yaw", 0.0) or 0.0)
+
+    return {
+        "ear_visible": (
+            abs(yaw)
+            >= settings.pre_exam_earphone_head_yaw_threshold
+        ),
+        "face_count": 1,
+        "yaw": round(yaw, 2),
+        "yaw_threshold": settings.pre_exam_earphone_head_yaw_threshold,
+    }
+
+
 def analyze_earphone_detection(
     detection_result: dict[str, Any],
 ) -> dict[str, Any]:
