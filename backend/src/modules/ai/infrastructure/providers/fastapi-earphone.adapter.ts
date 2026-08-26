@@ -19,6 +19,12 @@ interface RawDetectResponse {
   left_confidence: number;
   right_confidence: number;
   threshold: number;
+  inspection_complete: boolean;
+  left_ear_visible: boolean;
+  right_ear_visible: boolean;
+  left_yaw: number | null;
+  right_yaw: number | null;
+  yaw_threshold: number;
   message: string;
   [key: string]: unknown;
 }
@@ -64,6 +70,12 @@ export class FastApiEarphoneAdapter implements EarphoneProviderPort {
       leftConfidence: raw.left_confidence,
       rightConfidence: raw.right_confidence,
       threshold: raw.threshold,
+      inspectionComplete: raw.inspection_complete,
+      leftEarVisible: raw.left_ear_visible,
+      rightEarVisible: raw.right_ear_visible,
+      leftYaw: raw.left_yaw,
+      rightYaw: raw.right_yaw,
+      yawThreshold: raw.yaw_threshold,
       message: raw.message,
     };
   }

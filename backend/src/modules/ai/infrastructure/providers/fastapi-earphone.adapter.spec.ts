@@ -53,6 +53,12 @@ function buildRawResponse(overrides: Partial<Record<string, unknown>> = {}) {
     left_confidence: 68.14,
     right_confidence: 0.0,
     threshold: 45.0,
+    inspection_complete: true,
+    left_ear_visible: true,
+    right_ear_visible: true,
+    left_yaw: 61.24,
+    right_yaw: -64.15,
+    yaw_threshold: 50.0,
     message: '시험 시작 전에 이어폰을 제거해 주세요.',
     ...overrides,
   };
@@ -87,6 +93,12 @@ describe('FastApiEarphoneAdapter.detect', () => {
       leftConfidence: 68.14,
       rightConfidence: 0,
       threshold: 45,
+      inspectionComplete: true,
+      leftEarVisible: true,
+      rightEarVisible: true,
+      leftYaw: 61.24,
+      rightYaw: -64.15,
+      yawThreshold: 50,
       message: '시험 시작 전에 이어폰을 제거해 주세요.',
     });
   });

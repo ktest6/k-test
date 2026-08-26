@@ -22,6 +22,12 @@ function buildResult(overrides: Partial<DetectEarphoneResult> = {}): DetectEarph
     leftConfidence: 0,
     rightConfidence: 0,
     threshold: 45,
+    inspectionComplete: true,
+    leftEarVisible: true,
+    rightEarVisible: true,
+    leftYaw: 61.24,
+    rightYaw: -64.15,
+    yawThreshold: 50,
     message: '이어폰이 탐지되지 않았습니다.',
     ...overrides,
   };
@@ -106,7 +112,7 @@ describe('EarphoneDetectionService.detect', () => {
     expect(detect).not.toHaveBeenCalled();
   });
 
-  it('passes the images and ids through to the provider, persists the result, and returns it as-is', async () => {
+  it('passes the images and ids through to the provider and persists the result', async () => {
     const detect = jest
       .fn<Promise<DetectEarphoneResult>, [DetectEarphoneInput]>()
       .mockResolvedValue(buildResult({ earphoneDetected: true, leftLabel: 'Earbuds' }));
@@ -128,9 +134,69 @@ describe('EarphoneDetectionService.detect', () => {
     });
     expect(client.from).toHaveBeenCalledWith('tb_earphone_logs');
     expect(insert).toHaveBeenCalledWith(
-      expect.objectContaining({ exam_session_id: 7, earphone_detected: true }),
+      expect.objectContaining({
+        exam_session_id: 7,
+        earphone_detected: true,
+        inspection_complete: true,
+      }),
     );
-    expect(result).toEqual(buildResult({ earphoneDetected: true, leftLabel: 'Earbuds' }));
+    expect(result).toEqual(
+      buildResult({
+        earphoneDetected: true,
+        leftLabel: 'Earbuds',
+        message: 'An earphone was detected. Please remove it before continuing.',
+      }),
+    );
+  });
+
+  it('builds an English guidance message instead of passing through the anti-cheat Korean message', async () => {
+    const detect = jest
+      .fn<Promise<DetectEarphoneResult>, [DetectEarphoneInput]>()
+      .mockResolvedValue(buildResult({ earphoneDetected: false }));
+    const { service } = buildService({ earphoneProvider: { detect } });
+
+    const result = await service.detect('9', '7', buildImage(), buildImage());
+
+    expect(result.message).toBe('No earphone was detected.');
+  });
+
+  it('tells the candidate to show both ears when neither is visible yet', async () => {
+    const detect = jest
+      .fn<Promise<DetectEarphoneResult>, [DetectEarphoneInput]>()
+      .mockResolvedValue(
+        buildResult({ inspectionComplete: false, leftEarVisible: false, rightEarVisible: false }),
+      );
+    const { service } = buildService({ earphoneProvider: { detect } });
+
+    const result = await service.detect('9', '7', buildImage(), buildImage());
+
+    expect(result.message).toBe('Turn your face sideways so both ears are visible.');
+  });
+
+  it('tells the candidate to show the left ear specifically when only that one is missing', async () => {
+    const detect = jest
+      .fn<Promise<DetectEarphoneResult>, [DetectEarphoneInput]>()
+      .mockResolvedValue(
+        buildResult({ inspectionComplete: false, leftEarVisible: false, rightEarVisible: true }),
+      );
+    const { service } = buildService({ earphoneProvider: { detect } });
+
+    const result = await service.detect('9', '7', buildImage(), buildImage());
+
+    expect(result.message).toBe('Turn your face to show your left ear.');
+  });
+
+  it('tells the candidate to show the right ear specifically when only that one is missing', async () => {
+    const detect = jest
+      .fn<Promise<DetectEarphoneResult>, [DetectEarphoneInput]>()
+      .mockResolvedValue(
+        buildResult({ inspectionComplete: false, leftEarVisible: true, rightEarVisible: false }),
+      );
+    const { service } = buildService({ earphoneProvider: { detect } });
+
+    const result = await service.detect('9', '7', buildImage(), buildImage());
+
+    expect(result.message).toBe('Turn your face to show your right ear.');
   });
 
   it('does not treat a provider failure as a pass — throws instead of defaulting to not-detected', async () => {
@@ -175,13 +241,16 @@ describe('EarphoneDetectionService.hasPassedCheck', () => {
     expect(result).toBe(false);
   });
 
-  it('returns true when a passing check (earphone_detected: false) is on file', async () => {
+  it('returns true when a passing check (earphone_detected: false, inspection_complete: true) is on file', async () => {
     const maybeSingle = jest.fn().mockResolvedValue({ data: { id: 'log-1' } });
     const { service, client } = buildService({ client: { maybeSingle } });
 
     const result = await service.hasPassedCheck('7');
 
     expect(client.from).toHaveBeenCalledWith('tb_earphone_logs');
+    const queryBuilder = client.from.mock.results[0].value as { eq: jest.Mock };
+    expect(queryBuilder.eq).toHaveBeenCalledWith('earphone_detected', false);
+    expect(queryBuilder.eq).toHaveBeenCalledWith('inspection_complete', true);
     expect(result).toBe(true);
   });
 });
