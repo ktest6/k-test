@@ -18,7 +18,7 @@ import re
 from dataclasses import dataclass, field
 
 from ..llm.citation import filter_by_citation, verify_citation
-from ..llm.client import GeminiClient, LLMUnavailable
+from ..llm.client import GeminiClient, LLMUnavailable, answered_model
 from ..scoring.messages import Notice, emit, notice, notice_or_free_text
 from ..scoring.schema import (
     ChecklistItem,
@@ -112,6 +112,11 @@ class ChecklistJudgeResult:
     notices: list[Notice] = field(default_factory=list)
     dropped_citations: int = 0
     llm_used: bool = False
+    #: 이 판정에 **실제로 답한 모델** 이름. 부르려던 모델과 다를 수 있다
+    #: (원 모델이 붐벼서 못 받으면 대체 모델로 갈아타기 때문이다). 호출을 안 했으면 None
+    llm_model_used: str | None = None
+    #: 대체 모델로 갈아탄 경우 원래 부르려던 모델 이름. 안 갈아탔으면 None
+    llm_fallback_from: str | None = None
 
 
 def build_prompt(answer_text: str, item: ItemInfo) -> str:
@@ -410,6 +415,8 @@ def judge_checklist(
     out.notices = notices
     out.dropped_citations = dropped
     out.llm_used = True
+    # 누가 답했는지를 남긴다(붐비는 모델 대신 대체 모델이 답했을 수 있다)
+    out.llm_model_used, out.llm_fallback_from = answered_model(client)
     return out
 
 

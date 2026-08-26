@@ -1,0 +1,42 @@
+# 시연 서버의 LoRA 받아쓰기 서버(lora_stt_server.py)가 **돌기만 하는 데** 필요한 것.
+#
+# scripts/speech_lab/requirements-lab.txt 에서 추론에 쓰이는 것만 골라 냈다.
+# 일부러 뺀 것과 그 까닭:
+#   datasets · accelerate · jiwer   → 학습·평가용. 시연 서버에서는 학습을 안 한다.
+#   espnet · funasr · torchaudio    → 세탁 탐지 증인단(오디션)용. 받아쓰기 서버와 무관.
+#   xgboost · scikit-learn          → 점수 결합층 학습용. 채점 서버 쪽 일이고 그것도 학습.
+#   g2pk · kiwipiepy                → 라벨 만들기·판정용.
+# 이것들을 같이 깔면 이미지가 몇 GB 더 붇고, 설치가 실패할 자리만 늘어난다.
+#
+# torch 는 여기 적지 않는다. 그래픽카드에 맞는 판을 setup.sh 가 따로 받는다
+# (여기에 적으면 CPU 판이 딸려 들어와 GPU 를 못 쓰게 된다).
+#
+#   설치:  /opt/ktest/venv-stt/bin/pip install -r requirements-stt.txt
+
+# 판을 딱 맞춰 못 박은 까닭:
+#   여기 적힌 값은 **8/22 에 내 PC(RTX 4060)에서 v2 어댑터가 실제로 돌아간 환경
+#   (D:\해커톤데이터\lora-venv)의 판 그대로**다. 8/25 에 급히 만든
+#   `scripts/speech_lab/gcp/setup_lora_vm.sh` 도 같은 판으로 맞춰 두었다.
+#   transformers 를 5.x 로 올리면 Whisper 의 generate 인자가 달라져서, 그때
+#   실측한 받아쓰기 결과(오류를 안 고치고 보존하는 성질)가 그대로 나온다는
+#   보장이 없다. 시연 서버는 새것보다 **그때와 같은 것**이 중요하다.
+
+# 모델 본체(Whisper)와 어댑터 얹기.
+transformers==4.48.3
+peft==0.14.0
+# Trainer 가 아니라 모델을 올릴 때 transformers 가 부른다. lora-venv 에도 들어 있다.
+accelerate==1.14.0
+
+# 소리 읽기. wav 를 숫자 배열로 바꾼다(리눅스에서는 libsndfile1 이 함께 있어야 한다).
+soundfile==0.14.0
+
+# 촘촘함(샘플레이트)이 16kHz 가 아닐 때만 쓰는 변환기.
+# 응시자 녹음이 48kHz 로 들어오는 일이 잦아서 실제로 쓰인다.
+librosa==0.11.0          # 1.0 은 파이썬 3.12 전용 — VM 은 3.11 이라 0.11 로 (기능 차이 없음, 8/26 실측)
+
+# 추론 서버 뼈대와 실행기. 이 셋은 판을 안 박아도 문제된 적이 없다.
+fastapi>=0.110
+uvicorn>=0.29
+
+# {"url": "..."} 방식으로 음성을 받을 때 내려받는 도구.
+httpx>=0.27

@@ -182,6 +182,34 @@ def _swap_in_content_features(
         features[index] = replacement
 
 
+def _emit_fallback_notice(
+    warnings: list[str],
+    notices: list[Notice],
+    stage: str,
+    fallback_from: str | None,
+    model_used: str | None,
+) -> None:
+    """붐비는 모델 대신 대체 모델이 답했으면 그 사실을 결과에 한 줄 남긴다.
+
+    왜 남기는가:
+    같은 답안을 다시 채점했을 때 점수가 달라지면 이유를 대야 한다. 그 이유가
+    "그때는 원래 모델이 못 받아서 다른 모델이 판정했다"인 경우가 있고,
+    결과 어디에도 그 사실이 없으면 아무도 설명하지 못한다.
+
+    단계 이름(errors / checklist / transcript)을 함께 적는 이유:
+    세 호출이 각각 다른 모델을 쓸 수 있어서, 어느 판정이 대체 모델의 것인지
+    구분되지 않으면 근거로 쓸 수 없다.
+    """
+    # 갈아탄 적이 없으면 알릴 것이 없다(대부분의 채점이 이 길로 지나간다)
+    if not fallback_from or not model_used or fallback_from == model_used:
+        return
+    # `from` 은 파이썬 예약어라 이름을 키워드로 직접 적을 수 없어 사전으로 넘긴다
+    emit(
+        warnings, notices, "LLM_FALLBACK_MODEL_USED",
+        **{"from": fallback_from, "to": model_used, "stage": stage},
+    )
+
+
 def _resolve_transcript(
     request: ScoreRequest,
     client: GeminiClient,
@@ -222,6 +250,11 @@ def _resolve_transcript(
     notices.extend(correction.notices)
     if correction.correction_applied:
         emit(warnings, notices, "TRANSCRIPT_APPLIED", count=correction.change_count)
+    # 보정을 대체 모델이 했다면 그것도 결과에 남긴다
+    _emit_fallback_notice(
+        warnings, notices, "transcript",
+        correction.llm_fallback_from, correction.llm_model_used,
+    )
 
     return TranscriptContext(
         corrected_text=correction.corrected_text,
@@ -643,6 +676,16 @@ def score_submission(
     warnings.extend(checklist_result.warnings)
     notices.extend(checklist_result.notices)
 
+    # 두 판정 중 대체 모델이 답한 것이 있으면 어느 단계였는지 남긴다
+    _emit_fallback_notice(
+        warnings, notices, "errors",
+        error_result.llm_fallback_from, error_result.llm_model_used,
+    )
+    _emit_fallback_notice(
+        warnings, notices, "checklist",
+        checklist_result.llm_fallback_from, checklist_result.llm_model_used,
+    )
+
     # 4단계: 보정이 일어난 자리에서 나온 오류 지적에 신뢰도 표시를 단다
     marked = 0
     if transcript and transcript.corrected_spans:
@@ -703,11 +746,19 @@ def score_submission(
         weights_provisional=weights.provisional,
         weights_profile=weights.profile,
         llm_used=error_result.llm_used or checklist_result.llm_used,
-        llm_model=client.model_name if client.available else None,
-        # 문법을 판정한 모델이 따로라는 사실을 남긴다. 이것이 없으면
-        # 나중에 같은 답안을 다시 채점했을 때 값이 왜 달라졌는지 설명할 수 없다
+        # 부르려던 모델이 아니라 **실제로 답한 모델**을 적는다.
+        # 붐비는 모델 대신 대체 모델이 답하는 일이 있어서, 부르려던 이름을 적어 두면
+        # 나중에 같은 답안을 다시 채점했을 때 값이 왜 달라졌는지 설명할 수 없다.
+        # (체크리스트를 아예 안 불렀으면 지금까지처럼 설정에 적힌 이름이 나간다)
+        llm_model=(
+            checklist_result.llm_model_used
+            or (client.model_name if client.available else None)
+        ),
+        # 문법을 판정한 모델은 따로라는 사실을 남긴다
         llm_model_errors=(
-            error_client.model_name if error_result.llm_used else None
+            (error_result.llm_model_used or error_client.model_name)
+            if error_result.llm_used
+            else None
         ),
         dropped_citations=dropped,
         timings_ms=timings,

@@ -85,7 +85,7 @@ params 이름이 `...Notice` 로 끝나면 전부 이 중첩이다.
 - **어디서 나오는지** — 응답의 어느 자리에 실리는지
 
 
-**전체 189개** (그중 내부용 2개는 영어화 대상이 아님)
+**전체 190개** (그중 내부용 2개는 영어화 대상이 아님)
 
 
 ---
@@ -99,7 +99,7 @@ params 이름이 `...Notice` 로 끝나면 전부 이 중첩이다.
 
 ---
 
-## POST /score (116개)
+## POST /score (117개)
 
 | code | params | 한국어 원문 | 영어 초안 | 어디서 나오는지 |
 |---|---|---|---|---|
@@ -133,6 +133,7 @@ params 이름이 `...Notice` 로 끝나면 전부 이 중첩이다.
 | `STT_AZURE_CALL_FAILED` | (없음) | 음성을 글자로 옮기지 못했다. Azure 음성 서비스 호출이 실패했다. | The audio could not be transcribed. The call to the Azure Speech service failed. | HTTP 503 detail |
 | `STT_AZURE_TIMEOUT` | `timeoutSec` (int(초)) 예: 60 | 발음 평가가 제한 시간({timeoutSec}초) 안에 끝나지 않았다. | Pronunciation assessment did not finish within {timeoutSec} seconds. | HTTP 503 detail |
 | `STT_AZURE_REQUEST_CANCELED` | (없음) | 음성을 글자로 옮기지 못했다. Azure 음성 서비스가 요청을 거절했다. | The audio could not be transcribed. The Azure Speech service rejected the request. | HTTP 503 detail |
+| `LLM_FALLBACK_MODEL_USED` | `from` (str(원래 부르려던 모델)) 예: "gemini-3-flash-preview"<br>`to` (str(실제로 답한 대체 모델)) 예: "gemini-3.1-flash-lite"<br>`stage` (str(errors \| checklist \| transcript)) 예: "errors" | {stage} 단계에서 모델 {from} 이(가) 응답하지 못해 대체 모델 {to} 로 판정했습니다. | Stage {stage}: model {from} did not respond, so the fallback model {to} was used. | warnings |
 | `LLM_FREE_TEXT` | `text` (str(LLM 자유 생성, 고정 문구 아님)) 예: "답안에서 지각한 이유를 밝혔다." | {text} | {text} | evidence comment 등 |
 | `VALIDITY_INVALID_WRAP` | `reason` (str) 예: "답안의 한글 비율이 12%로 기준(50%)에 못 미쳐 …"<br>`reasonNotice` (notice) 예: → VALIDITY_HANGUL_RATIO | [채점 무효] {reason} | [Not scored] {reason} | warnings |
 | `VALIDITY_SOFT_WRAP` | `reason` (str) 예: "어미가 붙은 문장이 1/5에 그쳐 온전한 문장으로 보기 어렵다."<br>`reasonNotice` (notice) 예: → VALIDITY_NO_SENTENCE_SOFT | [답안 유효성] {reason} | [Answer validity] {reason} | warnings |

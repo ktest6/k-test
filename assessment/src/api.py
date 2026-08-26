@@ -169,6 +169,13 @@ def health() -> dict:
         # 오류 자질(조사·어미·어휘·높임법)만 다른 모델로 돌린다.
         # 배포한 뒤 GEMINI_MODEL_ERRORS 가 제대로 들어갔는지 여기서 확인한다
         "llm_model_errors": client_for_errors(client).model_name,
+        # 위 모델이 "지금 붐벼서 못 받는다"(503)고 할 때 대신 부르는 모델.
+        # **새로 추가된 필드다** — 기존 필드의 이름과 뜻은 하나도 바뀌지 않았다.
+        # 이 이름이 위 모델과 같으면 갈아탈 곳이 없다는 뜻이다(같은 모델을 또 부를 수는 없다).
+        # 채점에서 실제로 갈아타는 것은 오류 판정(llm_model_errors)뿐이다 —
+        # 나머지 두 단계는 기본 모델이 이미 이 대체 모델과 같기 때문이다.
+        # 배포한 뒤 GEMINI_MODEL_FALLBACK 이 제대로 들어갔는지 여기서 확인한다
+        "llm_model_fallback": client.fallback_model,
         # 임시값을 쓰고 있는지 한눈에 보이게 함께 알려준다
         "weights_profile": DEFAULT_WEIGHTS.profile,
         "weights_provisional": DEFAULT_WEIGHTS.provisional,

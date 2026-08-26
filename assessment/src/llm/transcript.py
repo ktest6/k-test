@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 from ..scoring.messages import Notice, emit, notice
 from ..scoring.schema import Evidence, FeatureSource
 from .citation import verify_citation
-from .client import GeminiClient, LLMUnavailable
+from .client import GeminiClient, LLMUnavailable, answered_model
 
 # 보정이 원문을 이 비율보다 많이 바꾸면 보정 전체를 물린다.
 # 몇 글자를 고치는 것이 아니라 답안을 통째로 다시 써 버린 경우인데,
@@ -169,6 +169,11 @@ class TranscriptCorrection:
     correction_applied: bool = False
     nationality: str | None = None
     llm_used: bool = False
+    #: 이 보정에 **실제로 답한 모델** 이름. 부르려던 모델과 다를 수 있다
+    #: (원 모델이 붐벼서 못 받으면 대체 모델로 갈아타기 때문이다). 호출을 안 했으면 None
+    llm_model_used: str | None = None
+    #: 대체 모델로 갈아탄 경우 원래 부르려던 모델 이름. 안 갈아탔으면 None
+    llm_fallback_from: str | None = None
     warnings: list[str] = field(default_factory=list)
     #: 위 warnings 와 같은 내용을 '코드 + 값' 으로 담은 것. 백엔드가 영어로 바꿔 쓴다
     notices: list[Notice] = field(default_factory=list)
@@ -527,4 +532,7 @@ def correct_transcript(
         return no_correction
 
     # 받은 답을 그대로 믿지 않고 좌표 계산과 과보정 검사를 거친다
-    return build_correction(original_text, payload, nationality)
+    correction = build_correction(original_text, payload, nationality)
+    # 누가 답했는지를 남긴다(붐비는 모델 대신 대체 모델이 답했을 수 있다)
+    correction.llm_model_used, correction.llm_fallback_from = answered_model(client)
+    return correction
