@@ -6,12 +6,34 @@ import { describeError } from '../../../../common/utils/describe-error.util';
 import { extractAntiCheatError } from '../../../../common/utils/extract-anti-cheat-error.util';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import {
+  DetectEarphoneResult,
   EARPHONE_PROVIDER,
   EarphoneImageInput,
   EarphoneProviderPort,
 } from '../../../ai/domain/ports/earphone-provider.port';
 import { ExamSessionAccessService } from '../../../exam-session/application/services/exam-session-access.service';
 import { EarphoneDetectResponseDto } from '../dto/earphone-detect-response.dto';
+
+/**
+ * anti-cheat의 message 필드는 아직 한국어 자유 문장이라(오류 코드처럼 code+params로
+ * 안 옴) 그대로 번역하지 않고, 우리가 이미 구조화된 필드(inspectionComplete/
+ * leftEarVisible/rightEarVisible/earphoneDetected)로 직접 영어 안내 문구를 만든다 —
+ * anti-cheat 쪽 문구가 바뀌어도 이 안내는 안 깨진다.
+ */
+function buildGuidanceMessage(result: DetectEarphoneResult): string {
+  if (!result.inspectionComplete) {
+    if (!result.leftEarVisible && !result.rightEarVisible) {
+      return 'Turn your face sideways so both ears are visible.';
+    }
+    if (!result.leftEarVisible) {
+      return 'Turn your face to show your left ear.';
+    }
+    return 'Turn your face to show your right ear.';
+  }
+  return result.earphoneDetected
+    ? 'An earphone was detected. Please remove it before continuing.'
+    : 'No earphone was detected.';
+}
 
 /**
  * 시험 시작 후 이어폰 착용 여부 감지. id-card 인증과 마찬가지로 examSessionId
@@ -42,7 +64,7 @@ export class EarphoneDetectionService {
   ): Promise<EarphoneDetectResponseDto> {
     await this.examSessionAccessService.assertOwnedInProgress(examSessionId, userId);
 
-    let result: EarphoneDetectResponseDto;
+    let result: DetectEarphoneResult;
     try {
       result = await this.earphoneProvider.detect({
         // AI팀 외부 계약상 필드명은 examId지만, 회차가 없어져서 세션 id를 그대로 싣는다.
@@ -67,13 +89,18 @@ export class EarphoneDetectionService {
     await client.from('tb_earphone_logs').insert({
       exam_session_id: Number(examSessionId),
       earphone_detected: result.earphoneDetected,
+      inspection_complete: result.inspectionComplete,
       checked_at: new Date().toISOString(),
     });
 
-    return result;
+    return { ...result, message: buildGuidanceMessage(result) };
   }
 
-  /** 게이트 체크(ExamSessionService.assertVerifiedSession)에서 쓰는 통과 여부 조회. */
+  /**
+   * 게이트 체크(ExamSessionService.assertVerifiedSession)에서 쓰는 통과 여부 조회.
+   * inspection_complete가 true인 판정만 인정한다 — 자세 문제로 검사가 불완전했던
+   * 판정은 earphone_detected=false가 나와도 신뢰할 수 없기 때문이다.
+   */
   async hasPassedCheck(examSessionId: string): Promise<boolean> {
     const client = this.supabaseService.getAdminClient();
     const { data } = await client
@@ -81,6 +108,7 @@ export class EarphoneDetectionService {
       .select('earphone_log_id')
       .eq('exam_session_id', Number(examSessionId))
       .eq('earphone_detected', false)
+      .eq('inspection_complete', true)
       .limit(1)
       .maybeSingle();
 
