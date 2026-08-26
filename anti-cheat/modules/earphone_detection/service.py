@@ -51,7 +51,7 @@ def analyze_earphone_image(
             "earphone_detected": False,
             "label": None,
             "confidence": 0.0,
-            "threshold": settings.earphone_confidence_threshold,
+            "threshold": settings.pre_exam_earphone_confidence_threshold,
             "message": "얼굴을 옆으로 돌려 귀를 보여 주세요.",
         }
 

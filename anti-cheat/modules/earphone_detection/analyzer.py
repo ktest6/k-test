@@ -62,7 +62,7 @@ def analyze_earphone_detection(
 
     valid_detections = _find_valid_detections(
         matched_labels=matched_labels,
-        threshold=settings.earphone_confidence_threshold,
+        threshold=settings.pre_exam_earphone_confidence_threshold,
     )
 
     if not valid_detections:
@@ -70,7 +70,7 @@ def analyze_earphone_detection(
             "earphone_detected": False,
             "label": None,
             "confidence": 0.0,
-            "threshold": settings.earphone_confidence_threshold,
+            "threshold": settings.pre_exam_earphone_confidence_threshold,
             "retry_required": False,
             "message": "이어폰이 탐지되지 않았습니다.",
         }
@@ -84,7 +84,7 @@ def analyze_earphone_detection(
         "earphone_detected": True,
         "label": best_detection["label"],
         "confidence": best_detection["confidence"],
-        "threshold": settings.earphone_confidence_threshold,
+        "threshold": settings.pre_exam_earphone_confidence_threshold,
         "retry_required": False,
         "message": "이어폰이 탐지되었습니다.",
     }
