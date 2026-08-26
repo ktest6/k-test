@@ -1,3 +1,5 @@
+import { substituteTemplate } from '../utils/substitute-template.util';
+
 /**
  * assessment 서비스(재완님 담당)가 응답에 실어 보내는 채점/생성 관련 상태·오류
  * 코드(`notices`/`notice`, HTTP 4xx·5xx의 `detail.code`)를 영어 문장으로 바꾸는
@@ -6,8 +8,8 @@
  * 바뀌면 그 문서를 다시 뽑아서 이 파일도 같이 갱신해야 한다.
  *
  * 모든 코드가 완전히 같은 모양이라(문장 템플릿 + {placeholder}), 코드 하나하나에
- * 함수를 만들지 않고 문자열 템플릿 하나로 다 처리한다 — resolveNotice()가 그
- * 치환(및 중첩 notice 재귀 해석)을 전담한다.
+ * 함수를 만들지 않고 문자열 템플릿 하나로 다 처리한다 — resolveNotice()가 치환
+ * 자체는 공용 substituteTemplate에 맡기고, 중첩 notice 재귀 해석만 전담한다.
  */
 
 export interface Notice {
@@ -38,20 +40,9 @@ export function resolveNotice(notice: Notice): string {
     return notice.message;
   }
 
-  const params = notice.params ?? {};
-  return template.replace(/\{(\w+)\}/g, (match, key: string) => {
-    const value = params[key];
-    if (isNotice(value)) {
-      return resolveNotice(value);
-    }
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-      return String(value);
-    }
-    // 문서 규칙상 템플릿이 참조하는 값은 문자열·숫자·불리언·중첩 notice뿐이다 —
-    // 그 외(예: SUBSCORE_NOTE_LIST의 items처럼 템플릿이 안 쓰는 부가 배열)가
-    // 여기로 오면 원래 {key} 표기를 그대로 남긴다.
-    return match;
-  });
+  return substituteTemplate(template, notice.params ?? {}, (value) =>
+    isNotice(value) ? resolveNotice(value) : undefined,
+  );
 }
 
 /** code → 영어 문장 템플릿. assessment/outputs/api_message_codes.md 의 '영어 초안' 그대로. */

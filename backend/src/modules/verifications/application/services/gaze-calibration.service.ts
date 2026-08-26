@@ -3,7 +3,9 @@ import { ConfigType } from '@nestjs/config';
 import { appConfig } from '../../../../config/configuration';
 import { ConflictDomainException } from '../../../../common/exceptions/domain.exception';
 import { serviceCommunicationFailed } from '../../../../common/exceptions/error-messages';
+import { resolveAntiCheatError } from '../../../../common/exceptions/anti-cheat-error-messages';
 import { describeError } from '../../../../common/utils/describe-error.util';
+import { extractAntiCheatError } from '../../../../common/utils/extract-anti-cheat-error.util';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import {
   CalibrateGazeResult,
@@ -74,7 +76,12 @@ export class GazeCalibrationService {
       if (!this.config.requireMonitoringService) {
         return NEUTRAL_RESULT;
       }
-      throw new ConflictDomainException(serviceCommunicationFailed('gaze calibration'));
+      const antiCheatError = extractAntiCheatError(err);
+      throw new ConflictDomainException(
+        antiCheatError
+          ? resolveAntiCheatError(antiCheatError)
+          : serviceCommunicationFailed('gaze calibration'),
+      );
     }
 
     if (result.calibrated) {

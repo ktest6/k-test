@@ -277,6 +277,27 @@ describe('IdCardVerificationService.verify', () => {
     expect(insert).not.toHaveBeenCalled();
   });
 
+  it('uses the anti-cheat structured error message when the provider returns one', async () => {
+    const axiosError = {
+      isAxiosError: true,
+      message: 'Request failed with status code 400',
+      response: {
+        status: 400,
+        data: {
+          detail: '여권을 인식할 수 없습니다.',
+          code: 'DOCUMENT_NOT_DETECTED',
+          params: { documentType: 'passport' },
+        },
+      },
+    };
+    const identityProvider = { verify: jest.fn().mockRejectedValue(axiosError) };
+    const { service } = buildService({ identityProvider });
+
+    await expect(service.verify('9', buildDto())).rejects.toThrow(
+      'The passport could not be recognized.',
+    );
+  });
+
   it('throws when an image cannot be downloaded from storage', async () => {
     const download = jest.fn().mockResolvedValue({ data: null, error: { message: 'not found' } });
     const { service } = buildService({ client: { download } });

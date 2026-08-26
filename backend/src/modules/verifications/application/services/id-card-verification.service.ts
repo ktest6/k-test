@@ -9,7 +9,9 @@ import {
   notOwnedByUser,
   serviceCommunicationFailed,
 } from '../../../../common/exceptions/error-messages';
+import { resolveAntiCheatError } from '../../../../common/exceptions/anti-cheat-error-messages';
 import { describeError } from '../../../../common/utils/describe-error.util';
+import { extractAntiCheatError } from '../../../../common/utils/extract-anti-cheat-error.util';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import {
   IDENTITY_PROVIDER,
@@ -111,7 +113,12 @@ export class IdCardVerificationService {
       this.logger.warn(
         `본인인증 서비스 통신 실패 (examSessionId=${dto.examSessionId}, userId=${userId}): ${describeError(err)}`,
       );
-      throw new ConflictDomainException(serviceCommunicationFailed('identity verification'));
+      const antiCheatError = extractAntiCheatError(err);
+      throw new ConflictDomainException(
+        antiCheatError
+          ? resolveAntiCheatError(antiCheatError)
+          : serviceCommunicationFailed('identity verification'),
+      );
     }
 
     const matched = result.verified;
