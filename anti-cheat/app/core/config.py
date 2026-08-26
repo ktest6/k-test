@@ -47,6 +47,7 @@ class Settings:
     gaze_calibration_minimum_sample_count: int
     phone_confidence_threshold: float
     earphone_head_yaw_threshold: float
+    pre_exam_earphone_head_yaw_threshold: float
 
 
 def get_required_env(name: str) -> str:
@@ -266,6 +267,12 @@ settings = Settings(
     earphone_head_yaw_threshold=get_float_env(
         name="EARPHONE_HEAD_YAW_THRESHOLD",
         default="40.0",
+        minimum=0.0,
+        maximum=180.0,
+    ),
+    pre_exam_earphone_head_yaw_threshold=get_float_env(
+        name="PRE_EXAM_EARPHONE_HEAD_YAW_THRESHOLD",
+        default="50.0",
         minimum=0.0,
         maximum=180.0,
     ),
