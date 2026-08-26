@@ -170,6 +170,27 @@ describe('GazeCalibrationService.calibrate', () => {
     );
   });
 
+  it('uses the anti-cheat structured error message when the provider returns one', async () => {
+    const axiosError = {
+      isAxiosError: true,
+      message: 'Request failed with status code 400',
+      response: {
+        status: 400,
+        data: {
+          detail: 'Calibration에 필요한 유효 시선 표본이 부족합니다.',
+          code: 'CALIBRATION_SAMPLES_INSUFFICIENT',
+          params: { actualCount: 2, requiredCount: 5 },
+        },
+      },
+    };
+    const calibrate = jest.fn().mockRejectedValue(axiosError);
+    const { service } = buildService({ monitoringProvider: { calibrate } });
+
+    await expect(service.calibrate('9', '7', [buildImage('center_1')])).rejects.toThrow(
+      'Not enough valid gaze samples for calibration (2 of 5 required).',
+    );
+  });
+
   it('returns a neutral result instead of throwing when requireMonitoringService is false', async () => {
     const calibrate = jest.fn().mockRejectedValue(new Error('fastapi unreachable'));
     const insert = jest.fn();

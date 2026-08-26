@@ -143,6 +143,26 @@ describe('EarphoneDetectionService.detect', () => {
     );
     expect(insert).not.toHaveBeenCalled();
   });
+
+  it('uses the anti-cheat structured error message when the provider returns one', async () => {
+    const axiosError = {
+      isAxiosError: true,
+      message: 'Request failed with status code 502',
+      response: {
+        status: 502,
+        data: {
+          detail: 'AWS Rekognition 이어폰 탐지에 실패했습니다.',
+          code: 'REKOGNITION_EARPHONE_DETECTION_FAILED',
+        },
+      },
+    };
+    const detect = jest.fn().mockRejectedValue(axiosError);
+    const { service } = buildService({ earphoneProvider: { detect } });
+
+    await expect(service.detect('9', '7', buildImage(), buildImage())).rejects.toThrow(
+      'AWS Rekognition earphone detection failed.',
+    );
+  });
 });
 
 describe('EarphoneDetectionService.hasPassedCheck', () => {
