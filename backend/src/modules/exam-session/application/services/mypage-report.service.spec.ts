@@ -1,4 +1,5 @@
 import {
+  ConflictDomainException,
   ForbiddenDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
@@ -24,11 +25,13 @@ import { SkippedQuestionRepository } from '../../domain/skipped-question.reposit
 import { ExamSessionQuestionService } from './exam-session-question.service';
 import { MypageReportService } from './mypage-report.service';
 
-function buildSession(overrides: Partial<{ userId: string }> = {}): ExamSession {
+function buildSession(
+  overrides: Partial<{ userId: string; status: SessionStatus }> = {},
+): ExamSession {
   return new ExamSession(
     '100',
     overrides.userId ?? '9',
-    SessionStatus.SUBMITTED,
+    overrides.status ?? SessionStatus.SUBMITTED,
     0,
     new Date('2026-08-01T00:00:00.000Z'),
     null,
@@ -266,5 +269,73 @@ describe('MypageReportService.getReport', () => {
     expect(result.finalGrade).toBe('B');
     expect(result.percentile).toBe(70.5);
     expect(result.startedAt).toEqual(new Date('2026-08-01T00:00:00.000Z'));
+  });
+});
+
+describe('MypageReportService.getViolationSummary', () => {
+  it('throws NotFoundDomainException when the session does not exist', async () => {
+    const { service } = buildService({ findSessionById: jest.fn().mockResolvedValue(null) });
+
+    await expect(service.getViolationSummary('100', '9')).rejects.toThrow(NotFoundDomainException);
+  });
+
+  it('throws ForbiddenDomainException when the caller does not own the session', async () => {
+    const { service } = buildService({
+      findSessionById: jest
+        .fn()
+        .mockResolvedValue(buildSession({ userId: '9', status: SessionStatus.DISQUALIFIED })),
+    });
+
+    await expect(service.getViolationSummary('100', '99')).rejects.toThrow(
+      ForbiddenDomainException,
+    );
+  });
+
+  it('throws ConflictDomainException when the session is not disqualified', async () => {
+    const { service } = buildService({
+      findSessionById: jest
+        .fn()
+        .mockResolvedValue(buildSession({ status: SessionStatus.SUBMITTED })),
+    });
+
+    await expect(service.getViolationSummary('100', '9')).rejects.toThrow(ConflictDomainException);
+  });
+
+  it('aggregates violation counts by type and severity without touching scoring/questions', async () => {
+    const events = [
+      buildProctoringEvent('DUAL_MONITOR', 'HIGH'),
+      buildProctoringEvent('TAB_SWITCH', 'MEDIUM'),
+      buildProctoringEvent('TAB_SWITCH', 'MEDIUM'),
+      buildProctoringEvent('TAB_SWITCH', 'MEDIUM'),
+      buildProctoringEvent('EYE_GAZE_AWAY', 'LOW'),
+      buildProctoringEvent('EYE_GAZE_AWAY', 'LOW'),
+    ];
+    const findExamResultById = jest.fn();
+    const getAssignedQuestions = jest.fn();
+    const { service } = buildService({
+      findSessionById: jest
+        .fn()
+        .mockResolvedValue(buildSession({ status: SessionStatus.DISQUALIFIED })),
+      findEventsBySession: jest.fn().mockResolvedValue(events),
+      findExamResultById,
+      getAssignedQuestions,
+    });
+
+    const result = await service.getViolationSummary('100', '9');
+
+    expect(result).toMatchObject({
+      examSessionId: '100',
+      candidateName: 'Yena Back',
+      startedAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        { eventType: 'DUAL_MONITOR', severity: 'HIGH', count: 1 },
+        { eventType: 'TAB_SWITCH', severity: 'MEDIUM', count: 3 },
+        { eventType: 'EYE_GAZE_AWAY', severity: 'LOW', count: 2 },
+      ]),
+    );
+    expect(findExamResultById).not.toHaveBeenCalled();
+    expect(getAssignedQuestions).not.toHaveBeenCalled();
   });
 });

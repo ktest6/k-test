@@ -6,6 +6,7 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { MyExamStatusResponseDto } from '../application/dto/my-exam-status-response.dto';
 import { ReportResponseDto } from '../application/dto/report-response.dto';
+import { ViolationSummaryResponseDto } from '../application/dto/violation-summary-response.dto';
 import { ExamSessionService } from '../application/services/exam-session.service';
 import { MypageReportService } from '../application/services/mypage-report.service';
 
@@ -59,5 +60,21 @@ export class MypageController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<ReportResponseDto> {
     return this.mypageReportService.getReport(examResultId, user.id);
+  }
+
+  @Get('violations/:examSessionId')
+  @ApiOperation({
+    summary: '실격 세션 부정행위 사유 조회',
+    description:
+      '세션이 실격(DISQUALIFIED) 처리된 경우 전용 — 부정행위 신호를 종류·심각도별 건수로 ' +
+      '집계해서 보여준다. 채점 자체가 없는 세션이라 등급/영역별 점수/문항별 답변은 없다. ' +
+      '실격이 아닌 세션에 호출하면 409.',
+  })
+  @ApiStandardResponse(ViolationSummaryResponseDto, { message: 'Violation summary retrieved' })
+  async getViolationSummary(
+    @Param('examSessionId') examSessionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ViolationSummaryResponseDto> {
+    return this.mypageReportService.getViolationSummary(examSessionId, user.id);
   }
 }

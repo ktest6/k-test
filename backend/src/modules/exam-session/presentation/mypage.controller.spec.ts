@@ -13,6 +13,7 @@ function buildController(
   overrides: Partial<{
     listMine: jest.Mock;
     getReport: jest.Mock;
+    getViolationSummary: jest.Mock;
   }> = {},
 ) {
   const examSessionService = {
@@ -21,6 +22,7 @@ function buildController(
   } as unknown as ExamSessionService;
   const mypageReportService = {
     getReport: jest.fn(),
+    getViolationSummary: jest.fn(),
     ...overrides,
   } as unknown as MypageReportService;
   return new MypageController(examSessionService, mypageReportService);
@@ -103,5 +105,18 @@ describe('MypageController.getReport', () => {
 
     expect(getReport).toHaveBeenCalledWith('r1', '1');
     expect(result).toBe(report);
+  });
+});
+
+describe('MypageController.getViolationSummary', () => {
+  it('delegates to MypageReportService.getViolationSummary', async () => {
+    const summary = { examSessionId: '100', candidateName: 'Yena Back', violations: [] };
+    const getViolationSummary = jest.fn().mockResolvedValue(summary);
+    const controller = buildController({ getViolationSummary });
+
+    const result = await controller.getViolationSummary('100', buildUser());
+
+    expect(getViolationSummary).toHaveBeenCalledWith('100', '1');
+    expect(result).toBe(summary);
   });
 });
