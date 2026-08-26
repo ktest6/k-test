@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  ConflictDomainException,
   ForbiddenDomainException,
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
@@ -10,10 +11,14 @@ import {
   PROCTORING_EVENT_REPOSITORY,
   ProctoringEventRepository,
 } from '../../../monitoring/domain/proctoring-event.repository.interface';
-import { ProctoringSeverity } from '../../../monitoring/domain/entities/proctoring-event.entity';
+import {
+  ProctoringEvent,
+  ProctoringSeverity,
+} from '../../../monitoring/domain/entities/proctoring-event.entity';
 import { ExamResultService } from '../../../scoring/application/services/exam-result.service';
 import { ScoringService } from '../../../scoring/application/services/scoring.service';
 import { UserService } from '../../../user/application/services/user.service';
+import { SessionStatus } from '../../domain/enums/session-status.enum';
 import {
   EXAM_SESSION_REPOSITORY,
   ExamSessionRepository,
@@ -52,6 +57,13 @@ export interface Report {
   percentile: number | null;
   domainScores: ReportDomainScore[];
   tasks: ReportTask[];
+  violations: ReportViolation[];
+}
+
+export interface ViolationSummary {
+  examSessionId: string;
+  candidateName: string;
+  startedAt: Date;
   violations: ReportViolation[];
 }
 
@@ -146,6 +158,51 @@ export class MypageReportService {
       .filter((item) => typeof item.area === 'string' && typeof item.score === 'number')
       .map((item) => ({ area: item.area as string, score: item.score as number }));
 
+    return {
+      examResultId: examResult.id,
+      examSessionId: session.id,
+      candidateName: `${user.firstName} ${user.lastName}`,
+      startedAt: session.startedAt,
+      finalGrade: examResult.finalGrade,
+      percentile: examResult.percentile,
+      domainScores,
+      tasks,
+      violations: this.aggregateViolations(events),
+    };
+  }
+
+  /**
+   * 마이페이지 "실격 사유 보기" — 실격(DISQUALIFIED) 세션 전용. 채점 자체가 없으므로
+   * getReport와 달리 등급/영역별 점수/문항별 답변은 없고, 부정행위 신호를 종류·심각도별
+   * 건수로 집계한 것만 돌려준다. 실격이 아닌 세션에 호출하면 409 — 잘못된 화면 연결을
+   * 조용히 통과시키지 않고 바로 드러나게 하려는 의도다.
+   */
+  async getViolationSummary(examSessionId: string, userId: string): Promise<ViolationSummary> {
+    const session = await this.examSessionRepository.findById(examSessionId);
+    if (!session) {
+      throw new NotFoundDomainException(notFound('Exam session', examSessionId));
+    }
+    if (session.userId !== userId) {
+      throw new ForbiddenDomainException(notOwnedByUser('report'));
+    }
+    if (session.status !== SessionStatus.DISQUALIFIED) {
+      throw new ConflictDomainException(`Exam session (${examSessionId}) is not disqualified.`);
+    }
+
+    const [user, events] = await Promise.all([
+      this.userService.findById(userId),
+      this.proctoringEventRepository.findByExamSessionId(session.id),
+    ]);
+
+    return {
+      examSessionId: session.id,
+      candidateName: `${user.firstName} ${user.lastName}`,
+      startedAt: session.startedAt,
+      violations: this.aggregateViolations(events),
+    };
+  }
+
+  private aggregateViolations(events: ProctoringEvent[]): ReportViolation[] {
     const violationCounts = new Map<string, ReportViolation>();
     for (const event of events) {
       const key = `${event.eventType}:${event.severity}`;
@@ -160,17 +217,6 @@ export class MypageReportService {
         });
       }
     }
-
-    return {
-      examResultId: examResult.id,
-      examSessionId: session.id,
-      candidateName: `${user.firstName} ${user.lastName}`,
-      startedAt: session.startedAt,
-      finalGrade: examResult.finalGrade,
-      percentile: examResult.percentile,
-      domainScores,
-      tasks,
-      violations: Array.from(violationCounts.values()),
-    };
+    return Array.from(violationCounts.values());
   }
 }
