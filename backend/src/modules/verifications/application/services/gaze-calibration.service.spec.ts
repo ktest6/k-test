@@ -20,6 +20,8 @@ function buildResult(overrides: Partial<CalibrateGazeResult> = {}): CalibrateGaz
     sampleCount: 6,
     eyeYawCenter: -2.1937,
     eyePitchCenter: -20.7994,
+    headYawCenter: 1.0,
+    headPitchCenter: -2.0,
     ...overrides,
   };
 }
@@ -143,6 +145,8 @@ describe('GazeCalibrationService.calibrate', () => {
         exam_session_id: 7,
         eye_yaw_center: -2.1937,
         eye_pitch_center: -20.7994,
+        head_yaw_center: 1.0,
+        head_pitch_center: -2.0,
         sample_count: 6,
       }),
     );
@@ -207,6 +211,8 @@ describe('GazeCalibrationService.calibrate', () => {
       sampleCount: 0,
       eyeYawCenter: 0,
       eyePitchCenter: 0,
+      headYawCenter: 0,
+      headPitchCenter: 0,
     });
     expect(insert).not.toHaveBeenCalled();
   });
@@ -223,14 +229,43 @@ describe('GazeCalibrationService.getLatestCalibration', () => {
   });
 
   it('maps the stored row to camelCase when a calibration exists', async () => {
-    const maybeSingle = jest
-      .fn()
-      .mockResolvedValue({ data: { eye_yaw_center: -2.1937, eye_pitch_center: -20.7994 } });
+    const maybeSingle = jest.fn().mockResolvedValue({
+      data: {
+        eye_yaw_center: -2.1937,
+        eye_pitch_center: -20.7994,
+        head_yaw_center: 1.0,
+        head_pitch_center: -2.0,
+      },
+    });
     const { service, client } = buildService({ client: { maybeSingle } });
 
     const result = await service.getLatestCalibration('7');
 
     expect(client.from).toHaveBeenCalledWith('tb_gaze_calibrations');
-    expect(result).toEqual({ eyeYawCenter: -2.1937, eyePitchCenter: -20.7994 });
+    expect(result).toEqual({
+      eyeYawCenter: -2.1937,
+      eyePitchCenter: -20.7994,
+      headYawCenter: 1.0,
+      headPitchCenter: -2.0,
+    });
+  });
+});
+
+describe('GazeCalibrationService.hasCalibrated', () => {
+  it('returns false when no calibration is on file', async () => {
+    const maybeSingle = jest.fn().mockResolvedValue({ data: null });
+    const { service } = buildService({ client: { maybeSingle } });
+
+    await expect(service.hasCalibrated('7')).resolves.toBe(false);
+  });
+
+  it('returns true when a calibration record exists', async () => {
+    const maybeSingle = jest.fn().mockResolvedValue({ data: { gaze_calibration_id: 1 } });
+    const { service, client } = buildService({ client: { maybeSingle } });
+
+    const result = await service.hasCalibrated('7');
+
+    expect(client.from).toHaveBeenCalledWith('tb_gaze_calibrations');
+    expect(result).toBe(true);
   });
 });

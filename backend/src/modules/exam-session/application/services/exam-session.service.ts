@@ -10,6 +10,7 @@ import {
 import { notFound, notOwnedByUser } from '../../../../common/exceptions/error-messages';
 import { ExamResultService } from '../../../scoring/application/services/exam-result.service';
 import { EarphoneDetectionService } from '../../../verifications/application/services/earphone-detection.service';
+import { GazeCalibrationService } from '../../../verifications/application/services/gaze-calibration.service';
 import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
 import { ExamSession } from '../../domain/entities/exam-session.entity';
 import { SessionStatus } from '../../domain/enums/session-status.enum';
@@ -50,6 +51,7 @@ export class ExamSessionService {
     private readonly examSessionAccessService: ExamSessionAccessService,
     private readonly idCardVerificationService: IdCardVerificationService,
     private readonly earphoneDetectionService: EarphoneDetectionService,
+    private readonly gazeCalibrationService: GazeCalibrationService,
     private readonly examResultService: ExamResultService,
     @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>,
     private readonly eventEmitter: EventEmitter2,
@@ -127,10 +129,11 @@ export class ExamSessionService {
   }
 
   /**
-   * 본인인증/이어폰 확인이 아직 안 끝났으면 그 이유 메시지를, 다 끝났으면
-   * null을 반환한다. AI팀 서비스가 아직 배포되지 않은 기간에는 서버 환경변수
-   * (REQUIRE_IDENTITY_VERIFICATION/REQUIRE_EARPHONE_CHECK)로 각 체크를 개별
-   * 우회할 수 있다 — 기본값은 강제(true), 실제 서비스 배포 전 반드시 되돌릴 것.
+   * 본인인증/이어폰 확인/시선 캘리브레이션이 아직 안 끝났으면 그 이유 메시지를,
+   * 다 끝났으면 null을 반환한다. AI팀 서비스가 아직 배포되지 않은 기간에는 서버
+   * 환경변수(REQUIRE_IDENTITY_VERIFICATION/REQUIRE_EARPHONE_CHECK/
+   * REQUIRE_GAZE_CALIBRATION)로 각 체크를 개별 우회할 수 있다 — 기본값은
+   * 강제(true), 실제 서비스 배포 전 반드시 되돌릴 것.
    */
   private async findVerificationGap(examSessionId: string): Promise<string | null> {
     if (this.config.requireIdentityVerification) {
@@ -144,6 +147,13 @@ export class ExamSessionService {
       const earphoneCheckPassed = await this.earphoneDetectionService.hasPassedCheck(examSessionId);
       if (!earphoneCheckPassed) {
         return 'You must complete the earphone check first.';
+      }
+    }
+
+    if (this.config.requireGazeCalibration) {
+      const calibrated = await this.gazeCalibrationService.hasCalibrated(examSessionId);
+      if (!calibrated) {
+        return 'You must complete gaze calibration first.';
       }
     }
 

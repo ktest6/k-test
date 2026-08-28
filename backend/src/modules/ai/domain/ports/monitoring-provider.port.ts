@@ -18,9 +18,15 @@ export interface AnalyzeFrameInput {
   currentImage: MonitoringImageInput;
   /** runIdentityCheck가 true일 때만 값 있음. */
   referenceImage?: MonitoringImageInput;
-  /** 사전 캘리브레이션 결과가 있을 때만 값 있음 — 둘 다 있어야 시선 판정에 반영된다. */
-  eyeYawCenter?: number;
-  eyePitchCenter?: number;
+  /**
+   * 캘리브레이션 기준값 4개 — anti-cheat가 전부 필수로 요구한다(하나라도 없으면 422).
+   * 캘리브레이션이 본인인증/이어폰 확인과 동급의 게이트가 되면서, 이 호출 시점엔
+   * 항상 값이 있다고 가정한다(MonitoringService.analyze 참고).
+   */
+  eyeYawCenter: number;
+  eyePitchCenter: number;
+  headYawCenter: number;
+  headPitchCenter: number;
   /** 직전 analyze 호출에서 돌려받은 연속 시선 상태 — 첫 프레임이거나 저장된 상태가 없으면 생략. */
   previousGazeState?: Record<string, unknown>;
 }
@@ -37,7 +43,14 @@ export interface MonitoringEventSummary {
 }
 
 export interface MonitoringDetectedEvent {
+  /** 이 이벤트를 발생시킨 룰 식별자(예: RULE_PHONE_DETECTED). */
+  ruleId: string;
   eventType: string;
+  /** 이 이벤트 하나만의 위험도 — eventSummary.severity(프레임 전체 최고 위험도)와 다를 수 있다. */
+  severity: MonitoringSeverity;
+  /** 이 이벤트 하나만의 처리 판단. 실제 증거 행동(클립 생성 등)은 eventSummary.decision 기준으로 한 번만 수행한다. */
+  decision: MonitoringDecision;
+  message: string;
   details: Record<string, unknown>;
 }
 
@@ -46,6 +59,13 @@ export interface AnalyzeFrameResult {
   events: MonitoringDetectedEvent[];
   /** FastAPI가 계산한 다음 연속 시선 상태 — 세션에 저장해뒀다가 다음 analyze 요청의 previousGazeState로 그대로 돌려줘야 한다. */
   gazeState: Record<string, unknown> | null;
+  /** 이번 요청에서 동일인 검사를 실제로 요청했는지. */
+  identityCheckRequested: boolean;
+  /**
+   * 동일인 검사가 실제로 실행됐는지 — requested가 true여도 얼굴이 0명/여러 명이면
+   * false가 될 수 있다. false면 프런트가 다음 프레임에서 같은 기준 이미지로 재요청해야 한다.
+   */
+  identityCheckExecuted: boolean;
   /** 응답 원문 그대로 — 감사/디버깅용으로 meta에 저장한다. */
   raw: Record<string, unknown>;
 }
@@ -62,6 +82,8 @@ export interface CalibrateGazeResult {
   sampleCount: number;
   eyeYawCenter: number;
   eyePitchCenter: number;
+  headYawCenter: number;
+  headPitchCenter: number;
 }
 
 /**

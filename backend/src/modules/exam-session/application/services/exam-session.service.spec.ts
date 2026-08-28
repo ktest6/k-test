@@ -9,6 +9,7 @@ import {
 import { ExamResult } from '../../../scoring/domain/entities/exam-result.entity';
 import { ExamResultService } from '../../../scoring/application/services/exam-result.service';
 import { EarphoneDetectionService } from '../../../verifications/application/services/earphone-detection.service';
+import { GazeCalibrationService } from '../../../verifications/application/services/gaze-calibration.service';
 import { IdCardVerificationService } from '../../../verifications/application/services/id-card-verification.service';
 import { ExamSession } from '../../domain/entities/exam-session.entity';
 import { SessionStatus } from '../../domain/enums/session-status.enum';
@@ -73,6 +74,13 @@ function buildEarphoneDetectionService(overrides: Partial<{ hasPassedCheck: jest
   } as unknown as EarphoneDetectionService;
 }
 
+function buildGazeCalibrationService(overrides: Partial<{ hasCalibrated: jest.Mock }> = {}) {
+  return {
+    hasCalibrated: jest.fn().mockResolvedValue(true),
+    ...overrides,
+  } as unknown as GazeCalibrationService;
+}
+
 function buildExamResultService(
   overrides: Partial<{ findByExamSessionId: jest.Mock }> = {},
 ): ExamResultService {
@@ -83,11 +91,16 @@ function buildExamResultService(
 }
 
 function buildConfig(
-  overrides: Partial<{ requireIdentityVerification: boolean; requireEarphoneCheck: boolean }> = {},
+  overrides: Partial<{
+    requireIdentityVerification: boolean;
+    requireEarphoneCheck: boolean;
+    requireGazeCalibration: boolean;
+  }> = {},
 ): ConfigType<typeof appConfig> {
   return {
     requireIdentityVerification: overrides.requireIdentityVerification ?? true,
     requireEarphoneCheck: overrides.requireEarphoneCheck ?? true,
+    requireGazeCalibration: overrides.requireGazeCalibration ?? true,
   } as ConfigType<typeof appConfig>;
 }
 
@@ -96,6 +109,7 @@ function buildService(
     repository: Partial<ExamSessionRepository>;
     idCardVerificationService: ReturnType<typeof buildIdCardVerificationService>;
     earphoneDetectionService: ReturnType<typeof buildEarphoneDetectionService>;
+    gazeCalibrationService: ReturnType<typeof buildGazeCalibrationService>;
     examResultService: ExamResultService;
     config: ConfigType<typeof appConfig>;
   }> = {},
@@ -106,6 +120,7 @@ function buildService(
     overrides.idCardVerificationService ?? buildIdCardVerificationService();
   const earphoneDetectionService =
     overrides.earphoneDetectionService ?? buildEarphoneDetectionService();
+  const gazeCalibrationService = overrides.gazeCalibrationService ?? buildGazeCalibrationService();
   const examResultService = overrides.examResultService ?? buildExamResultService();
   const config = overrides.config ?? buildConfig();
   const emit = jest.fn();
@@ -116,6 +131,7 @@ function buildService(
     examSessionAccessService,
     idCardVerificationService,
     earphoneDetectionService,
+    gazeCalibrationService,
     examResultService,
     config,
     eventEmitter,
@@ -126,6 +142,7 @@ function buildService(
     repository,
     idCardVerificationService,
     earphoneDetectionService,
+    gazeCalibrationService,
     examResultService,
     emit,
   };
@@ -343,6 +360,18 @@ describe('ExamSessionService.assertVerifiedSession', () => {
     await expect(service.assertVerifiedSession('1', '1')).rejects.toThrow(ForbiddenDomainException);
   });
 
+  it('rejects when gaze calibration is still pending', async () => {
+    const session = buildSession({ status: SessionStatus.INPROGRESS });
+    const { service } = buildService({
+      repository: { findById: jest.fn().mockResolvedValue(session) },
+      gazeCalibrationService: buildGazeCalibrationService({
+        hasCalibrated: jest.fn().mockResolvedValue(false),
+      }),
+    });
+
+    await expect(service.assertVerifiedSession('1', '1')).rejects.toThrow(ForbiddenDomainException);
+  });
+
   it('returns the session when verification is complete', async () => {
     const session = buildSession({ status: SessionStatus.INPROGRESS });
     const { service } = buildService({
@@ -381,6 +410,27 @@ describe('ExamSessionService.isVerified', () => {
 
     await expect(service.isVerified('1')).resolves.toBe(true);
     expect(hasVerifiedSession).not.toHaveBeenCalled();
+  });
+
+  it('returns false while gaze calibration is pending', async () => {
+    const { service } = buildService({
+      gazeCalibrationService: buildGazeCalibrationService({
+        hasCalibrated: jest.fn().mockResolvedValue(false),
+      }),
+    });
+
+    await expect(service.isVerified('1')).resolves.toBe(false);
+  });
+
+  it('ignores gaze calibration when requireGazeCalibration is false', async () => {
+    const hasCalibrated = jest.fn().mockResolvedValue(false);
+    const { service } = buildService({
+      gazeCalibrationService: buildGazeCalibrationService({ hasCalibrated }),
+      config: buildConfig({ requireGazeCalibration: false }),
+    });
+
+    await expect(service.isVerified('1')).resolves.toBe(true);
+    expect(hasCalibrated).not.toHaveBeenCalled();
   });
 });
 

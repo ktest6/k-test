@@ -19,6 +19,15 @@ export interface AppConfig {
    */
   requireEarphoneCheck: boolean;
   /**
+   * 시험 시작 시 시선 캘리브레이션(화면 중앙 응시 기준값 저장) 완료를 요구할지 여부.
+   * requireIdentityVerification/requireEarphoneCheck와 같은 이유(AI팀 서비스 미배포
+   * 기간)로 임시 우회용. anti-cheat의 /monitoring/analyze가 eye/head yaw·pitch 기준값
+   * 4개를 전부 필수로 요구하게 되면서, 캘리브레이션 없이는 모니터링 자체가 불가능해져
+   * 본인인증/이어폰 확인과 동급의 게이트로 승격했다. 기본값은 true(강제) — 실제
+   * 서비스 배포 전에는 반드시 다시 true로 되돌릴 것.
+   */
+  requireGazeCalibration: boolean;
+  /**
    * 시선 캘리브레이션(calibrate) 통신 실패를 에러로 알릴지 여부. 기본값 true(강제)일 때
    * 실패하면 409 에러를 던진다. AI팀 모니터링 서비스가 아직 배포되지 않은 개발/테스트
    * 기간에는 false로 내려 실패해도 조용히 "캘리브레이션 안 됨"으로 처리할 수 있다.
@@ -81,6 +90,7 @@ export const appConfig = registerAs('app', (): AppConfig => ({
   swaggerEnabled: (process.env.SWAGGER_ENABLED ?? 'true') === 'true',
   requireIdentityVerification: (process.env.REQUIRE_IDENTITY_VERIFICATION ?? 'true') === 'true',
   requireEarphoneCheck: (process.env.REQUIRE_EARPHONE_CHECK ?? 'true') === 'true',
+  requireGazeCalibration: (process.env.REQUIRE_GAZE_CALIBRATION ?? 'true') === 'true',
   requireMonitoringService: (process.env.REQUIRE_MONITORING_SERVICE ?? 'true') === 'true',
   reportRetrySchedulerEnabled: (process.env.ENABLE_REPORT_RETRY_SCHEDULER ?? 'true') === 'true',
   supabase: {

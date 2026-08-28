@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   MONITORING_PROVIDER,
+  MonitoringDetectedEvent,
   MonitoringImageInput,
   MonitoringProviderPort,
 } from '../../../ai/domain/ports/monitoring-provider.port';
@@ -84,6 +85,14 @@ export interface AnalyzeFrameResult {
   createClip: boolean;
   eventCount: number;
   recordedEvents: ProctoringEvent[];
+  /** 이번 요청에서 동일인 검사를 실제로 요청했는지. */
+  identityCheckRequested: boolean;
+  /**
+   * 동일인 검사가 실제로 실행됐는지 — requested가 true여도 얼굴이 0명/여러 명이면
+   * false가 될 수 있다. false면 프런트가 다음 프레임에서 같은 기준 이미지로
+   * run_identity_check:true를 다시 요청해야 한다.
+   */
+  identityCheckExecuted: boolean;
 }
 
 const NEUTRAL_RESULT: Omit<AnalyzeFrameResult, 'recordedEvents'> = {
@@ -91,6 +100,8 @@ const NEUTRAL_RESULT: Omit<AnalyzeFrameResult, 'recordedEvents'> = {
   decision: 'NONE',
   createClip: false,
   eventCount: 0,
+  identityCheckRequested: false,
+  identityCheckExecuted: false,
 };
 
 /**
@@ -138,11 +149,22 @@ export class MonitoringService {
     }
 
     const calibration = await this.gazeCalibrationService.getLatestCalibration(session.id);
+    if (!calibration) {
+      // anti-cheat가 eye/head yaw·pitch 4개를 전부 필수로 요구해서, 캘리브레이션이
+      // 없으면 호출 자체가 무조건 422로 실패한다 — 요청을 보내지 않고 조용히
+      // "이상 없음"으로 처리한다(REQUIRE_GAZE_CALIBRATION=false로 게이트를 꺼둔
+      // 과도기, 또는 캘리브레이션 API 호출 전 프런트가 먼저 analyze를 부른 경우).
+      this.logger.warn(
+        `시선 캘리브레이션 기록 없음, 모니터링 분석 건너뜀 (examSessionId=${examSessionId})`,
+      );
+      return { ...NEUTRAL_RESULT, recordedEvents: [] };
+    }
+
     const previousGazeState = await this.getGazeState(examSessionId);
 
     let result: {
       eventSummary: AnalyzeFrameResult;
-      events: { eventType: string; details: Record<string, unknown> }[];
+      events: MonitoringDetectedEvent[];
     };
     try {
       const analyzed = await this.monitoringProvider.analyze({
@@ -156,8 +178,10 @@ export class MonitoringService {
         runIdentityCheck,
         currentImage,
         referenceImage,
-        eyeYawCenter: calibration?.eyeYawCenter,
-        eyePitchCenter: calibration?.eyePitchCenter,
+        eyeYawCenter: calibration.eyeYawCenter,
+        eyePitchCenter: calibration.eyePitchCenter,
+        headYawCenter: calibration.headYawCenter,
+        headPitchCenter: calibration.headPitchCenter,
         previousGazeState,
       });
       await this.saveGazeState(examSessionId, analyzed.gazeState);
@@ -168,6 +192,8 @@ export class MonitoringService {
           createClip: analyzed.eventSummary.createClip,
           eventCount: analyzed.eventSummary.eventCount,
           recordedEvents: [],
+          identityCheckRequested: analyzed.identityCheckRequested,
+          identityCheckExecuted: analyzed.identityCheckExecuted,
         },
         events: analyzed.eventSummary.eventDetected ? analyzed.events : [],
       };
@@ -187,11 +213,19 @@ export class MonitoringService {
       const snapshotPath = await this.uploadSnapshot(examSessionId, currentImage);
 
       for (const event of result.events) {
+        // 개별 이벤트는 자기 자신의 severity를 쓴다(프레임 전체 최고 severity와
+        // 다를 수 있다) — ruleId/decision/message는 별도 컬럼 없이 meta에 details와
+        // 함께 담는다(집계·필터링은 severity 컬럼만으로 충분하므로 마이그레이션 불필요).
         const saved = await this.proctoringEventRepository.create({
           examSessionId,
           eventType: event.eventType,
-          severity: severity,
-          meta: event.details,
+          severity: event.severity === 'NORMAL' ? severity : event.severity,
+          meta: {
+            ...event.details,
+            ruleId: event.ruleId,
+            decision: event.decision,
+            message: event.message,
+          },
           snapshotPath,
         });
         recordedEvents.push(saved);

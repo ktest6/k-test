@@ -23,7 +23,11 @@ interface RawEventSummary {
 }
 
 interface RawDetectedEvent {
+  rule_id: string;
   event_type: string;
+  severity: MonitoringEventSummary['severity'];
+  decision: MonitoringEventSummary['decision'];
+  message: string;
   details: Record<string, unknown>;
 }
 
@@ -31,6 +35,8 @@ interface RawAnalyzeResponse {
   event_summary: RawEventSummary;
   events: RawDetectedEvent[];
   gaze_monitor?: { state: Record<string, unknown> };
+  identity_check_requested: boolean;
+  identity_check_executed: boolean;
   [key: string]: unknown;
 }
 
@@ -39,6 +45,8 @@ interface RawCalibrateResponse {
   sample_count: number;
   eye_yaw_center: number;
   eye_pitch_center: number;
+  head_yaw_center: number;
+  head_pitch_center: number;
 }
 
 /** 도영님 담당 부정행위 감지 서비스의 POST /monitoring/analyze를 호출하는 실제 어댑터. */
@@ -68,10 +76,10 @@ export class MonitoringAdapter implements MonitoringProviderPort {
         contentType: input.referenceImage.contentType,
       });
     }
-    if (input.eyeYawCenter !== undefined && input.eyePitchCenter !== undefined) {
-      form.append('eye_yaw_center', String(input.eyeYawCenter));
-      form.append('eye_pitch_center', String(input.eyePitchCenter));
-    }
+    form.append('eye_yaw_center', String(input.eyeYawCenter));
+    form.append('eye_pitch_center', String(input.eyePitchCenter));
+    form.append('head_yaw_center', String(input.headYawCenter));
+    form.append('head_pitch_center', String(input.headPitchCenter));
     if (input.previousGazeState) {
       form.append('previous_gaze_state', JSON.stringify(input.previousGazeState));
     }
@@ -86,7 +94,11 @@ export class MonitoringAdapter implements MonitoringProviderPort {
 
     const raw = response.data;
     const events: MonitoringDetectedEvent[] = (raw.events ?? []).map((e) => ({
+      ruleId: e.rule_id,
       eventType: e.event_type,
+      severity: e.severity,
+      decision: e.decision,
+      message: e.message,
       details: e.details,
     }));
 
@@ -100,6 +112,8 @@ export class MonitoringAdapter implements MonitoringProviderPort {
       },
       events,
       gazeState: raw.gaze_monitor?.state ?? null,
+      identityCheckRequested: raw.identity_check_requested,
+      identityCheckExecuted: raw.identity_check_executed,
       raw: raw as unknown as Record<string, unknown>,
     };
   }
@@ -129,6 +143,8 @@ export class MonitoringAdapter implements MonitoringProviderPort {
       sampleCount: raw.sample_count,
       eyeYawCenter: raw.eye_yaw_center,
       eyePitchCenter: raw.eye_pitch_center,
+      headYawCenter: raw.head_yaw_center,
+      headPitchCenter: raw.head_pitch_center,
     };
   }
 }

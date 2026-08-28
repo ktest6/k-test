@@ -12,4 +12,10 @@ export class GazeCalibrationResponseDto {
 
   @ApiProperty({ description: '화면 중앙 응시 시 Eye Pitch 기준값', example: -20.7994 })
   eyePitchCenter: number;
+
+  @ApiProperty({ description: '화면 중앙 응시 시 Head Yaw 기준값', example: 1.0 })
+  headYawCenter: number;
+
+  @ApiProperty({ description: '화면 중앙 응시 시 Head Pitch 기준값', example: -2.0 })
+  headPitchCenter: number;
 }
