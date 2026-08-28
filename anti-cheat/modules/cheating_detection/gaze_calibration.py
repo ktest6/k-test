@@ -14,7 +14,10 @@ gaze_calibration.py
 from statistics import median
 from typing import Any
 
-from modules.cheating_detection.gaze_monitor import extract_eye_direction
+from modules.cheating_detection.gaze_monitor import (
+    extract_eye_direction,
+    extract_head_pose,
+)
 from modules.common.exceptions import GazeCalibrationError
 
 
@@ -91,6 +94,8 @@ def create_gaze_calibration(
 
     eye_yaw_samples: list[float] = []
     eye_pitch_samples: list[float] = []
+    head_yaw_samples: list[float] = []
+    head_pitch_samples: list[float] = []
 
     for face_monitor_result in face_monitor_results:
         if not isinstance(face_monitor_result, dict):
@@ -110,12 +115,15 @@ def create_gaze_calibration(
             continue
 
         eye_direction = extract_eye_direction(face_detail)
+        head_pose = extract_head_pose(face_detail)
 
         if eye_direction["confidence"] < minimum_eye_confidence:
             continue
 
         eye_yaw_samples.append(eye_direction["yaw"])
         eye_pitch_samples.append(eye_direction["pitch"])
+        head_yaw_samples.append(head_pose["yaw"])
+        head_pitch_samples.append(head_pose["pitch"])
 
     sample_count = len(eye_yaw_samples)
 
@@ -132,5 +140,7 @@ def create_gaze_calibration(
     return {
         "eye_yaw_center": float(median(eye_yaw_samples)),
         "eye_pitch_center": float(median(eye_pitch_samples)),
+        "head_yaw_center": float(median(head_yaw_samples)),
+        "head_pitch_center": float(median(head_pitch_samples)),
         "sample_count": sample_count,
     }

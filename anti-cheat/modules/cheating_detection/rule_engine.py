@@ -14,6 +14,7 @@ rule_engine.py
 
 from typing import Any
 
+from app.core.config import settings
 from modules.cheating_detection.face_monitor import (
     EVENT_FACE_NORMAL,
     EVENT_FACE_OUT_OF_FRAME,
@@ -43,7 +44,6 @@ DECISION_CREATE_CLIP = "CREATE_CLIP"
 EYE_ONLY_MEDIUM_COUNT = 2
 EYE_ONLY_HIGH_COUNT = 3
 EYE_AND_HEAD_HIGH_COUNT = 2
-HEAD_POSE_HIGH_COUNT = 2
 
 
 # 위험도 비교 우선순위
@@ -152,33 +152,19 @@ def evaluate_gaze_rules(
 
     eye_and_head = eye_gaze_away and head_pose_away
 
-    if eye_and_head:
-        consecutive_count = state.get(
-            "consecutive_eye_and_head_count",
-            0,
-        )
-        gaze_type = "EYE_AND_HEAD"
-
-    elif eye_gaze_away:
-        consecutive_count = state.get(
-            "consecutive_eye_only_count",
-            0,
-        )
-        gaze_type = "EYE_ONLY"
-
-    else:
-        consecutive_count = state.get(
-            "consecutive_head_only_count",
-            0,
-        )
-        gaze_type = "HEAD_ONLY"
-
-    if (
-        not isinstance(consecutive_count, int)
-        or isinstance(consecutive_count, bool)
-        or consecutive_count < 1
-    ):
-        return applied_rules
+    gaze_type = (
+        "EYE_AND_HEAD"
+        if eye_and_head
+        else "EYE_ONLY" if eye_gaze_away else "HEAD_ONLY"
+    )
+    eye_consecutive_count = max(
+        state.get("consecutive_eye_away_count", 0),
+        state.get("consecutive_eye_only_count", 0),
+    )
+    head_consecutive_count = max(
+        state.get("consecutive_head_away_count", 0),
+        state.get("consecutive_head_only_count", 0),
+    )
 
     consecutive_away_count = state.get(
         "consecutive_away_count",
@@ -191,25 +177,25 @@ def evaluate_gaze_rules(
     direction = gaze_monitor_result.get("direction")
 
     if eye_gaze_away:
-        if eye_and_head:
-            if consecutive_count >= EYE_AND_HEAD_HIGH_COUNT:
-                eye_severity = SEVERITY_HIGH
-                eye_decision = DECISION_CREATE_CLIP
-            else:
-                eye_severity = SEVERITY_MEDIUM
-                eye_decision = DECISION_RECORD_EVENT
-
-        elif consecutive_count >= EYE_ONLY_HIGH_COUNT:
+        if eye_consecutive_count >= EYE_ONLY_HIGH_COUNT:
             eye_severity = SEVERITY_HIGH
             eye_decision = DECISION_CREATE_CLIP
 
-        elif consecutive_count >= EYE_ONLY_MEDIUM_COUNT:
+        elif eye_consecutive_count >= EYE_ONLY_MEDIUM_COUNT:
             eye_severity = SEVERITY_MEDIUM
             eye_decision = DECISION_RECORD_EVENT
 
         else:
             eye_severity = SEVERITY_LOW
             eye_decision = DECISION_NONE
+
+        if (
+            eye_and_head
+            and state.get("consecutive_eye_and_head_count", 0)
+            >= EYE_AND_HEAD_HIGH_COUNT
+        ):
+            eye_severity = SEVERITY_HIGH
+            eye_decision = DECISION_CREATE_CLIP
 
         applied_rules.append(
             create_rule_result(
@@ -220,7 +206,7 @@ def evaluate_gaze_rules(
                 message="응시자의 시선이 정상 범위를 벗어났습니다.",
                 details={
                     "direction": direction,
-                    "consecutive_count": consecutive_count,
+                    "consecutive_count": eye_consecutive_count,
                     "consecutive_away_count": consecutive_away_count,
                     "away_duration_ms": away_duration_ms,
                     "eye_direction": gaze_monitor_result.get(
@@ -233,12 +219,35 @@ def evaluate_gaze_rules(
         )
 
     if head_pose_away:
-        if consecutive_count >= HEAD_POSE_HIGH_COUNT:
+        head_pose_level = gaze_monitor_result.get(
+            "head_pose_level",
+            "SLIGHT",
+        )
+
+        if head_pose_level == "LARGE":
+            head_consecutive_count = state.get(
+                "consecutive_head_large_count",
+                head_consecutive_count,
+            )
+            medium_count = settings.gaze_head_large_medium_count
+            high_count = settings.gaze_head_large_high_count
+        else:
+            head_consecutive_count = state.get(
+                "consecutive_head_slight_count",
+                head_consecutive_count,
+            )
+            medium_count = settings.gaze_head_slight_medium_count
+            high_count = settings.gaze_head_slight_high_count
+
+        if head_consecutive_count >= high_count:
             head_severity = SEVERITY_HIGH
             head_decision = DECISION_CREATE_CLIP
-        else:
+        elif head_consecutive_count >= medium_count:
             head_severity = SEVERITY_MEDIUM
             head_decision = DECISION_RECORD_EVENT
+        else:
+            head_severity = SEVERITY_LOW
+            head_decision = DECISION_NONE
 
         applied_rules.append(
             create_rule_result(
@@ -249,13 +258,18 @@ def evaluate_gaze_rules(
                 message="응시자의 고개 방향이 정상 범위를 벗어났습니다.",
                 details={
                     "direction": direction,
-                    "consecutive_count": consecutive_count,
+                    "consecutive_count": head_consecutive_count,
                     "consecutive_away_count": consecutive_away_count,
                     "away_duration_ms": away_duration_ms,
                     "head_pose": gaze_monitor_result.get(
                         "head_pose",
                         {},
                     ),
+                    "relative_head_pose": gaze_monitor_result.get(
+                        "relative_head_pose",
+                        {},
+                    ),
+                    "head_pose_level": head_pose_level,
                     "gaze_type": gaze_type,
                 },
             )
@@ -368,67 +382,6 @@ def evaluate_object_rules(
     return applied_rules
 
 
-# 여러 탐지 결과가 함께 발생한 경우 평가 -> 룰 엔진 고도화
-def evaluate_combination_rules(
-    monitoring_results: dict[str, Any],
-) -> list[dict[str, Any]]:
-    """여러 탐지 결과를 조합한 규칙을 평가한다."""
-
-    applied_rules: list[dict[str, Any]] = []
-
-    head_pose_result = monitoring_results.get(
-        "head_pose",
-    )
-
-    object_result = monitoring_results.get(
-        "object_monitor",
-    )
-
-    head_event_type = None
-
-    if head_pose_result is not None:
-        head_event_type = head_pose_result.get(
-            "event_type",
-        )
-
-    detected_labels: set[str] = set()
-
-    if object_result is not None:
-        detected_objects = object_result.get(
-            "detected_objects",
-            [],
-        )
-
-        detected_labels = {
-            detected_object.get("label")
-            for detected_object in detected_objects
-            if detected_object.get("label") is not None
-        }
-
-    if (
-        head_event_type == "HEAD_DOWN"
-        and "Mobile Phone" in detected_labels
-    ):
-        applied_rules.append(
-            create_rule_result(
-                rule_id="RULE_SUSPICIOUS_PHONE_USAGE",
-                event_type="SUSPICIOUS_PHONE_USAGE",
-                severity=SEVERITY_HIGH,
-                decision=DECISION_CREATE_CLIP,
-                message=(
-                    "응시자가 고개를 아래로 향한 상태에서 "
-                    "휴대폰이 탐지되었습니다."
-                ),
-                details={
-                    "head_event_type": head_event_type,
-                    "detected_label": "Cell Phone",
-                },
-            )
-        )
-
-    return applied_rules
-
-
 # 적용된 규칙 중 가장 최고 위험도 선택
 def get_highest_severity(
     applied_rules: list[dict[str, Any]],
@@ -515,12 +468,6 @@ def evaluate_rules(
     applied_rules.extend(
         evaluate_object_rules(
             object_result,
-        )
-    )
-
-    applied_rules.extend(
-        evaluate_combination_rules(
-            monitoring_results,
         )
     )
 

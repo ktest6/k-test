@@ -133,8 +133,10 @@ async def analyze_frame(
     elapsed_ms: int = Form(...),
     capture_sequence: int = Form(...),
     run_identity_check: bool = Form(False),
-    eye_yaw_center: float | None = Form(None),
-    eye_pitch_center: float | None = Form(None),
+    eye_yaw_center: float = Form(...),
+    eye_pitch_center: float = Form(...),
+    head_yaw_center: float = Form(...),
+    head_pitch_center: float = Form(...),
     previous_gaze_state: str | None = Form(None),
     current_image: UploadFile = File(...),
     reference_image: UploadFile | None = File(None),
@@ -199,6 +201,8 @@ async def analyze_frame(
             run_identity_check=run_identity_check,
             eye_yaw_center=eye_yaw_center,
             eye_pitch_center=eye_pitch_center,
+            head_yaw_center=head_yaw_center,
+            head_pitch_center=head_pitch_center,
             previous_gaze_state=parsed_previous_gaze_state,
         )
 
