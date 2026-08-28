@@ -3,7 +3,7 @@ import { substituteTemplate } from '../utils/substitute-template.util';
 /**
  * anti-cheat 서비스(도영님 담당)가 4xx/5xx 응답에 실어 보내는 `{detail, code,
  * params?}` 오류를 영어 문장으로 바꾸는 카탈로그. `/Users/yena/Downloads/
- * anti-cheat API 오류 코드 전체 매핑표.xlsx`(2026-08-25 기준, anti-cheat/app·
+ * anti-cheat API 오류 코드 전체 매핑표 (1).xlsx`(2026-08-28 기준, anti-cheat/app·
  * anti-cheat/modules 전수 조사)를 그대로 옮겼다 — anti-cheat 쪽 코드가 바뀌면
  * 그 표를 다시 받아서 이 파일도 같이 갱신해야 한다.
  *
@@ -32,8 +32,9 @@ export const ANTI_CHEAT_ERROR_MESSAGES: Record<string, string> = {
   REQUEST_NUMBER_INVALID: "The field '{field}' must be a {expectedType}.",
   REQUEST_ENUM_INVALID:
     "The field '{field}' has a value that is not allowed (allowed: {allowedValues}).",
-  REQUEST_FILE_INVALID: "The field '{field}' has an invalid file format.",
-  REQUEST_FILE_LIST_INVALID: "The field '{field}' has an invalid file list format.",
+  REQUEST_FILE_INVALID: "The field '{field}' has an invalid file format (expected {expectedType}).",
+  REQUEST_FILE_LIST_INVALID:
+    "The field '{field}' has an invalid file list format (expected {expectedType}).",
   REQUEST_BODY_INVALID: 'The request body format is invalid ({reason}).',
 
   // ── 이미지 검증(공통) ──
@@ -66,14 +67,14 @@ export const ANTI_CHEAT_ERROR_MESSAGES: Record<string, string> = {
 
   // ── 시선 상태(POST /monitoring/analyze) ──
   GAZE_RESULT_TYPE_INVALID: 'The gaze analysis result must be an {expectedType}.',
-  GAZE_ELAPSED_MS_TYPE_INVALID: 'The elapsed exam time must be an {expectedType}.',
+  GAZE_ELAPSED_MS_TYPE_INVALID: 'The elapsed exam time must be an {expectedType} (got {actual}).',
   GAZE_ELAPSED_MS_OUT_OF_RANGE: 'The elapsed exam time must be at least {min} (got {actual}).',
   GAZE_CAPTURE_SEQUENCE_TYPE_INVALID:
-    'The capture image sequence number must be an {expectedType}.',
+    'The capture image sequence number must be an {expectedType} (got {actual}).',
   GAZE_CAPTURE_SEQUENCE_OUT_OF_RANGE:
     'The capture image sequence number must be at least {min} (got {actual}).',
   GAZE_PERSISTENT_THRESHOLD_TYPE_INVALID:
-    'The persistent gaze-deviation threshold count must be an {expectedType}.',
+    'The persistent gaze-deviation threshold count must be an {expectedType} (got {actual}).',
   GAZE_PERSISTENT_THRESHOLD_OUT_OF_RANGE:
     'The persistent gaze-deviation threshold count must be at least {min} (got {actual}).',
   PREVIOUS_GAZE_STATE_TYPE_INVALID: 'The previous gaze state must be an {expectedType}.',
