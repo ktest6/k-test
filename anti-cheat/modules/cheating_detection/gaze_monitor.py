@@ -32,6 +32,10 @@ DIRECTION_DOWN_LEFT = "DOWN_LEFT"
 DIRECTION_DOWN_RIGHT = "DOWN_RIGHT"
 DIRECTION_UNKNOWN = "UNKNOWN"
 
+HEAD_POSE_NORMAL = "NORMAL"
+HEAD_POSE_SLIGHT = "SLIGHT"
+HEAD_POSE_LARGE = "LARGE"
+
 
 def to_float(
     value: Any,
@@ -209,6 +213,37 @@ def is_head_pose_away(
     )
 
 
+def classify_head_pose_level(
+    head_pose: dict[str, float],
+    yaw_slight_threshold: float,
+    yaw_large_threshold: float,
+    pitch_down_slight_threshold: float,
+    pitch_down_large_threshold: float,
+    pitch_up_slight_threshold: float,
+    pitch_up_large_threshold: float,
+) -> str:
+    """상대 Head Pose를 정상·가벼운 이탈·큰 이탈로 분류한다."""
+
+    yaw = abs(head_pose.get("yaw", 0.0))
+    pitch = head_pose.get("pitch", 0.0)
+
+    if (
+        yaw > yaw_large_threshold
+        or pitch < pitch_down_large_threshold
+        or pitch > pitch_up_large_threshold
+    ):
+        return HEAD_POSE_LARGE
+
+    if (
+        yaw > yaw_slight_threshold
+        or pitch < pitch_down_slight_threshold
+        or pitch > pitch_up_slight_threshold
+    ):
+        return HEAD_POSE_SLIGHT
+
+    return HEAD_POSE_NORMAL
+
+
 def is_valid_gaze_calibration(
     gaze_calibration: dict[str, Any] | None,
 ) -> bool:
@@ -256,6 +291,38 @@ def calculate_relative_eye_direction(
     }
 
 
+def calculate_relative_head_pose(
+    head_pose: dict[str, float],
+    gaze_calibration: dict[str, Any] | None,
+) -> dict[str, float]:
+    """정면 Calibration 기준의 상대 Head Pose를 계산한다."""
+
+    head_yaw_center = (
+        gaze_calibration.get("head_yaw_center")
+        if isinstance(gaze_calibration, dict)
+        else None
+    )
+    head_pitch_center = (
+        gaze_calibration.get("head_pitch_center")
+        if isinstance(gaze_calibration, dict)
+        else None
+    )
+
+    if not all(
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and isfinite(value)
+        for value in (head_yaw_center, head_pitch_center)
+    ):
+        return dict(head_pose)
+
+    return {
+        "yaw": head_pose["yaw"] - head_yaw_center,
+        "pitch": head_pose["pitch"] - head_pitch_center,
+        "roll": head_pose["roll"],
+    }
+
+
 def create_not_analyzed_result(
     message: str,
 ) -> dict[str, Any]:
@@ -280,6 +347,12 @@ def create_not_analyzed_result(
             "pitch": None,
             "roll": None,
         },
+        "relative_head_pose": {
+            "yaw": None,
+            "pitch": None,
+            "roll": None,
+        },
+        "head_pose_level": HEAD_POSE_NORMAL,
         "eye_gaze_away": False,
         "head_pose_away": False,
         "message": message,
@@ -294,6 +367,12 @@ def analyze_gaze_monitor(
     head_pitch_threshold: float,
     minimum_eye_confidence: float,
     gaze_calibration: dict[str, Any] | None = None,
+    head_yaw_slight_threshold: float | None = None,
+    head_yaw_large_threshold: float | None = None,
+    head_pitch_down_slight_threshold: float | None = None,
+    head_pitch_down_large_threshold: float | None = None,
+    head_pitch_up_slight_threshold: float | None = None,
+    head_pitch_up_large_threshold: float | None = None,
 ) -> dict[str, Any]:
     """
     얼굴 분석 결과를 바탕으로 시선 및 고개 방향을 판단한다.
@@ -344,6 +423,43 @@ def analyze_gaze_monitor(
     head_pose = extract_head_pose(
         face_detail=face_detail,
     )
+    relative_head_pose = calculate_relative_head_pose(
+        head_pose=head_pose,
+        gaze_calibration=gaze_calibration,
+    )
+    head_pose_level = classify_head_pose_level(
+        head_pose=relative_head_pose,
+        yaw_slight_threshold=(
+            head_yaw_slight_threshold
+            if head_yaw_slight_threshold is not None
+            else head_yaw_threshold
+        ),
+        yaw_large_threshold=(
+            head_yaw_large_threshold
+            if head_yaw_large_threshold is not None
+            else head_yaw_threshold
+        ),
+        pitch_down_slight_threshold=(
+            head_pitch_down_slight_threshold
+            if head_pitch_down_slight_threshold is not None
+            else -head_pitch_threshold
+        ),
+        pitch_down_large_threshold=(
+            head_pitch_down_large_threshold
+            if head_pitch_down_large_threshold is not None
+            else -head_pitch_threshold
+        ),
+        pitch_up_slight_threshold=(
+            head_pitch_up_slight_threshold
+            if head_pitch_up_slight_threshold is not None
+            else head_pitch_threshold
+        ),
+        pitch_up_large_threshold=(
+            head_pitch_up_large_threshold
+            if head_pitch_up_large_threshold is not None
+            else head_pitch_threshold
+        ),
+    )
 
     eye_confidence = eye_direction.get(
         "confidence",
@@ -351,8 +467,14 @@ def analyze_gaze_monitor(
     )
 
     if eye_confidence < minimum_eye_confidence:
+        head_pose_away = head_pose_level != HEAD_POSE_NORMAL
+
         return {
-            "event_type": EVENT_GAZE_UNCERTAIN,
+            "event_type": (
+                EVENT_GAZE_AWAY
+                if head_pose_away
+                else EVENT_GAZE_UNCERTAIN
+            ),
             "direction": DIRECTION_UNKNOWN,
             "eye_direction_reliable": False,
             "eye_direction": eye_direction,
@@ -362,15 +484,18 @@ def analyze_gaze_monitor(
                 "pitch": None,
             },
             "head_pose": head_pose,
+            "relative_head_pose": relative_head_pose,
+            "head_pose_level": head_pose_level,
             "eye_gaze_away": False,
-            "head_pose_away": is_head_pose_away(
-                head_pose=head_pose,
-                head_yaw_threshold=head_yaw_threshold,
-                head_pitch_threshold=head_pitch_threshold,
-            ),
+            "head_pose_away": head_pose_away,
             "message": (
-                "Eye Direction 신뢰도가 낮아 "
-                "시선 방향을 판단할 수 없습니다."
+                "Eye Direction 신뢰도는 낮지만 고개 방향이 "
+                "정상 범위를 벗어났습니다."
+                if head_pose_away
+                else (
+                    "Eye Direction 신뢰도가 낮아 "
+                    "시선 방향을 판단할 수 없습니다."
+                )
             ),
         }
 
@@ -394,11 +519,7 @@ def analyze_gaze_monitor(
         direction != DIRECTION_CENTER
     )
 
-    head_pose_away = is_head_pose_away(
-        head_pose=head_pose,
-        head_yaw_threshold=head_yaw_threshold,
-        head_pitch_threshold=head_pitch_threshold,
-    )
+    head_pose_away = head_pose_level != HEAD_POSE_NORMAL
 
     gaze_away = (
         eye_gaze_away
@@ -424,6 +545,8 @@ def analyze_gaze_monitor(
         "calibration_applied": calibration_applied,
         "relative_eye_direction": relative_eye_direction,
         "head_pose": head_pose,
+        "relative_head_pose": relative_head_pose,
+        "head_pose_level": head_pose_level,
         "eye_gaze_away": eye_gaze_away,
         "head_pose_away": head_pose_away,
         "message": message,

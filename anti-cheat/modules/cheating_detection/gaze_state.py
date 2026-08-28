@@ -16,6 +16,8 @@ from typing import Any
 from modules.cheating_detection.gaze_monitor import (
     EVENT_GAZE_AWAY,
     EVENT_GAZE_NORMAL,
+    EVENT_GAZE_NOT_ANALYZED,
+    EVENT_GAZE_UNCERTAIN,
 )
 from modules.common.exceptions import GazeStateError
 
@@ -103,6 +105,10 @@ def create_initial_gaze_state(
 
     return {
         "consecutive_away_count": 0,
+        "consecutive_eye_away_count": 0,
+        "consecutive_head_away_count": 0,
+        "consecutive_head_slight_count": 0,
+        "consecutive_head_large_count": 0,
         "consecutive_eye_only_count": 0,
         "consecutive_head_only_count": 0,
         "consecutive_eye_and_head_count": 0,
@@ -184,6 +190,10 @@ def update_gaze_state(
     if event_type == EVENT_GAZE_AWAY:
         eye_gaze_away = gaze_monitor_result.get("eye_gaze_away") is True
         head_pose_away = gaze_monitor_result.get("head_pose_away") is True
+        head_pose_level = gaze_monitor_result.get(
+            "head_pose_level",
+            "NORMAL",
+        )
 
         away_started_elapsed_ms = gaze_state.get("away_started_elapsed_ms")
         if away_started_elapsed_ms is None:
@@ -192,26 +202,67 @@ def update_gaze_state(
         consecutive_away_count = (
             gaze_state.get("consecutive_away_count", 0) + 1
         )
-        consecutive_eye_only_count = 0
-        consecutive_head_only_count = 0
-        consecutive_eye_and_head_count = 0
+        consecutive_eye_away_count = (
+            max(
+                gaze_state.get("consecutive_eye_away_count", 0),
+                gaze_state.get("consecutive_eye_only_count", 0),
+            )
+            + 1
+            if eye_gaze_away
+            else 0
+        )
+        consecutive_head_away_count = (
+            max(
+                gaze_state.get("consecutive_head_away_count", 0),
+                gaze_state.get("consecutive_head_only_count", 0),
+            )
+            + 1
+            if head_pose_away
+            else 0
+        )
+        consecutive_eye_and_head_count = (
+            gaze_state.get("consecutive_eye_and_head_count", 0) + 1
+            if eye_gaze_away and head_pose_away
+            else 0
+        )
+        consecutive_head_slight_count = (
+            gaze_state.get("consecutive_head_slight_count", 0) + 1
+            if head_pose_away and head_pose_level == "SLIGHT"
+            else 0
+        )
+        consecutive_head_large_count = (
+            gaze_state.get("consecutive_head_large_count", 0) + 1
+            if head_pose_away and head_pose_level == "LARGE"
+            else 0
+        )
 
-        if eye_gaze_away and not head_pose_away:
-            consecutive_eye_only_count = (
-                gaze_state.get("consecutive_eye_only_count", 0) + 1
-            )
-        elif not eye_gaze_away and head_pose_away:
-            consecutive_head_only_count = (
-                gaze_state.get("consecutive_head_only_count", 0) + 1
-            )
-        elif eye_gaze_away and head_pose_away:
-            consecutive_eye_and_head_count = (
-                gaze_state.get("consecutive_eye_and_head_count", 0) + 1
-            )
+        # 기존 응답 필드는 백엔드 호환성을 위해 유지한다.
+        consecutive_eye_only_count = (
+            consecutive_eye_away_count
+            if eye_gaze_away and not head_pose_away
+            else 0
+        )
+        consecutive_head_only_count = (
+            consecutive_head_away_count
+            if head_pose_away and not eye_gaze_away
+            else 0
+        )
 
         gaze_state.update(
             {
                 "consecutive_away_count": consecutive_away_count,
+                "consecutive_eye_away_count": (
+                    consecutive_eye_away_count
+                ),
+                "consecutive_head_away_count": (
+                    consecutive_head_away_count
+                ),
+                "consecutive_head_slight_count": (
+                    consecutive_head_slight_count
+                ),
+                "consecutive_head_large_count": (
+                    consecutive_head_large_count
+                ),
                 "consecutive_eye_only_count": consecutive_eye_only_count,
                 "consecutive_head_only_count": consecutive_head_only_count,
                 "consecutive_eye_and_head_count": (
@@ -228,7 +279,11 @@ def update_gaze_state(
                 ),
             }
         )
-    elif event_type == EVENT_GAZE_NORMAL:
+    elif event_type in {
+        EVENT_GAZE_NORMAL,
+        EVENT_GAZE_UNCERTAIN,
+        EVENT_GAZE_NOT_ANALYZED,
+    }:
         gaze_state = create_initial_gaze_state()
 
     gaze_state.update(

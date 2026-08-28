@@ -36,6 +36,8 @@ GazeDirection = Literal[
     "UNKNOWN",
 ]
 
+HeadPoseLevel = Literal["NORMAL", "SLIGHT", "LARGE"]
+
 EventSeverity = Literal[
     "NORMAL",
     "LOW",
@@ -96,6 +98,10 @@ class GazeStateResponse(BaseModel):
     """다음 프레임 계산에 다시 사용할 연속 시선 상태."""
 
     consecutive_away_count: int = Field(ge=0)
+    consecutive_eye_away_count: int = Field(default=0, ge=0)
+    consecutive_head_away_count: int = Field(default=0, ge=0)
+    consecutive_head_slight_count: int = Field(default=0, ge=0)
+    consecutive_head_large_count: int = Field(default=0, ge=0)
     consecutive_eye_only_count: int = Field(ge=0)
     consecutive_head_only_count: int = Field(ge=0)
     consecutive_eye_and_head_count: int = Field(ge=0)
@@ -124,6 +130,8 @@ class GazeMonitorResponse(BaseModel):
     calibration_applied: bool
     relative_eye_direction: RelativeEyeDirectionResponse
     head_pose: HeadPoseResponse
+    relative_head_pose: HeadPoseResponse
+    head_pose_level: HeadPoseLevel
     eye_gaze_away: bool
     head_pose_away: bool
     message: str
@@ -139,6 +147,8 @@ class GazeCalibrationResponse(BaseModel):
     sample_count: int = Field(ge=1)
     eye_yaw_center: float
     eye_pitch_center: float
+    head_yaw_center: float
+    head_pitch_center: float
 
 
 class EventSummaryResponse(BaseModel):
@@ -154,7 +164,11 @@ class EventSummaryResponse(BaseModel):
 class MonitoringEventResponse(BaseModel):
     """외부 응답용 개별 모니터링 이벤트."""
 
+    rule_id: str
     event_type: str
+    severity: EventSeverity
+    decision: EventDecision
+    message: str
     details: dict[str, Any] = Field(
         default_factory=dict,
     )

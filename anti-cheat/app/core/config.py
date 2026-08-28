@@ -43,6 +43,16 @@ class Settings:
     gaze_eye_pitch_threshold: float
     gaze_head_yaw_threshold: float
     gaze_head_pitch_threshold: float
+    gaze_head_pitch_down_medium_threshold: float
+    gaze_head_pitch_down_high_threshold: float
+    gaze_head_yaw_slight_threshold: float
+    gaze_head_yaw_large_threshold: float
+    gaze_head_pitch_up_slight_threshold: float
+    gaze_head_pitch_up_large_threshold: float
+    gaze_head_slight_medium_count: int
+    gaze_head_slight_high_count: int
+    gaze_head_large_medium_count: int
+    gaze_head_large_high_count: int
     gaze_minimum_eye_confidence: float
     gaze_persistent_count_threshold: int
     gaze_calibration_minimum_sample_count: int
@@ -256,6 +266,58 @@ settings = Settings(
         minimum=0.0,
         maximum=180.0,
     ),
+    gaze_head_pitch_down_medium_threshold=get_float_env(
+        name="GAZE_HEAD_PITCH_DOWN_MEDIUM_THRESHOLD",
+        default="-5.0",
+        minimum=-180.0,
+        maximum=0.0,
+    ),
+    gaze_head_pitch_down_high_threshold=get_float_env(
+        name="GAZE_HEAD_PITCH_DOWN_HIGH_THRESHOLD",
+        default="-10.0",
+        minimum=-180.0,
+        maximum=0.0,
+    ),
+    gaze_head_yaw_slight_threshold=get_float_env(
+        name="GAZE_HEAD_YAW_SLIGHT_THRESHOLD",
+        default="10.0",
+        minimum=0.0,
+        maximum=180.0,
+    ),
+    gaze_head_yaw_large_threshold=get_float_env(
+        name="GAZE_HEAD_YAW_LARGE_THRESHOLD",
+        default="20.0",
+        minimum=0.0,
+        maximum=180.0,
+    ),
+    gaze_head_pitch_up_slight_threshold=get_float_env(
+        name="GAZE_HEAD_PITCH_UP_SLIGHT_THRESHOLD",
+        default="10.0",
+        minimum=0.0,
+        maximum=180.0,
+    ),
+    gaze_head_pitch_up_large_threshold=get_float_env(
+        name="GAZE_HEAD_PITCH_UP_LARGE_THRESHOLD",
+        default="20.0",
+        minimum=0.0,
+        maximum=180.0,
+    ),
+    gaze_head_slight_medium_count=get_positive_int_env(
+        name="GAZE_HEAD_SLIGHT_MEDIUM_COUNT",
+        default="5",
+    ),
+    gaze_head_slight_high_count=get_positive_int_env(
+        name="GAZE_HEAD_SLIGHT_HIGH_COUNT",
+        default="15",
+    ),
+    gaze_head_large_medium_count=get_positive_int_env(
+        name="GAZE_HEAD_LARGE_MEDIUM_COUNT",
+        default="2",
+    ),
+    gaze_head_large_high_count=get_positive_int_env(
+        name="GAZE_HEAD_LARGE_HIGH_COUNT",
+        default="3",
+    ),
     gaze_minimum_eye_confidence=get_float_env(
         name="GAZE_MINIMUM_EYE_CONFIDENCE",
         default="80.0",
@@ -284,3 +346,55 @@ settings = Settings(
         maximum=180.0,
     ),
 )
+
+
+def validate_head_pose_policy(settings_value: Settings) -> None:
+    """고개 각도 및 연속 횟수 정책의 기준 순서를 검증한다."""
+
+    if not (
+        settings_value.gaze_head_yaw_slight_threshold
+        < settings_value.gaze_head_yaw_large_threshold
+    ):
+        raise RuntimeError(
+            "GAZE_HEAD_YAW_SLIGHT_THRESHOLD는 "
+            "GAZE_HEAD_YAW_LARGE_THRESHOLD보다 작아야 합니다."
+        )
+
+    if not (
+        settings_value.gaze_head_pitch_down_high_threshold
+        < settings_value.gaze_head_pitch_down_medium_threshold
+    ):
+        raise RuntimeError(
+            "GAZE_HEAD_PITCH_DOWN_HIGH_THRESHOLD는 "
+            "GAZE_HEAD_PITCH_DOWN_MEDIUM_THRESHOLD보다 작아야 합니다."
+        )
+
+    if not (
+        settings_value.gaze_head_pitch_up_slight_threshold
+        < settings_value.gaze_head_pitch_up_large_threshold
+    ):
+        raise RuntimeError(
+            "GAZE_HEAD_PITCH_UP_SLIGHT_THRESHOLD는 "
+            "GAZE_HEAD_PITCH_UP_LARGE_THRESHOLD보다 작아야 합니다."
+        )
+
+    if not (
+        settings_value.gaze_head_slight_medium_count
+        < settings_value.gaze_head_slight_high_count
+    ):
+        raise RuntimeError(
+            "GAZE_HEAD_SLIGHT_MEDIUM_COUNT는 "
+            "GAZE_HEAD_SLIGHT_HIGH_COUNT보다 작아야 합니다."
+        )
+
+    if not (
+        settings_value.gaze_head_large_medium_count
+        < settings_value.gaze_head_large_high_count
+    ):
+        raise RuntimeError(
+            "GAZE_HEAD_LARGE_MEDIUM_COUNT는 "
+            "GAZE_HEAD_LARGE_HIGH_COUNT보다 작아야 합니다."
+        )
+
+
+validate_head_pose_policy(settings)

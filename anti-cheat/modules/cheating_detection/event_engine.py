@@ -39,9 +39,30 @@ def create_events(
         if not isinstance(details, dict):
             details = {}
 
+        rule_id = applied_rule.get("rule_id")
+        severity = applied_rule.get("severity")
+        decision = applied_rule.get("decision")
+        message = applied_rule.get("message")
+
+        if not isinstance(rule_id, str) or not rule_id.strip():
+            continue
+
+        if not isinstance(severity, str) or not severity.strip():
+            continue
+
+        if not isinstance(decision, str) or not decision.strip():
+            continue
+
+        if not isinstance(message, str):
+            message = ""
+
         events.append(
             {
+                "rule_id": rule_id,
                 "event_type": event_type,
+                "severity": severity,
+                "decision": decision,
+                "message": message,
                 "details": details,
             }
         )

@@ -72,6 +72,19 @@ def should_run_identity_check(
     return event_type == EVENT_FACE_NORMAL
 
 
+def validate_identity_check_request(
+    run_identity_check: bool,
+    reference_image_bytes: bytes | None,
+) -> None:
+    """동일인 검사 요청 시 기준 이미지가 함께 전달됐는지 검증한다."""
+
+    if run_identity_check and reference_image_bytes is None:
+        raise MonitoringError(
+            "중간 동일인 검사를 위한 기준 이미지가 없습니다.",
+            code="IDENTITY_REFERENCE_IMAGE_REQUIRED",
+        )
+
+
 def run_identity_monitoring(
     reference_image_bytes: bytes,
     current_image_bytes: bytes,
@@ -137,6 +150,8 @@ def analyze_monitoring_frame(
     run_identity_check: bool = False,
     eye_yaw_center: float | None = None,
     eye_pitch_center: float | None = None,
+    head_yaw_center: float | None = None,
+    head_pitch_center: float | None = None,
     previous_gaze_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
@@ -192,6 +207,11 @@ def analyze_monitoring_frame(
             image_key="currentImage",
         )
 
+        validate_identity_check_request(
+            run_identity_check=run_identity_check,
+            reference_image_bytes=reference_image_bytes,
+        )
+
         if reference_image_bytes is not None:
             validate_image_bytes(
                 image_bytes=reference_image_bytes,
@@ -215,6 +235,14 @@ def analyze_monitoring_frame(
                 "eye_pitch_center": eye_pitch_center,
             }
 
+            if head_yaw_center is not None and head_pitch_center is not None:
+                gaze_calibration.update(
+                    {
+                        "head_yaw_center": head_yaw_center,
+                        "head_pitch_center": head_pitch_center,
+                    }
+                )
+
         gaze_monitor_result = analyze_gaze_monitor(
             face_monitor_result=face_monitor_result,
             eye_yaw_threshold=(
@@ -233,6 +261,24 @@ def analyze_monitoring_frame(
                 settings.gaze_minimum_eye_confidence
             ),
             gaze_calibration=gaze_calibration,
+            head_yaw_slight_threshold=(
+                settings.gaze_head_yaw_slight_threshold
+            ),
+            head_yaw_large_threshold=(
+                settings.gaze_head_yaw_large_threshold
+            ),
+            head_pitch_down_slight_threshold=(
+                settings.gaze_head_pitch_down_medium_threshold
+            ),
+            head_pitch_down_large_threshold=(
+                settings.gaze_head_pitch_down_high_threshold
+            ),
+            head_pitch_up_slight_threshold=(
+                settings.gaze_head_pitch_up_slight_threshold
+            ),
+            head_pitch_up_large_threshold=(
+                settings.gaze_head_pitch_up_large_threshold
+            ),
         )
 
         gaze_state_result = update_gaze_state(
@@ -255,12 +301,6 @@ def analyze_monitoring_frame(
         )
 
         if run_identity_check and can_run_identity_check:
-            if reference_image_bytes is None:
-                raise MonitoringError(
-                    "중간 동일인 검사를 위한 기준 이미지가 없습니다.",
-                    code="IDENTITY_REFERENCE_IMAGE_REQUIRED",
-                )
-
             identity_monitor_result = run_identity_monitoring(
                 reference_image_bytes=reference_image_bytes,
                 current_image_bytes=current_image_bytes,
