@@ -38,8 +38,8 @@ SOURCE_IMAGE_PATH = Path(
 )
 
 TARGET_IMAGE_PATH = Path(
-    # "/Users/apple/dio_folder/python/ktest_git/k-test/anti-cheat/data/compare/target_true.jpg"
-    "/Users/apple/dio_folder/python/ktest_git/k-test/anti-cheat/data/compare/target_false.png"
+    "/Users/apple/dio_folder/python/ktest_git/k-test/anti-cheat/data/compare/test_img.png"
+    # "/Users/apple/dio_folder/python/ktest_git/k-test/anti-cheat/data/compare/target_false.png"
 )
 
 # 테스트할 신청자 정보를 실제 여권 정보에 맞게 설정한다.

@@ -25,8 +25,8 @@ from modules.identity_verification.document_reader import (
 
 
 IMAGE_PATH = Path(
-    # "/Users/apple/dio_folder/python/hackathon_aws/poc/images/ex_dio_front.jpg"
-    "/Users/apple/dio_folder/python/hackathon_aws/poc/images/pakistan_male.png"
+    "/Users/apple/dio_folder/python/hackathon_aws/poc/images/ex_dio_front.jpg"
+    # "/Users/apple/dio_folder/python/hackathon_aws/poc/images/pakistan_male.png"
     # "/Users/apple/dio_folder/python/dataset/dio_passport.jpg"
 )
 

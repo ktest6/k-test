@@ -62,6 +62,9 @@ assessment/.check_speech/
 # AI Hub·국립국어원 말뭉치 등. 로컬 전용이며 결과 수치만 공유한다.
 data/
 
+# ---------- 안티치트 로컬 카메라 실험 녹화 파일 ----------
+anti-cheat/data/camera_recordings/
+
 # ---------- 채점 파트 작업 일지 (8/19부터 로컬 전용) ----------
 assessment/HISTORY.md
 
