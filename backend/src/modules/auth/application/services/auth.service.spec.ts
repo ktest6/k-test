@@ -65,6 +65,7 @@ function buildConfig(signupSecret: string): AppConfig {
     swaggerEnabled: false,
     requireIdentityVerification: true,
     requireEarphoneCheck: true,
+    requireGazeCalibration: true,
     requireMonitoringService: true,
     reportRetrySchedulerEnabled: true,
     supabase: { url: '', anonKey: '', serviceRoleKey: '' },

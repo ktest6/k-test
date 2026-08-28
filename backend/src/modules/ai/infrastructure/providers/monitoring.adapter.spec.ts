@@ -13,6 +13,7 @@ function buildConfig(url = 'https://monitoring.internal'): AppConfig {
     swaggerEnabled: false,
     requireIdentityVerification: true,
     requireEarphoneCheck: true,
+    requireGazeCalibration: true,
     requireMonitoringService: true,
     reportRetrySchedulerEnabled: true,
     supabase: { url: '', anonKey: '', serviceRoleKey: '' },
@@ -44,6 +45,10 @@ function buildInput(overrides: Partial<AnalyzeFrameInput> = {}): AnalyzeFrameInp
       filename: 'frame.jpg',
       contentType: 'image/jpeg',
     },
+    eyeYawCenter: -2.1937,
+    eyePitchCenter: -20.7994,
+    headYawCenter: 1.0,
+    headPitchCenter: -2.0,
     ...overrides,
   };
 }
@@ -56,7 +61,18 @@ const RAW_RESPONSE = {
     decision: 'RECORD_EVENT',
     create_clip: false,
   },
-  events: [{ event_type: 'FACE_OUT_OF_FRAME', details: { face_count: 0 } }],
+  events: [
+    {
+      rule_id: 'RULE_FACE_OUT_OF_FRAME',
+      event_type: 'FACE_OUT_OF_FRAME',
+      severity: 'MEDIUM',
+      decision: 'RECORD_EVENT',
+      message: '얼굴이 화면 밖으로 벗어났습니다.',
+      details: { face_count: 0 },
+    },
+  ],
+  identity_check_requested: false,
+  identity_check_executed: false,
 };
 
 describe('MonitoringAdapter.analyze', () => {
@@ -90,8 +106,19 @@ describe('MonitoringAdapter.analyze', () => {
         decision: 'RECORD_EVENT',
         createClip: false,
       },
-      events: [{ eventType: 'FACE_OUT_OF_FRAME', details: { face_count: 0 } }],
+      events: [
+        {
+          ruleId: 'RULE_FACE_OUT_OF_FRAME',
+          eventType: 'FACE_OUT_OF_FRAME',
+          severity: 'MEDIUM',
+          decision: 'RECORD_EVENT',
+          message: '얼굴이 화면 밖으로 벗어났습니다.',
+          details: { face_count: 0 },
+        },
+      ],
       gazeState: null,
+      identityCheckRequested: false,
+      identityCheckExecuted: false,
       raw: RAW_RESPONSE,
     });
   });
@@ -154,11 +181,16 @@ describe('MonitoringAdapter.analyze', () => {
     expect(raw).toContain('true');
   });
 
-  it('includes eye_yaw_center/eye_pitch_center only when both are provided', async () => {
+  it('always includes eye/head yaw and pitch calibration values (anti-cheat requires all four)', async () => {
     const post = jest.fn().mockReturnValue(of({ data: RAW_RESPONSE }));
     const httpService = { post } as unknown as HttpService;
     const adapter = new MonitoringAdapter(httpService, buildConfig());
-    const input = buildInput({ eyeYawCenter: -2.1937, eyePitchCenter: -20.7994 });
+    const input = buildInput({
+      eyeYawCenter: -2.1937,
+      eyePitchCenter: -20.7994,
+      headYawCenter: 1.5,
+      headPitchCenter: -3.5,
+    });
 
     await adapter.analyze(input);
 
@@ -168,19 +200,10 @@ describe('MonitoringAdapter.analyze', () => {
     expect(raw).toContain('-2.1937');
     expect(raw).toContain('name="eye_pitch_center"');
     expect(raw).toContain('-20.7994');
-  });
-
-  it('omits eye_yaw_center/eye_pitch_center when not provided', async () => {
-    const post = jest.fn().mockReturnValue(of({ data: RAW_RESPONSE }));
-    const httpService = { post } as unknown as HttpService;
-    const adapter = new MonitoringAdapter(httpService, buildConfig());
-
-    await adapter.analyze(buildInput());
-
-    const [, body] = post.mock.calls[0] as [string, FormData];
-    const raw = body.getBuffer().toString('utf-8');
-    expect(raw).not.toContain('name="eye_yaw_center"');
-    expect(raw).not.toContain('name="eye_pitch_center"');
+    expect(raw).toContain('name="head_yaw_center"');
+    expect(raw).toContain('1.5');
+    expect(raw).toContain('name="head_pitch_center"');
+    expect(raw).toContain('-3.5');
   });
 });
 
@@ -190,6 +213,8 @@ describe('MonitoringAdapter.calibrate', () => {
     sample_count: 6,
     eye_yaw_center: -2.1937,
     eye_pitch_center: -20.7994,
+    head_yaw_center: 1.0,
+    head_pitch_center: -2.0,
   };
 
   it('posts to {url}/monitoring/gaze-calibration with the expected fields and parses the response', async () => {
@@ -223,6 +248,8 @@ describe('MonitoringAdapter.calibrate', () => {
       sampleCount: 6,
       eyeYawCenter: -2.1937,
       eyePitchCenter: -20.7994,
+      headYawCenter: 1.0,
+      headPitchCenter: -2.0,
     });
   });
 });

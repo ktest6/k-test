@@ -19,6 +19,8 @@ import { GazeCalibrationResponseDto } from '../dto/gaze-calibration-response.dto
 interface GazeCalibrationRow {
   eye_yaw_center: number;
   eye_pitch_center: number;
+  head_yaw_center: number;
+  head_pitch_center: number;
 }
 
 const NEUTRAL_RESULT: GazeCalibrationResponseDto = {
@@ -26,18 +28,21 @@ const NEUTRAL_RESULT: GazeCalibrationResponseDto = {
   sampleCount: 0,
   eyeYawCenter: 0,
   eyePitchCenter: 0,
+  headYawCenter: 0,
+  headPitchCenter: 0,
 };
 
 /**
  * 시험 시작 전 시선 캘리브레이션(화면 중앙 응시 이미지 여러 장 → 개인별
- * Eye Yaw/Pitch 기준값). 결과가 있으면 이후 모니터링(부정행위 감지)
+ * Eye/Head Yaw·Pitch 기준값). 결과가 있으면 이후 모니터링(부정행위 감지)
  * ANALYZE 요청마다 자동으로 실어 보낸다 — 본인인증 얼굴 사진을 동일인
  * 검사에 자동 재사용하는 것과 같은 패턴이다.
  *
  * 이어폰 감지와 마찬가지로 원본 이미지는 Storage에 올리지 않고 그대로
  * 전달만 한다 — 계산된 기준값 외에는 다시 쓸 일이 없는 일회성 판정이다.
- * 선택 기능이라(ANALYZE에서 eye_yaw_center/eye_pitch_center는 선택값)
- * 시험 시작을 막는 게이트는 아니다.
+ * anti-cheat의 ANALYZE가 이제 캘리브레이션 기준값 4개를 전부 필수로 요구해서
+ * (하나라도 없으면 422), 본인인증/이어폰 확인과 동급의 게이트가 됐다
+ * (REQUIRE_GAZE_CALIBRATION, ExamSessionService.assertVerifiedSession 참고).
  *
  * AI팀 모니터링 서비스가 아직 배포되지 않은 기간에는 REQUIRE_MONITORING_SERVICE=false로
  * 통신 실패를 에러 대신 "캘리브레이션 안 됨"으로 조용히 처리할 수 있다(analyze처럼).
@@ -90,6 +95,8 @@ export class GazeCalibrationService {
         exam_session_id: Number(examSessionId),
         eye_yaw_center: result.eyeYawCenter,
         eye_pitch_center: result.eyePitchCenter,
+        head_yaw_center: result.headYawCenter,
+        head_pitch_center: result.headPitchCenter,
         sample_count: result.sampleCount,
         calibrated_at: new Date().toISOString(),
       });
@@ -98,14 +105,21 @@ export class GazeCalibrationService {
     return result;
   }
 
-  /** 모니터링(부정행위 감지) ANALYZE 요청에 자동으로 실어 보낼 캘리브레이션 기준값 조회. */
-  async getLatestCalibration(
-    examSessionId: string,
-  ): Promise<{ eyeYawCenter: number; eyePitchCenter: number } | null> {
+  /**
+   * 모니터링(부정행위 감지) ANALYZE 요청에 자동으로 실어 보낼 캘리브레이션 기준값 조회.
+   * anti-cheat가 eye/head yaw·pitch 4개를 전부 필수로 요구하므로, 캘리브레이션 기록이
+   * 있으면 네 값이 항상 다 있다고 가정한다.
+   */
+  async getLatestCalibration(examSessionId: string): Promise<{
+    eyeYawCenter: number;
+    eyePitchCenter: number;
+    headYawCenter: number;
+    headPitchCenter: number;
+  } | null> {
     const client = this.supabaseService.getAdminClient();
     const { data } = await client
       .from('tb_gaze_calibrations')
-      .select('eye_yaw_center, eye_pitch_center')
+      .select('eye_yaw_center, eye_pitch_center, head_yaw_center, head_pitch_center')
       .eq('exam_session_id', Number(examSessionId))
       .order('created_at', { ascending: false })
       .limit(1)
@@ -114,6 +128,24 @@ export class GazeCalibrationService {
     if (!data) {
       return null;
     }
-    return { eyeYawCenter: data.eye_yaw_center, eyePitchCenter: data.eye_pitch_center };
+    return {
+      eyeYawCenter: data.eye_yaw_center,
+      eyePitchCenter: data.eye_pitch_center,
+      headYawCenter: data.head_yaw_center,
+      headPitchCenter: data.head_pitch_center,
+    };
+  }
+
+  /** 시작 게이트(ExamSessionService.assertVerifiedSession)에서 쓰는 완료 여부 조회. */
+  async hasCalibrated(examSessionId: string): Promise<boolean> {
+    const client = this.supabaseService.getAdminClient();
+    const { data } = await client
+      .from('tb_gaze_calibrations')
+      .select('gaze_calibration_id')
+      .eq('exam_session_id', Number(examSessionId))
+      .limit(1)
+      .maybeSingle();
+
+    return data !== null;
   }
 }

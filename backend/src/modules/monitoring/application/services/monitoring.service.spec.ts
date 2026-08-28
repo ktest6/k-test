@@ -78,8 +78,19 @@ function buildAnalyzedResult(overrides: Partial<AnalyzeFrameResult> = {}): Analy
     },
     events: [],
     gazeState: null,
+    identityCheckRequested: false,
+    identityCheckExecuted: false,
     raw: {},
     ...overrides,
+  };
+}
+
+function buildCalibration() {
+  return {
+    eyeYawCenter: -2.1937,
+    eyePitchCenter: -20.7994,
+    headYawCenter: 1.0,
+    headPitchCenter: -2.0,
   };
 }
 
@@ -105,7 +116,7 @@ function buildService(overrides: {
     ...overrides.idCardVerificationService,
   } as unknown as IdCardVerificationService;
   const gazeCalibrationService = {
-    getLatestCalibration: jest.fn().mockResolvedValue(null),
+    getLatestCalibration: jest.fn().mockResolvedValue(buildCalibration()),
     ...overrides.gazeCalibrationService,
   } as unknown as GazeCalibrationService;
   const supabaseService = {
@@ -204,7 +215,16 @@ describe('MonitoringService.analyze', () => {
           decision: 'RECORD_EVENT',
           createClip: false,
         },
-        events: [{ eventType: 'FACE_OUT_OF_FRAME', details: { face_count: 0 } }],
+        events: [
+          {
+            ruleId: 'RULE_FACE_OUT_OF_FRAME',
+            eventType: 'FACE_OUT_OF_FRAME',
+            severity: 'MEDIUM',
+            decision: 'RECORD_EVENT',
+            message: '얼굴이 화면 밖으로 벗어났습니다.',
+            details: { face_count: 0 },
+          },
+        ],
       }),
     );
     const service = buildService({
@@ -223,10 +243,101 @@ describe('MonitoringService.analyze', () => {
     expect(createInput.examSessionId).toBe('100');
     expect(createInput.eventType).toBe('FACE_OUT_OF_FRAME');
     expect(createInput.severity).toBe('MEDIUM');
-    expect(createInput.meta).toEqual({ face_count: 0 });
+    expect(createInput.meta).toEqual({
+      face_count: 0,
+      ruleId: 'RULE_FACE_OUT_OF_FRAME',
+      decision: 'RECORD_EVENT',
+      message: '얼굴이 화면 밖으로 벗어났습니다.',
+    });
     expect(createInput.snapshotPath).toMatch(/^100\/\d+-.+\.jpg$/);
     expect(result.recordedEvents).toEqual([savedEvent]);
     expect(result.severity).toBe('MEDIUM');
+  });
+
+  it('stores each event with its own severity, not the frame-level aggregate severity', async () => {
+    const create = jest
+      .fn<Promise<ProctoringEvent>, [CreateProctoringEventInput]>()
+      .mockImplementation((input) =>
+        Promise.resolve(
+          new ProctoringEvent(
+            '1',
+            '100',
+            input.eventType,
+            input.severity,
+            input.meta,
+            new Date(),
+            null,
+            null,
+          ),
+        ),
+      );
+    const analyze = jest.fn().mockResolvedValue(
+      buildAnalyzedResult({
+        eventSummary: {
+          eventDetected: true,
+          eventCount: 2,
+          severity: 'HIGH',
+          decision: 'CREATE_CLIP',
+          createClip: true,
+        },
+        events: [
+          {
+            ruleId: 'RULE_HEAD_POSE_AWAY',
+            eventType: 'HEAD_POSE_AWAY',
+            severity: 'MEDIUM',
+            decision: 'RECORD_EVENT',
+            message: '고개가 정상 범위를 벗어났습니다.',
+            details: {},
+          },
+          {
+            ruleId: 'RULE_PHONE_DETECTED',
+            eventType: 'PHONE_DETECTED',
+            severity: 'HIGH',
+            decision: 'CREATE_CLIP',
+            message: '휴대폰이 탐지되었습니다.',
+            details: { label: 'Mobile Phone' },
+          },
+        ],
+      }),
+    );
+    const service = buildService({
+      monitoringProvider: { analyze },
+      proctoringEventRepository: { create },
+    });
+
+    await service.analyze(
+      '100',
+      '9',
+      { capturedAt: '2026-08-04T00:00:00+09:00', elapsedMs: 1000, captureSequence: 1 },
+      buildFrame(),
+    );
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'HEAD_POSE_AWAY', severity: 'MEDIUM' }),
+    );
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'PHONE_DETECTED', severity: 'HIGH' }),
+    );
+  });
+
+  it('skips calling the provider and returns a neutral result when no gaze calibration exists', async () => {
+    const analyze = jest.fn();
+    const getLatestCalibration = jest.fn().mockResolvedValue(null);
+    const service = buildService({
+      monitoringProvider: { analyze },
+      gazeCalibrationService: { getLatestCalibration },
+    });
+
+    const result = await service.analyze(
+      '100',
+      '9',
+      { capturedAt: '2026-08-04T00:00:00+09:00', elapsedMs: 1000, captureSequence: 1 },
+      buildFrame(),
+    );
+
+    expect(analyze).not.toHaveBeenCalled();
+    expect(result.severity).toBe('NORMAL');
+    expect(result.recordedEvents).toEqual([]);
   });
 
   it('records the event with a null snapshot path when the snapshot upload fails', async () => {
@@ -250,7 +361,16 @@ describe('MonitoringService.analyze', () => {
           decision: 'RECORD_EVENT',
           createClip: false,
         },
-        events: [{ eventType: 'FACE_OUT_OF_FRAME', details: { face_count: 0 } }],
+        events: [
+          {
+            ruleId: 'RULE_FACE_OUT_OF_FRAME',
+            eventType: 'FACE_OUT_OF_FRAME',
+            severity: 'MEDIUM',
+            decision: 'RECORD_EVENT',
+            message: '얼굴이 화면 밖으로 벗어났습니다.',
+            details: { face_count: 0 },
+          },
+        ],
       }),
     );
     const upload = jest.fn().mockResolvedValue({ data: null, error: { message: 'boom' } });
@@ -294,6 +414,8 @@ describe('MonitoringService.analyze', () => {
       createClip: false,
       eventCount: 0,
       recordedEvents: [],
+      identityCheckRequested: false,
+      identityCheckExecuted: false,
     });
     expect(create).not.toHaveBeenCalled();
   });
@@ -358,10 +480,8 @@ describe('MonitoringService.analyze', () => {
     );
   });
 
-  it('attaches the saved gaze calibration values when one exists', async () => {
-    const getLatestCalibration = jest
-      .fn()
-      .mockResolvedValue({ eyeYawCenter: -2.1937, eyePitchCenter: -20.7994 });
+  it('attaches the saved gaze calibration values (eye and head) when one exists', async () => {
+    const getLatestCalibration = jest.fn().mockResolvedValue(buildCalibration());
     const analyze = jest.fn().mockResolvedValue(buildAnalyzedResult());
     const service = buildService({
       gazeCalibrationService: { getLatestCalibration },
@@ -377,23 +497,12 @@ describe('MonitoringService.analyze', () => {
 
     expect(getLatestCalibration).toHaveBeenCalledWith('100');
     expect(analyze).toHaveBeenCalledWith(
-      expect.objectContaining({ eyeYawCenter: -2.1937, eyePitchCenter: -20.7994 }),
-    );
-  });
-
-  it('omits calibration values when none is saved', async () => {
-    const analyze = jest.fn().mockResolvedValue(buildAnalyzedResult());
-    const service = buildService({ monitoringProvider: { analyze } });
-
-    await service.analyze(
-      '100',
-      '9',
-      { capturedAt: '2026-08-04T00:00:00+09:00', elapsedMs: 1000, captureSequence: 1 },
-      buildFrame(),
-    );
-
-    expect(analyze).toHaveBeenCalledWith(
-      expect.objectContaining({ eyeYawCenter: undefined, eyePitchCenter: undefined }),
+      expect.objectContaining({
+        eyeYawCenter: -2.1937,
+        eyePitchCenter: -20.7994,
+        headYawCenter: 1.0,
+        headPitchCenter: -2.0,
+      }),
     );
   });
 

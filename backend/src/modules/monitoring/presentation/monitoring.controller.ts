@@ -82,6 +82,8 @@ export class MonitoringController {
       createClip: result.createClip,
       eventCount: result.eventCount,
       recordedEvents: result.recordedEvents.map(toEventDto),
+      identityCheckRequested: result.identityCheckRequested,
+      identityCheckExecuted: result.identityCheckExecuted,
     };
   }
 

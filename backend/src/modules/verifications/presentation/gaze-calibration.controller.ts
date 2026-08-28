@@ -54,9 +54,11 @@ export class GazeCalibrationController {
   @ApiOperation({
     summary: '시험 시작 전 시선 캘리브레이션',
     description:
-      '화면 중앙을 응시한 이미지 여러 장으로 개인별 시선 기준값(eyeYawCenter/eyePitchCenter)을 뽑는다. ' +
-      '결과는 저장해두고, 이후 모니터링(부정행위 감지) 프레임 분석마다 서버가 자동으로 실어 보낸다. ' +
-      '선택 기능이라 시험 시작을 막지 않는다 — 안 해도 시험 진행에는 지장 없다.',
+      '화면 중앙을 응시한 이미지 여러 장으로 개인별 시선/고개 기준값(eyeYawCenter/eyePitchCenter/' +
+      'headYawCenter/headPitchCenter)을 뽑는다. 결과는 저장해두고, 이후 모니터링(부정행위 감지) ' +
+      '프레임 분석마다 서버가 자동으로 실어 보낸다. 본인인증·이어폰 확인과 동급의 필수 게이트다 ' +
+      '(REQUIRE_GAZE_CALIBRATION) — anti-cheat가 analyze 요청에 이 기준값 4개를 전부 필수로 ' +
+      '요구해서, 안 해두면 모니터링 자체가 무력화된다.',
   })
   @ApiStandardResponse(GazeCalibrationResponseDto, {
     status: 201,

@@ -27,4 +27,14 @@ export class MonitoringAnalyzeResponseDto {
     description: 'tb_proctoring_events에 실제로 저장된 이벤트 목록',
   })
   recordedEvents: ProctoringEventResponseDto[];
+
+  @ApiProperty({ description: '이번 요청에서 동일인 검사(run_identity_check)를 요청했는지' })
+  identityCheckRequested: boolean;
+
+  @ApiProperty({
+    description:
+      '동일인 검사가 실제로 실행됐는지. requested가 true인데 이 값이 false면(얼굴 0명 또는 ' +
+      '여러 명 등으로 실행 불가) 다음 프레임 요청에도 runIdentityCheck:true를 다시 보내야 한다.',
+  })
+  identityCheckExecuted: boolean;
 }
