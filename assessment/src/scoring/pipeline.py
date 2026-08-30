@@ -526,6 +526,11 @@ def assess_reliability(
     # 가장 나쁜 경우부터 본다.
     # 체크리스트를 핵심어 일치로 때웠다면 내용·과제 수행 점수는 사실상 가짜다.
     # (핵심어가 하나만 걸려도 전 항목이 충족으로 잡히기 때문에 점수가 크게 부풀려진다)
+    #
+    # 여기서 보는 것은 KIWI(대체 경로) 하나뿐이다. FeatureSource.RULE 은 대체가 아니라
+    # [보너스] 항목을 원래부터 코드가 계산하기로 한 정상 경로이므로 신뢰도를 낮추지 않는다.
+    # 이 조건을 "LLM 이 아니면"으로 넓히지 마라 — 보너스 하나 때문에 멀쩡한 채점이
+    # 통째로 fallback 으로 떨어진다.
     if had_checklist and any(c.source == FeatureSource.KIWI for c in checklist_results):
         return (
             Reliability.FALLBACK,
