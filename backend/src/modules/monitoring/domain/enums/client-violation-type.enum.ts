@@ -15,6 +15,6 @@ export enum ClientViolationType {
   MOUSE_LEAVE = 'MOUSE_LEAVE',
   /** paste 이벤트 — 답안에 붙여넣기. */
   PASTE = 'PASTE',
-  /** isExtended — 듀얼 모니터 감지. 누적 2회부터 자동 실격. */
+  /** isExtended — 듀얼 모니터 감지. 정상 시험 환경에서 나올 수 없는 명백한 부정행위라 1회만으로 자동 실격. */
   DUAL_MONITOR = 'DUAL_MONITOR',
 }
