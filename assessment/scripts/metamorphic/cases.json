@@ -71,7 +71,7 @@
     {
       "set_id": "SPK-001",
       "mode": "speaking",
-      "item_file": "items/speaking_v0.json",
+      "item_file": "items/archive/speaking_v0.json",
       "item_id": "SPK-001",
       "title": "기계 고장 구두 보고",
       "base_answer": "반장님, 삼번 라인 포장 기계가 십 분 전부터 갑자기 멈췄습니다. 컨베이어 벨트가 돌지 않고 빨간 경고등만 켜져 있습니다. 제가 전원을 껐다가 다시 켜 보고 벨트에 낀 테이프 조각도 빼 봤습니다. 그래도 기계가 다시 돌아가지 않습니다. 지금 정비 담당자를 부를까요, 아니면 다른 라인부터 먼저 할까요?",

@@ -53,7 +53,7 @@ SYSTEM_INSTRUCTION = """\
 USER_PROMPT_TEMPLATE = """\
 [문항 지시문]
 {item_prompt}
-
+{scene_block}
 [답안 원문]
 ```
 {answer_text}
@@ -125,8 +125,17 @@ def build_prompt(answer_text: str, item: ItemInfo) -> str:
     checklist_text = "\n".join(
         f"- id={c.id}: {c.description}" for c in item.checklist
     )
+
+    # 그림을 보고 답하는 문항이면 그림에 무엇이 있는지도 알려 준다.
+    # 채점하는 LLM 은 그림을 보지 못해서, 이것이 없으면
+    # '화살표를 말했는가' 같은 항목을 판정할 근거 자체가 없다.
+    # 그림 설명이 없는 문항(쓰기 등)은 예전과 똑같은 지시문이 만들어진다
+    scene = (item.scene_description or "").strip()
+    scene_block = f"\n[제시된 이미지 내용]\n{scene}\n" if scene else ""
+
     return USER_PROMPT_TEMPLATE.format(
         item_prompt=item.prompt or "(지시문 없음)",
+        scene_block=scene_block,
         answer_text=answer_text,
         checklist_text=checklist_text or "(항목 없음)",
     )

@@ -3,6 +3,7 @@
 /score 3문항(말하기 2 + 쓰기 1) -> /finalize 까지 실제 경로를 그대로 탄다.
 """
 
+import json
 import os
 import pathlib
 import sys
@@ -44,50 +45,59 @@ def rule(title=""):
 
 
 # ---------------------------------------------------------------------------
-# 답안 3개. 실제 제조업 현장 상황을 가정했다.
-# 학습자의 진짜 오류(안 돼습니다 / -에서 오용)와 STT가 잘못 받아쓸 만한 것
-# (차단하구, 포장 기가)을 일부러 섞어 두었다.
+# 말하기 문항은 실제 문항 파일(items/speaking_v1.json)에서 그대로 읽어 온다.
+# 시연 대본·백엔드 DB·이 데모가 모두 같은 문항을 쓰게 하려는 것이다.
+# (쓰기 문항은 아직 파일로 정리하지 않아 아래에 직접 적어 둔다)
 # ---------------------------------------------------------------------------
 
-ITEM1 = ItemInfo(
-    item_id="SPK-001",
-    prompt="작업 중 기계가 갑자기 멈췄습니다. 반장님에게 상황을 보고하고 어떻게 해야 할지 물어보세요.",
-    item_type="free_response",
-    expected_register="formal",
-    checklist=[
-        ChecklistItem(id="c1", description="어떤 문제가 생겼는지 구체적으로 말했는가", weight=1.5),
-        ChecklistItem(id="c2", description="자신이 이미 시도한 조치를 말했는가", weight=1.0),
-        ChecklistItem(id="c3", description="다음에 어떻게 할지 지시를 요청했는가", weight=1.5),
-        ChecklistItem(id="c4", description="상급자에게 맞는 높임 표현을 사용했는가", weight=1.0),
-    ],
-    reference_keywords=["기계", "멈추", "반장", "정비"],
-)
+ITEMS_PATH = pathlib.Path(__file__).resolve().parent.parent / "items" / "speaking_v1.json"
+
+
+def load_speaking_item(item_id):
+    """말하기 문항 파일에서 문항 하나를 찾아 채점용 ItemInfo 로 만든다."""
+    # 문항 파일 전체를 읽는다 (items 목록 안에 문항 객체들이 들어 있다)
+    data = json.loads(ITEMS_PATH.read_text(encoding="utf-8"))
+
+    # 번호가 같은 문항을 찾으면 그대로 ItemInfo 에 넣는다.
+    # 파일의 칸 이름(prompt, checklist, scene_description ...)을 채점 스키마와
+    # 똑같이 맞춰 두었기 때문에 변환 없이 통째로 넘길 수 있다.
+    for item in data.get("items", []):
+        if item.get("item_id") == item_id:
+            return ItemInfo(**item)
+
+    # 문항 번호가 바뀌었는데 이 스크립트만 옛날 것이면 조용히 틀린 채점을 하지 말고
+    # 여기서 바로 멈춘다
+    raise SystemExit(f"{ITEMS_PATH.name} 에 {item_id} 문항이 없습니다")
+
+
+# ---------------------------------------------------------------------------
+# 답안 3개. 실제 현장 상황을 가정한, 체크리스트를 대체로 만족하는 좋은 답안이다.
+# 다만 외국인 노동자의 실제 답안처럼 보이도록 띄어쓰기 흔들림("표지 입니다")과
+# 맞춤법 오류("여덜시")를 일부러 조금씩 남겨 두었다 — 오류 자질이 실제로
+# 잡히는지도 이 스크립트로 같이 확인하려는 것이다.
+# 말하기 두 문항은 음성이 아니라 전사 텍스트(answer_text)를 직접 넣는 경로라
+# 받아쓰기(LoRA) 서버가 꺼져 있어도 이 스크립트는 끝까지 돈다.
+# ---------------------------------------------------------------------------
+
+# SPK-101 · 비상대피로 표지의 뜻을 설명하는 문항
+ITEM1 = load_speaking_item("SPK-101")
 ANSWER1 = (
-    "반장님 지금 삼번 라인 포장 기가 갑자기 멈췄습니다 "
-    "빨간 불이 계속 깜박깜박 합니다 "
-    "제가 전원 버튼을 다시 눌러 봤는데 안 돼습니다 "
-    "기계 안에 종이가 끼여 있는 것 같습니다 "
-    "제가 지금 전원을 차단하구 정비팀에 연락할까요 "
-    "아니면 반장님 오실 때까지 기다릴까요"
+    "이거는 비상대피로 표지 입니다 "
+    "초록색 바탕에 빨간 동그라미가 있고 그 안에 화살표가 있습니다 "
+    "화살표는 위쪽을 가리키고 있습니다 "
+    "불이 나거나 지진이 나면 이 화살표를 따라서 밖으로 나가라는 뜻입니다 "
+    "위험할 때 나가는 길을 알려주는 표지 입니다"
 )
 
-ITEM2 = ItemInfo(
-    item_id="SPK-002",
-    prompt="동료가 안전모를 쓰지 않고 작업하고 있습니다. 동료에게 주의를 주고 이유를 설명하세요.",
-    item_type="free_response",
-    expected_register="polite",
-    checklist=[
-        ChecklistItem(id="c1", description="안전모를 써야 한다고 지적했는가", weight=1.5),
-        ChecklistItem(id="c2", description="왜 위험한지 이유를 설명했는가", weight=1.5),
-        ChecklistItem(id="c3", description="상대를 존중하는 표현을 썼는가", weight=1.0),
-    ],
-    reference_keywords=["안전모", "위험", "다치"],
-)
+# SPK-104 · 안전모 없이 사다리를 든 동료에게 위험을 알리는 문항
+# (시연 대본 장면 2에서 시연자가 마이크에 말하는 문장과 같은 발화다)
+ITEM2 = load_speaking_item("SPK-104")
 ANSWER2 = (
-    "저기요 잠깐만요 안전모 안 쓰고 있어요 "
-    "여기 위에서 물건이 떨어질 수 있어서 위험해요 "
-    "지난달에도 이번 공장에서 사람이 머리 다쳤어요 "
-    "제가 하나 가져다 드릴까요 같이 조심합시다"
+    "저기요 잠깐만요 "
+    "안전모 안 썼어요 그렇게 하면 위험해요 "
+    "그렇게 사다리 올라가면 떨어져서 머리 다쳐요 "
+    "안전모 먼저 쓰세요 "
+    "제가 사다리 잡아 줄게요"
 )
 
 ITEM3 = ItemInfo(
@@ -111,10 +121,11 @@ ANSWER3 = (
 )
 
 
+# 채점에 넣을 3건. 앞의 값은 제출 번호인데, 화면에서 알아보기 쉽게 문항 번호를 그대로 쓴다.
 CASES = [
-    ("SPK-001", Mode.SPEAKING, ANSWER1, ITEM1, TranscriptInput(correct=True, nationality="베트남")),
-    ("SPK-002", Mode.SPEAKING, ANSWER2, ITEM2, TranscriptInput(correct=True, nationality="베트남")),
-    ("WRT-001", Mode.WRITING, ANSWER3, ITEM3, None),
+    (ITEM1.item_id, Mode.SPEAKING, ANSWER1, ITEM1, TranscriptInput(correct=True, nationality="베트남")),
+    (ITEM2.item_id, Mode.SPEAKING, ANSWER2, ITEM2, TranscriptInput(correct=True, nationality="베트남")),
+    (ITEM3.item_id, Mode.WRITING, ANSWER3, ITEM3, None),
 ]
 
 

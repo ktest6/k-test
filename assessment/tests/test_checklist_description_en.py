@@ -185,8 +185,12 @@ def test_영어는_LLM_프롬프트에_들어가지_않는다():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("filename", ["speaking_v0.json", "writing_v0.json"])
-def test_문항_세트의_모든_체크리스트에_영어_문장이_있다(filename):
+# 파일마다 항목 수가 다르다. 항목이 조용히 사라지는 것을 잡으려고 개수까지 못 박는다
+@pytest.mark.parametrize(
+    ("filename", "expected_total"),
+    [("speaking_v1.json", 39), ("writing_v0.json", 16)],
+)
+def test_문항_세트의_모든_체크리스트에_영어_문장이_있다(filename, expected_total):
     """빈 칸이 하나라도 있으면 리포트 화면의 'Required Points' 가 비어 보인다."""
     items = json.loads((ITEMS_DIR / filename).read_text(encoding="utf-8"))["items"]
 
@@ -207,11 +211,11 @@ def test_문항_세트의_모든_체크리스트에_영어_문장이_있다(file
             assert english.endswith("."), f"{where} 가 마침표로 끝나지 않는다"
             total += 1
 
-    # 문항 5개 × 항목 3~4개 = 16개. 항목이 줄어들면 알아차리게 개수도 못 박는다
-    assert total == 16, f"{filename} 의 체크리스트 항목이 {total}개다"
+    # 말하기 v1 은 문항 4개에 39개, 쓰기 v0 은 문항 5개에 16개다
+    assert total == expected_total, f"{filename} 의 체크리스트 항목이 {total}개다"
 
 
-@pytest.mark.parametrize("filename", ["speaking_v0.json", "writing_v0.json"])
+@pytest.mark.parametrize("filename", ["speaking_v1.json", "writing_v0.json"])
 def test_문항_세트가_채점_계약으로_그대로_들어간다(filename):
     """items JSON 의 문항 객체는 ScoreRequest.item 에 그대로 넣을 수 있어야 한다."""
     items = json.loads((ITEMS_DIR / filename).read_text(encoding="utf-8"))["items"]

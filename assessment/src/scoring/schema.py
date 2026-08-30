@@ -501,6 +501,23 @@ class ItemInfo(BaseModel):
         default_factory=list,
         description="LLM을 못 쓸 때 쓰는 임시 대체 판정용 핵심어",
     )
+    image: str = Field(
+        default="",
+        description=(
+            "이미지 제시형 문항에서 응시자에게 보여 줄 그림 파일 이름 (예: 'SPK-101.png'). "
+            "화면에 무엇을 띄울지 고르는 값일 뿐이고 채점에는 쓰지 않는다. "
+            "선택 필드라서 백엔드가 안 보내도 채점은 그대로 돈다"
+        ),
+    )
+    scene_description: str = Field(
+        default="",
+        description=(
+            "위 image 에 무엇이 있는지 글로 적어 둔 것 (예: '초록 바탕 표지에 위쪽 화살표와 "
+            "비상대피로 글자'). 채점하는 LLM 은 그림을 보지 못하므로, "
+            "'시각 요소를 말했는가' 같은 항목을 판정하려면 그림 내용을 글로 받아야 한다. "
+            "선택 필드라서 없으면 예전처럼 지시문과 답안만 보고 판정한다"
+        ),
+    )
 
 
 class ScoreOptions(BaseModel):

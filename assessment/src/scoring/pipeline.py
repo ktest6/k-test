@@ -242,6 +242,10 @@ def _resolve_transcript(
         item_prompt=request.item.prompt,
         client=client,
         use_llm=request.options.use_llm,
+        # 그림 제시형 문항이면 그림 설명도 같이 넘긴다.
+        # 안 넘기면 모델이 자기 상식으로 그림을 짐작해서, 응시자가 그림대로 맞게
+        # 말한 묘사를 '보통은 이렇다'며 고쳐 버린다
+        scene_description=request.item.scene_description,
     )
     timings["transcript_ms"] = round((time.perf_counter() - started) * 1000, 1)
 
