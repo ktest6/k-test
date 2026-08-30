@@ -133,10 +133,19 @@ export class MypageReportService {
         const response =
           typeof meta?.stt_transcript === 'string' ? meta.stt_transcript : answer.contentText;
         const checklistResults = score?.rawResponse.checklist_results as
-          { description?: unknown; met?: unknown }[] | undefined;
+          { description?: unknown; description_en?: unknown; met?: unknown }[] | undefined;
+        // 리포트 화면은 영어로 보여준다 — assessment가 요청에 실려 온 description_en을
+        // 그대로 되돌려준다(문항에 description_en을 안 보냈으면 빈 문자열로 온다).
+        // 그 경우엔 채점 기준으로 쓰인 한국어 description이라도 보여주는 게 아무것도
+        // 안 뜨는 것보다 낫다(assessment-notice-messages와 같은 원칙).
         const requiredPoints = Array.isArray(checklistResults)
           ? checklistResults.map((item) => ({
-              description: typeof item.description === 'string' ? item.description : '',
+              description:
+                typeof item.description_en === 'string' && item.description_en.length > 0
+                  ? item.description_en
+                  : typeof item.description === 'string'
+                    ? item.description
+                    : '',
               met: item.met === 1 || item.met === true,
             }))
           : null;

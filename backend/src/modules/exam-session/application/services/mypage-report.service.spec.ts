@@ -227,6 +227,40 @@ describe('MypageReportService.getReport', () => {
     ]);
   });
 
+  it('prefers description_en over the Korean description when assessment returns one', async () => {
+    const question = buildQuestion('1');
+    const answer = buildAnswer('a1', '1');
+    const score = new Score(
+      's1',
+      'a1',
+      {
+        meta: {},
+        checklist_results: [
+          {
+            id: 'c1',
+            description: '안전모를 쓰라고 말했는가',
+            description_en: 'Tell him to wear a safety helmet.',
+            met: 1,
+          },
+          { id: 'c2', description: '위험 요소를 언급했는가', description_en: '', met: 0 },
+        ],
+      },
+      new Date(),
+    );
+    const { service } = buildService({
+      getAssignedQuestions: jest.fn().mockResolvedValue([question]),
+      listBySession: jest.fn().mockResolvedValue([answer]),
+      findByAnswerId: jest.fn().mockResolvedValue(score),
+    });
+
+    const result = await service.getReport('r1', '9');
+
+    expect(result.tasks[0].requiredPoints).toEqual([
+      { description: 'Tell him to wear a safety helmet.', met: true },
+      { description: '위험 요소를 언급했는가', met: false },
+    ]);
+  });
+
   it('maps domainScores from the stored result and aggregates violation counts by type and severity', async () => {
     const examResult = buildExamResult({
       domainScores: {
