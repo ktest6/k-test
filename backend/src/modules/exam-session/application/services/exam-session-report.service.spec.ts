@@ -295,6 +295,77 @@ describe('ExamSessionReportService.checkAndFinalize', () => {
     );
   });
 
+  it('passes through scene_description/item_type/reference_keywords and per-checklist description_en/requires when scoring', async () => {
+    const answer1 = buildAnswer('a1', '1');
+    const richQuestion = new Question(
+      '1',
+      QuestionSectionType.READ_AND_EXPLAIN,
+      {
+        preparationSeconds: 70,
+        responseSeconds: 80,
+        guideTexts: ['안내'],
+        instruction: '이 표지는 무슨 의미입니까?',
+        sceneDescription: '초록 바탕 표지에 위쪽 화살표.',
+        itemType: 'sign_description',
+        referenceKeywords: ['비상', '대피'],
+        expectedRegister: 'polite',
+      },
+      null,
+      [
+        { id: '1', code: 'c1', description: '글자를 말했는가', weight: 1.5, displayOrder: 0 },
+        {
+          id: '2',
+          code: 'c9',
+          description: '보너스',
+          weight: 0.5,
+          displayOrder: 1,
+          descriptionEn: 'Bonus.',
+          requires: [['c1']],
+        },
+      ],
+      new Date(),
+    );
+    const { service, mocks } = buildService({
+      getAssignedQuestions: jest.fn().mockResolvedValue([richQuestion]),
+      listAnsweredQuestionIds: jest.fn().mockResolvedValue(['1']),
+      listBySession: jest.fn().mockResolvedValue([answer1]),
+      findQuestionById: jest.fn().mockResolvedValue(richQuestion),
+      findByAnswerId: jest.fn().mockResolvedValue(null),
+      score: jest.fn().mockResolvedValue({}),
+    });
+
+    await service.checkAndFinalize('100', '9');
+
+    expect(mocks.score).toHaveBeenCalledWith(
+      expect.objectContaining({
+        item: {
+          itemId: '1',
+          prompt: '이 표지는 무슨 의미입니까?',
+          expectedRegister: 'polite',
+          sceneDescription: '초록 바탕 표지에 위쪽 화살표.',
+          itemType: 'sign_description',
+          referenceKeywords: ['비상', '대피'],
+          checklist: [
+            {
+              id: 'c1',
+              description: '글자를 말했는가',
+              weight: 1.5,
+              descriptionEn: undefined,
+              requires: undefined,
+            },
+            {
+              id: 'c9',
+              description: '보너스',
+              weight: 0.5,
+              descriptionEn: 'Bonus.',
+              requires: [['c1']],
+            },
+          ],
+        },
+      }),
+    );
+  });
+
   it('still marks the session submitted when the finalize call fails, without throwing', async () => {
     const { service, mocks } = buildService({
       getAssignedQuestions: jest.fn().mockResolvedValue([buildQuestion('1')]),

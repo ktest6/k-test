@@ -16,7 +16,16 @@ interface ScoreRequestBody {
     item_id: string;
     prompt: string;
     expected_register: string;
-    checklist: { id: string; description: string; weight: number }[];
+    checklist: {
+      id: string;
+      description: string;
+      weight: number;
+      description_en?: string;
+      requires?: string[][];
+    }[];
+    item_type?: string;
+    scene_description?: string;
+    reference_keywords?: string[];
   };
   audio?: { url: string; duration_ms?: number };
 }
@@ -44,7 +53,18 @@ export class AssessmentScoringAdapter implements ScoringProviderPort {
         item_id: input.item.itemId,
         prompt: input.item.prompt,
         expected_register: input.item.expectedRegister,
-        checklist: input.item.checklist,
+        checklist: input.item.checklist.map((c) => ({
+          id: c.id,
+          description: c.description,
+          weight: c.weight,
+          ...(c.descriptionEn ? { description_en: c.descriptionEn } : {}),
+          ...(c.requires && c.requires.length > 0 ? { requires: c.requires } : {}),
+        })),
+        ...(input.item.itemType ? { item_type: input.item.itemType } : {}),
+        ...(input.item.sceneDescription ? { scene_description: input.item.sceneDescription } : {}),
+        ...(input.item.referenceKeywords && input.item.referenceKeywords.length > 0
+          ? { reference_keywords: input.item.referenceKeywords }
+          : {}),
       },
     };
 

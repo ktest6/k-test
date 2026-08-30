@@ -5,6 +5,10 @@ export interface ScoreChecklistItemInput {
   id: string;
   description: string;
   weight: number;
+  /** 리포트 화면 표시용 영어 문장 — 채점에는 안 쓰인다. 없으면 안 보내도 된다. */
+  descriptionEn?: string;
+  /** 이 항목을 LLM 대신 앞 항목들의 판정으로 계산할 조건(AND of OR). 없으면 LLM이 직접 판정한다. */
+  requires?: string[][];
 }
 
 export interface ScoreItemInput {
@@ -22,6 +26,12 @@ export interface ScoreItemInput {
     prompt: string;
     expectedRegister: string;
     checklist: ScoreChecklistItemInput[];
+    /** assessment ItemInfo.item_type — 없으면 assessment가 기본값(free_response)으로 처리. */
+    itemType?: string;
+    /** 채점 LLM이 이미지를 못 보므로, 그림 기반 문항이면 이 글 설명으로 대신 전달한다. */
+    sceneDescription?: string;
+    /** LLM을 못 쓸 때의 임시 대체 판정용 핵심어. */
+    referenceKeywords?: string[];
   };
 }
 

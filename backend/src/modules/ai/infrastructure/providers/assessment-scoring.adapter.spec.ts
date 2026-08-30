@@ -162,4 +162,63 @@ describe('AssessmentScoringAdapter.score', () => {
     ];
     expect(options.headers).toEqual({ 'X-API-Key': 'secret-key' });
   });
+
+  it('includes item_type, scene_description, reference_keywords, and per-checklist description_en/requires when present', async () => {
+    const post = jest.fn().mockReturnValue(of({ data: {} }));
+    const httpService = { post } as unknown as HttpService;
+    const adapter = new AssessmentScoringAdapter(
+      httpService,
+      buildConfig(),
+      buildStoragePublicUrlService(),
+    );
+    const input: ScoreItemInput = {
+      ...buildAudioInput(),
+      item: {
+        itemId: 'SPK-101',
+        prompt: '이 표지는 무슨 의미입니까?',
+        expectedRegister: 'any',
+        itemType: 'sign_description',
+        sceneDescription: '초록 바탕 표지에 위쪽 화살표.',
+        referenceKeywords: ['비상', '대피'],
+        checklist: [
+          { id: 'c1', description: '글자를 말했는가', weight: 1.5, descriptionEn: 'Say a word.' },
+          { id: 'c9', description: '보너스', weight: 0.5, requires: [['c1']] },
+        ],
+      },
+    };
+
+    await adapter.score(input);
+
+    const [, body] = post.mock.calls[0] as [string, { item: Record<string, unknown> }];
+    expect(body.item).toMatchObject({
+      item_type: 'sign_description',
+      scene_description: '초록 바탕 표지에 위쪽 화살표.',
+      reference_keywords: ['비상', '대피'],
+      checklist: [
+        { id: 'c1', description: '글자를 말했는가', weight: 1.5, description_en: 'Say a word.' },
+        { id: 'c9', description: '보너스', weight: 0.5, requires: [['c1']] },
+      ],
+    });
+  });
+
+  it('omits item_type, scene_description, reference_keywords, and per-checklist description_en/requires when absent', async () => {
+    const post = jest.fn().mockReturnValue(of({ data: {} }));
+    const httpService = { post } as unknown as HttpService;
+    const adapter = new AssessmentScoringAdapter(
+      httpService,
+      buildConfig(),
+      buildStoragePublicUrlService(),
+    );
+
+    await adapter.score(buildAudioInput());
+
+    const [, body] = post.mock.calls[0] as [string, { item: Record<string, unknown> }];
+    expect(body.item).not.toHaveProperty('item_type');
+    expect(body.item).not.toHaveProperty('scene_description');
+    expect(body.item).not.toHaveProperty('reference_keywords');
+    expect((body.item.checklist as Record<string, unknown>[])[0]).not.toHaveProperty(
+      'description_en',
+    );
+    expect((body.item.checklist as Record<string, unknown>[])[0]).not.toHaveProperty('requires');
+  });
 });

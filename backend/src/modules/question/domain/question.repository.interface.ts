@@ -5,6 +5,8 @@ export interface CreateChecklistItemInput {
   code: string;
   description: string;
   weight: number;
+  descriptionEn?: string;
+  requires?: string[][];
 }
 
 export interface CreateQuestionDraftInput {

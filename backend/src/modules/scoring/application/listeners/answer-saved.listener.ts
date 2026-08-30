@@ -45,18 +45,21 @@ export class AnswerSavedListener {
         audioFileUrl: event.audioFileUrl,
         durationMs: event.durationMs,
         item: {
-          // TODO: 듣기/말하기 3유형 콘텐츠 구조에 맞는 채점 요청 스펙은 아직 미정(AI팀 확인 대기).
-          // 그때까지 임시로 question.id/instruction으로 채워서 컴파일만 맞춰둔다.
           itemId: question.id,
           prompt: question.content.instruction ?? question.content.guideTexts?.join(' ') ?? '',
-          // assessment는 'formal'|'polite'|'any'만 허용한다(빈 문자열이면 422) — 문항별
-          // 기대 격식은 아직 모델링돼 있지 않아 가장 중립적인 'any'로 채운다.
-          expectedRegister: 'any',
+          // assessment는 'formal'|'polite'|'any'만 허용한다(빈 문자열이면 422) — 문항에
+          // 안 정해져 있으면 가장 중립적인 'any'로 채운다.
+          expectedRegister: question.content.expectedRegister ?? 'any',
           checklist: question.checklistItems.map((c) => ({
             id: c.code,
             description: c.description,
             weight: c.weight,
+            descriptionEn: c.descriptionEn,
+            requires: c.requires,
           })),
+          itemType: question.content.itemType,
+          sceneDescription: question.content.sceneDescription,
+          referenceKeywords: question.content.referenceKeywords,
         },
       });
 

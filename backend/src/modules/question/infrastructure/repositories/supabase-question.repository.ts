@@ -31,6 +31,8 @@ interface ChecklistItemRow {
   description: string;
   weight: number;
   display_order: number;
+  description_en: string | null;
+  requires: string[][] | null;
 }
 
 function toChecklistDomain(row: ChecklistItemRow): QuestionChecklistItem {
@@ -40,6 +42,8 @@ function toChecklistDomain(row: ChecklistItemRow): QuestionChecklistItem {
     description: row.description,
     weight: Number(row.weight),
     displayOrder: row.display_order,
+    descriptionEn: row.description_en ?? undefined,
+    requires: row.requires ?? undefined,
   };
 }
 
@@ -87,6 +91,8 @@ export class SupabaseQuestionRepository implements QuestionRepository {
         description: c.description,
         weight: c.weight,
         display_order: checklistIndex,
+        description_en: c.descriptionEn ?? '',
+        requires: c.requires ?? [],
       })),
     );
 
