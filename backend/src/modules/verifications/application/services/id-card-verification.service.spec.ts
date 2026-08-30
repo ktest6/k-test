@@ -248,6 +248,21 @@ describe('IdCardVerificationService.verify', () => {
     expect(remove).toHaveBeenCalledWith(['9/7/id-card.jpg', '9/7/face.jpg']);
   });
 
+  it('keeps the id card image when face verification itself fails — anti-cheat still answers 200', async () => {
+    const identityProvider = {
+      verify: jest
+        .fn<Promise<VerifyIdentityResult>, [VerifyIdentityInput]>()
+        .mockResolvedValue(buildResult({ verified: false, faceVerified: false })),
+    };
+    const remove = jest.fn().mockResolvedValue({ data: null, error: null });
+    const { service } = buildService({ identityProvider, client: { remove } });
+
+    await service.verify('9', buildDto());
+
+    expect(remove).toHaveBeenCalledWith(['9/7/face.jpg']);
+    expect(remove).not.toHaveBeenCalledWith(expect.arrayContaining(['9/7/id-card.jpg']));
+  });
+
   it('does not attempt to delete the id card image when the provider call fails', async () => {
     const identityProvider = {
       verify: jest.fn().mockRejectedValue(new Error('fastapi unreachable')),

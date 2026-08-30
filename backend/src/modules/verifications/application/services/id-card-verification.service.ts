@@ -43,9 +43,10 @@ const IDENTITY_DOCS_BUCKET = 'identity-docs';
  * (이때는 결과를 못 받은 것이므로 아래 이미지 삭제도 일어나지 않는다 —
  * 같은 사진으로 재시도 가능해야 한다).
  *
- * 신분증 사진은 대조 결과를 실제로 받는 즉시(일치/불일치 무관) Storage에서
- * 삭제한다 — 그 이후로는 아무도 다시 읽지 않는 가장 민감한 이미지라 최대한
- * 짧게 보관한다.
+ * 신분증 사진은 얼굴 대조가 실제로 성공(faceVerified: true)했을 때만 Storage에서
+ * 삭제한다. anti-cheat는 얼굴이 불일치해도(faceVerified: false) 에러가 아니라
+ * 200으로 응답하므로, "응답을 받았다"가 아니라 faceVerified 값 자체를 봐야 한다
+ * — 실패한 시도의 신분증은 재검토(이의제기 대응 등)를 위해 남겨둔다.
  *
  * 얼굴 사진은 대조에 성공(matched: true)했을 때만 남긴다 — 모니터링(부정행위
  * 감지)이 시험 내내 getVerifiedFacePath()로 이 사진을 동일인 검사 기준
@@ -125,12 +126,18 @@ export class IdCardVerificationService {
     // similarity(0~100)를 tb_identity_logs.confidence(0~1) 스케일에 맞춘다.
     const confidence = result.similarity / 100;
 
-    // 4) 신분증 사진은 결과를 받은 이 시점부터 더 이상 쓰이지 않으므로 항상 정리한다.
-    // 얼굴 사진은 대조에 성공했을 때만 남긴다(모니터링이 재사용) — 불일치로 끝났으면
-    // 그 얼굴 사진도 아무도 다시 안 쓰므로 함께 정리한다. 삭제 실패는 본인인증 자체를
-    // 실패시킬 이유가 아니라 경고만 남긴다.
-    const pathsToDelete = matched ? [dto.idCardPath] : [dto.idCardPath, dto.facePath];
-    await this.deleteImages(client, pathsToDelete);
+    // 4) 신분증 사진은 얼굴 대조가 실제로 성공(faceVerified)했을 때만 정리한다 —
+    // anti-cheat는 얼굴이 불일치해도 200으로 응답하므로 "응답을 받았다"는 기준이
+    // 될 수 없다. 얼굴 사진은 최종 본인인증(matched, 신청 정보 대조까지 포함)에
+    // 성공했을 때만 남긴다(모니터링이 재사용) — 그 외에는 아무도 다시 안 읽으므로
+    // 함께 정리한다. 삭제 실패는 본인인증 자체를 실패시킬 이유가 아니라 경고만 남긴다.
+    const pathsToDelete = [
+      ...(result.faceVerified ? [dto.idCardPath] : []),
+      ...(matched ? [] : [dto.facePath]),
+    ];
+    if (pathsToDelete.length > 0) {
+      await this.deleteImages(client, pathsToDelete);
+    }
 
     // 5) 결과 로그 저장
     await client.from('tb_identity_logs').insert({
