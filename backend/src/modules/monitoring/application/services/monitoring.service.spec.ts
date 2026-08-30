@@ -642,11 +642,11 @@ describe('MonitoringService.reportViolation', () => {
     expect(result.sessionStatus).toBe(SessionStatus.INPROGRESS);
   });
 
-  it('does not auto-disqualify on the first occurrence of a violation type', async () => {
-    const create = jest.fn().mockResolvedValue(buildEvent({ eventType: 'DUAL_MONITOR' }));
+  it('does not auto-disqualify on the first occurrence of a violation type with a 2-occurrence threshold', async () => {
+    const create = jest.fn().mockResolvedValue(buildEvent({ eventType: 'TAB_SWITCH' }));
     const findByExamSessionId = jest
       .fn()
-      .mockResolvedValue([buildEvent({ eventType: 'DUAL_MONITOR', severity: 'HIGH' })]);
+      .mockResolvedValue([buildEvent({ eventType: 'TAB_SWITCH', severity: 'MEDIUM' })]);
     const disqualify = jest.fn();
     const service = buildService({
       proctoringEventRepository: { create, findByExamSessionId },
@@ -656,19 +656,16 @@ describe('MonitoringService.reportViolation', () => {
       },
     });
 
-    await service.reportViolation('100', '9', { violationType: ClientViolationType.DUAL_MONITOR });
+    await service.reportViolation('100', '9', { violationType: ClientViolationType.TAB_SWITCH });
 
     expect(disqualify).not.toHaveBeenCalled();
   });
 
-  it('auto-disqualifies the session on the 2nd DUAL_MONITOR occurrence and reports the new status', async () => {
+  it('auto-disqualifies the session on the 1st DUAL_MONITOR occurrence — no valid exam setup has two monitors', async () => {
     const create = jest.fn().mockResolvedValue(buildEvent({ eventType: 'DUAL_MONITOR' }));
     const findByExamSessionId = jest
       .fn()
-      .mockResolvedValue([
-        buildEvent({ eventType: 'DUAL_MONITOR', severity: 'HIGH' }),
-        buildEvent({ eventType: 'DUAL_MONITOR', severity: 'HIGH' }),
-      ]);
+      .mockResolvedValue([buildEvent({ eventType: 'DUAL_MONITOR', severity: 'HIGH' })]);
     const disqualifiedSession = new ExamSession(
       '100',
       '9',
@@ -695,7 +692,7 @@ describe('MonitoringService.reportViolation', () => {
 
     expect(disqualify).toHaveBeenCalledWith(
       '100',
-      expect.stringContaining('using a dual-monitor setup'),
+      expect.stringContaining('using a dual-monitor setup was detected 1 time.'),
     );
     expect(result.sessionStatus).toBe(SessionStatus.DISQUALIFIED);
   });
@@ -740,12 +737,12 @@ describe('MonitoringService.reportViolation', () => {
   });
 
   it('does not count other violation types toward this type’s threshold', async () => {
-    const create = jest.fn().mockResolvedValue(buildEvent({ eventType: 'DUAL_MONITOR' }));
+    const create = jest.fn().mockResolvedValue(buildEvent({ eventType: 'TAB_SWITCH' }));
     const findByExamSessionId = jest
       .fn()
       .mockResolvedValue([
-        buildEvent({ eventType: 'DUAL_MONITOR', severity: 'HIGH' }),
         buildEvent({ eventType: 'TAB_SWITCH', severity: 'MEDIUM' }),
+        buildEvent({ eventType: 'DUAL_MONITOR', severity: 'HIGH' }),
         buildEvent({ eventType: 'WINDOW_CLOSE_ATTEMPT', severity: 'HIGH' }),
       ]);
     const disqualify = jest.fn();
@@ -757,7 +754,7 @@ describe('MonitoringService.reportViolation', () => {
       },
     });
 
-    await service.reportViolation('100', '9', { violationType: ClientViolationType.DUAL_MONITOR });
+    await service.reportViolation('100', '9', { violationType: ClientViolationType.TAB_SWITCH });
 
     expect(disqualify).not.toHaveBeenCalled();
   });

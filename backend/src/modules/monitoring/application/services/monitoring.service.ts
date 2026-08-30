@@ -53,8 +53,19 @@ const CLIENT_VIOLATION_SEVERITY: Record<ClientViolationType, ProctoringSeverity>
   [ClientViolationType.MOUSE_LEAVE]: 'LOW',
 };
 
-/** 같은 종류의 프런트 부정행위가 이 횟수만큼 누적되면 자동으로 실격 처리한다(종류 무관, 프런트 부정행위 방지 플로우 기준). */
-const CLIENT_VIOLATION_DISQUALIFY_THRESHOLD = 2;
+/**
+ * 종류별로 이 횟수만큼 누적되면 자동으로 실격 처리한다(프런트 부정행위 방지 플로우 기준).
+ * DUAL_MONITOR는 정상적인 시험 환경에서 나올 수 없는 명백한 부정행위 정황이라 1회만으로
+ * 즉시 실격, 나머지는 오탐 여지가 있어 2회부터 실격한다.
+ */
+const CLIENT_VIOLATION_DISQUALIFY_THRESHOLD: Record<ClientViolationType, number> = {
+  [ClientViolationType.DUAL_MONITOR]: 1,
+  [ClientViolationType.WINDOW_CLOSE_ATTEMPT]: 2,
+  [ClientViolationType.TAB_SWITCH]: 2,
+  [ClientViolationType.PASTE]: 2,
+  [ClientViolationType.BLUR]: 2,
+  [ClientViolationType.MOUSE_LEAVE]: 2,
+};
 
 /** 실격 안내 메일(영문)에 실릴, 위반 종류별 사람이 읽을 수 있는 사유 문구. */
 const CLIENT_VIOLATION_LABEL: Record<ClientViolationType, string> = {
@@ -248,10 +259,11 @@ export class MonitoringService {
   /**
    * AI 모니터링(analyze)과 별개로, 프런트가 브라우저 이벤트(탭 이탈/포커스
    * 이탈/붙여넣기/듀얼 모니터 등)로 직접 감지한 위반을 기록한다. 웹캠 프레임이
-   * 없는 신호라 스냅샷은 남기지 않는다. 종류 무관하게 같은 violationType이
-   * 누적 2회부터 자동 실격(프런트 부정행위 방지 플로우 기준) — 종류별로 각각
-   * 따로 센다(예: TAB_SWITCH 1회 + BLUR 1회는 합산되지 않음). 응답에 처리
-   * 직후의 세션 상태를 같이 실어줘서, 프런트가 이 호출 하나로 "방금
+   * 없는 신호라 스냅샷은 남기지 않는다. 같은 violationType이 종류별 정해진
+   * 횟수(CLIENT_VIOLATION_DISQUALIFY_THRESHOLD, DUAL_MONITOR는 1회·나머지는
+   * 2회)만큼 누적되면 자동 실격 — 종류별로 각각 따로 센다(예: TAB_SWITCH 1회 +
+   * BLUR 1회는 합산되지 않음). 응답에 처리 직후의 세션 상태를 같이 실어줘서,
+   * 프런트가 이 호출 하나로 "방금
    * 실격됐는지"까지 바로 알 수 있게 한다(별도 상태 조회 필요 없음).
    */
   async reportViolation(
@@ -273,8 +285,9 @@ export class MonitoringService {
     const events = await this.proctoringEventRepository.findByExamSessionId(examSessionId);
     const violationEventType: string = dto.violationType;
     const violationCount = events.filter((event) => event.eventType === violationEventType).length;
-    if (violationCount >= CLIENT_VIOLATION_DISQUALIFY_THRESHOLD) {
-      const reason = `Anti-cheating policy violation — ${CLIENT_VIOLATION_LABEL[dto.violationType]} was detected ${violationCount} times.`;
+    if (violationCount >= CLIENT_VIOLATION_DISQUALIFY_THRESHOLD[dto.violationType]) {
+      const timeWord = violationCount === 1 ? 'time' : 'times';
+      const reason = `Anti-cheating policy violation — ${CLIENT_VIOLATION_LABEL[dto.violationType]} was detected ${violationCount} ${timeWord}.`;
       const disqualified = await this.examSessionService.disqualify(examSessionId, reason);
       sessionStatus = disqualified.status;
     }
