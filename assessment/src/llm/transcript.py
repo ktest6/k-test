@@ -65,7 +65,9 @@ SYSTEM_INSTRUCTION = """\
    말버릇("음", "그", "저기")도 지우지 않는다.
 4. 고칠 곳이 없으면 원문을 한 글자도 바꾸지 말고 그대로 돌려준다.
    억지로 고칠 곳을 찾아내지 마라.
-5. 반드시 지정된 JSON 형식으로만 답한다.
+5. 이미지 내용이 주어지면 화자의 묘사가 그 내용과 맞는지 그것을 기준으로 판단하고,
+   자신의 일반 상식으로 화자의 묘사를 바꾸지 않는다.
+6. 반드시 지정된 JSON 형식으로만 답한다.
 """
 
 USER_PROMPT_TEMPLATE = """\
@@ -74,7 +76,7 @@ USER_PROMPT_TEMPLATE = """\
 
 [문항 지시문]
 {item_prompt}
-
+{scene_block}
 [응시자 국적]
 {nationality}
 
@@ -467,10 +469,20 @@ def build_prompt(
     original_text: str,
     nationality: str | None = None,
     item_prompt: str = "",
+    scene_description: str = "",
 ) -> str:
     """LLM에 보낼 지시문을 만든다. 테스트에서 내용 확인이 가능하도록 분리해 둔다."""
+    # 그림을 보고 말하는 문항이면 그림에 무엇이 있는지도 알려 준다.
+    # 이것이 없으면 모델은 자기 상식으로 그림을 짐작해서, 응시자가 맞게 말한 묘사까지
+    # "표지는 원래 이런 색이다"라며 고쳐 버린다(실제로 SPK-101 에서 응시자가 말한
+    # '빨간 동그라미'를 '하얀 동그라미'로 바꾼 일이 있었다).
+    # 그림 설명이 없는 문항은 예전과 글자 하나까지 똑같은 지시문이 만들어진다
+    scene = (scene_description or "").strip()
+    scene_block = f"\n[제시된 이미지 내용]\n{scene}\n" if scene else ""
+
     return USER_PROMPT_TEMPLATE.format(
         item_prompt=item_prompt or "(지시문 없음)",
+        scene_block=scene_block,
         # 국적을 모르면 모른다고 적는다. 빈칸으로 두면 모델이 멋대로 지어내기 쉽다
         nationality=nationality or "(알 수 없음 — 국적 정보 없이 판단하라)",
         original_text=original_text,
@@ -483,12 +495,16 @@ def correct_transcript(
     item_prompt: str = "",
     client: GeminiClient | None = None,
     use_llm: bool = True,
+    scene_description: str = "",
 ) -> TranscriptCorrection:
     """STT 전사 원문을 보정해서 원문·보정본·diff 를 함께 돌려준다.
 
     LLM을 못 쓰는 상황에서도 예외를 던지지 않는다.
     그때는 보정하지 않은 원문을 그대로 돌려주고 경고만 남긴다.
     채점 자체는 원본으로도 돌아가야 하기 때문이다.
+
+    scene_description 은 그림을 보고 말하는 문항에서 그림에 무엇이 있는지 적어 둔 글이다.
+    이것을 넘겨야 모델이 자기 상식이 아니라 실제 그림을 기준으로 판단한다.
     """
     # 어떤 길로 빠지든 '원문 그대로' 상태는 항상 만들어 둔다
     no_correction = TranscriptCorrection(
@@ -513,7 +529,7 @@ def correct_transcript(
         emit(no_correction.warnings, no_correction.notices, "TRANSCRIPT_API_KEY_MISSING")
         return no_correction
 
-    prompt = build_prompt(original_text, nationality, item_prompt)
+    prompt = build_prompt(original_text, nationality, item_prompt, scene_description)
     try:
         payload = client.generate_json(
             prompt,

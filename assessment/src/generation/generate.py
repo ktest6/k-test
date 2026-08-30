@@ -314,6 +314,9 @@ def _item_to_raw(item: GeneratedItem) -> dict:
             {
                 "id": entry.id,
                 "description": entry.description,
+                # 관리자가 화면에서 고친 영어 문장도 같이 되돌려 넣는다.
+                # 안 넣으면 재검증을 한 번 돌 때마다 영어가 사라져 버린다
+                "description_en": entry.description_en,
                 "weight": entry.weight,
                 "quote": entry.citation.quote or entry.citation.matched_text,
             }

@@ -1,0 +1,135 @@
+{
+  "version": "speaking_v1",
+  "mode": "speaking",
+  "status": "draft",
+  "note": "가중치 임시 · 회의 후 확정, SPK-104 c6 는 A안 임시. 말하기 문항 4개(이미지 제시형). 응시자는 이미지를 보고 음성으로 답하고, 전사 텍스트가 ScoreRequest.answer_text 로 들어온다. items[] 객체는 ScoreRequest.item 에 그대로 넣을 수 있는 형태다. 채점 AI 는 이미지를 보지 않는다 — 이미지에 무엇이 있는지는 scene_description 으로 글로 전달한다. image 는 파일명만 적어 두었고 실제 파일은 나중에 items/images/ 에 둔다. SPK-105·106 은 음성 질문 문항, 질문 wav 는 별도.",
+  "items": [
+    {
+      "item_id": "SPK-101",
+      "item_type": "sign_description",
+      "image": "SPK-101.png",
+      "prompt": "이 표지는 무슨 의미입니까? 말로 설명하세요.",
+      "scene_description": "초록 바탕 직사각형 표지. 왼쪽에 흰 테두리 빨간 원 안에 위쪽 화살표, 오른쪽에 흰 글자 '비상대피로'.",
+      "expected_register": "any",
+      "checklist": [
+        { "id": "c1", "description": "표지에 적힌 글자(비상 / 대피 / 비상대피로) 중 하나 이상을 말했는가", "description_en": "Say a word written on the sign, such as emergency or evacuation.", "weight": 1.5 },
+        { "id": "c2", "description": "표지의 시각 요소(화살표, 원, 색깔) 중 하나 이상을 언급했는가", "description_en": "Describe what you see on the sign, such as the arrow, the circle, or the color.", "weight": 1.0 },
+        { "id": "c3", "description": "'길·통로·출구·나가는 곳' 등 이동 경로를 뜻하는 표현을 사용했는가", "description_en": "Use a word for a way out, such as road, path, or exit.", "weight": 1.5 },
+        { "id": "c4", "description": "위급 상황(불·화재·지진·사고·위험 등)을 하나 이상 언급했는가", "description_en": "Name a dangerous situation, such as a fire, an earthquake, or an accident.", "weight": 1.5 },
+        { "id": "c5", "description": "화살표가 가리키는 방향(위쪽·앞쪽·직진 등)을 말했는가", "description_en": "Say which way the arrow points, such as up or straight ahead.", "weight": 1.0 },
+        { "id": "c6", "description": "사람이 해야 할 행동을 동사로 말했는가 (나가다·가다·따라가다·피하다·대피하다 등)", "description_en": "Say what people must do, using a verb like go out or escape.", "weight": 1.0 },
+        { "id": "c7", "description": "위급 상황과 이동(대피)을 하나의 문장 안에서 연결해 말했는가", "description_en": "In one sentence, connect the emergency and going out.", "weight": 1.0 },
+        { "id": "c8", "description": "표지의 '의미'를 설명하는 형식으로 진술했는가 (…라는 뜻이에요 / …를 알려주는 표지예요 등)", "description_en": "Explain the meaning of the sign, like this sign means or this sign tells you.", "weight": 1.0 },
+        { "id": "c9", "description": "[보너스] 비상 상황 + 대피 경로 + 방향 또는 행동, 세 요소를 모두 포함했는가", "description_en": "Say all three things: the emergency, the escape route, and the direction or action.", "weight": 0.5 }
+      ],
+      "reference_keywords": ["비상", "대피", "화살표", "출구", "나가", "위험"]
+    },
+    {
+      "item_id": "SPK-102",
+      "item_type": "sign_description",
+      "image": "SPK-102.png",
+      "prompt": "이 표지는 무슨 의미입니까? 말로 설명하세요.",
+      "scene_description": "흰 바탕 입간판. 위에 파란 글자 '근로자', 가운데 큰 분홍 글자 '쉼터', 아래 작은 글자 '충분한 휴식은 안전의 또다른 준비 입니다.'. 공사장 자갈 바닥 배경.",
+      "expected_register": "any",
+      "checklist": [
+        { "id": "c1", "description": "[최소기준] 한국어로 표지에 대해 무언가를 설명하려는 발화가 있는가", "description_en": "Say something in Korean about this sign.", "weight": 0.5 },
+        { "id": "c2", "description": "표지에 적힌 글자(근로자 / 쉼터) 중 하나 이상을 말했는가", "description_en": "Say a word written on the sign, such as worker or rest area.", "weight": 1.5 },
+        { "id": "c3", "description": "이 표지가 특정 '장소'를 가리킨다는 것을 나타내는 표현을 사용했는가 (여기, 이곳, 방, 곳, 자리 등)", "description_en": "Use a word that shows this is a place, such as here or room.", "weight": 1.0 },
+        { "id": "c4", "description": "휴식을 뜻하는 어휘를 사용했는가 (쉬다, 휴식, 쉼터, 잠깐 쉬다, 좀 쉬다 등)", "description_en": "Use a word about resting, such as rest or take a break.", "weight": 1.5 },
+        { "id": "c5", "description": "이 장소를 이용하는 대상이 일하는 사람임을 언급했는가 (근로자, 노동자, 일하는 사람, 우리 등)", "description_en": "Say who uses this place, such as workers or people who work here.", "weight": 1.0 },
+        { "id": "c6", "description": "그 장소에서 하는 행동을 동사로 말했는가 (쉬어요, 들어가요, 앉아요, 밥 먹어요, 물 마셔요 등)", "description_en": "Say what people do there, using a verb like rest, sit, or eat.", "weight": 1.0 },
+        { "id": "c7", "description": "안전과 관련된 표현을 언급했는가 (안전, 사고, 다치다, 위험 등)", "description_en": "Use a word about safety, such as safety, accident, or danger.", "weight": 1.0 },
+        { "id": "c8", "description": "휴식과 안전의 관계를 하나의 문장 안에서 연결해 말했는가 (예: '쉬면 안전해요', '안 쉬면 다쳐요')", "description_en": "In one sentence, connect resting and safety.", "weight": 1.0 },
+        { "id": "c9", "description": "표지의 '의미'를 설명하는 형식으로 진술했는가 (…라는 뜻이에요 / …를 알려주는 표지예요 등)", "description_en": "Explain the meaning of the sign, like this sign means or this sign tells you.", "weight": 1.0 },
+        { "id": "c10", "description": "[보너스] 대상(일하는 사람) + 기능(쉬는 곳·휴식) + 이유(안전), 세 요소를 모두 포함했는가", "description_en": "Say all three things: who uses it, what it is for, and why it helps.", "weight": 0.5 }
+      ],
+      "reference_keywords": ["근로자", "쉼터", "휴식", "쉬", "안전"]
+    },
+    {
+      "item_id": "SPK-103",
+      "item_type": "picture_description",
+      "image": "SPK-103.png",
+      "prompt": "사진 속 사람이 지금 무엇을 하고 있는지 묘사하세요.",
+      "scene_description": "공사 현장. 주황 안전모·안전대(형광 하네스)·장갑을 착용한 남성 작업자가 나무 작업대 위 나무판을 왼손으로 누르고 오른손 망치로 두드리고(못 박고) 있다. 뒤에 콘크리트 펌프카·트럭·철근 구조물.",
+      "expected_register": "any",
+      "checklist": [
+        { "id": "c1", "description": "[최소기준] 사진 속 장면에 대한 정보를 하나라도 말했는가", "description_en": "Say at least one thing about the picture.", "weight": 0.5 },
+        { "id": "c2", "description": "사진 속 인물을 가리키는 표현을 사용했는가 (사람, 남자, 아저씨, 작업자, 근로자 등)", "description_en": "Say who is in the picture, such as a man or a worker.", "weight": 1.0 },
+        { "id": "c3", "description": "그 인물이 일이나 작업을 하고 있다는 것을 나타내는 표현을 사용했는가 (일해요, 작업해요, 공사해요 등)", "description_en": "Say that he is working, using a word like work.", "weight": 1.0 },
+        { "id": "c4", "description": "인물이 손에 들고 사용하는 도구나 물건을 언급했는가 (망치, 공구, 연장, 이거 등)", "description_en": "Say what he is holding in his hand, such as a tool.", "weight": 1.0 },
+        { "id": "c5", "description": "인물이 착용한 안전 장비를 하나 이상 언급했는가 (안전모, 헬멧, 모자, 장갑, 안전벨트, 안전대 등)", "description_en": "Name one safety item he is wearing, such as a helmet or gloves.", "weight": 1.0 },
+        { "id": "c6", "description": "도구를 '망치'라는 단어로 정확히 지칭했는가", "description_en": "Use the exact word for the tool: hammer.", "weight": 1.0 },
+        { "id": "c7", "description": "두드리거나 치는 동작을 나타내는 동사를 사용했는가 (때리다, 치다, 두드리다, 박다, 못 박다 등)", "description_en": "Say what he is doing with the tool, such as hitting or hammering.", "weight": 1.5 },
+        { "id": "c8", "description": "작업의 대상이 되는 물체를 언급했는가 (나무, 나무판, 판, 목재, 책상, 작업대 등)", "description_en": "Say what he is working on, such as wood or a board.", "weight": 1.5 },
+        { "id": "c9", "description": "인물의 자세나 반대쪽 손의 동작을 언급했는가 (누르고 있다, 잡고 있다, 서 있다, 고개를 숙이고 있다, 내려다보고 있다 등)", "description_en": "Say how he stands or what his other hand does, such as holding the board down.", "weight": 1.0 },
+        { "id": "c10", "description": "[보너스] 인물 + 도구 + 대상 + 두드리는 행위, 네 요소를 모두 포함했는가", "description_en": "Say all four things: the person, the tool, the object, and the hitting action.", "weight": 0.5 }
+      ],
+      "reference_keywords": ["망치", "작업자", "안전모", "나무", "두드리", "장갑"]
+    },
+    {
+      "item_id": "SPK-104",
+      "item_type": "hazard_warning",
+      "image": "SPK-104.png",
+      "prompt": "사진 속 사람은 당신과 같이 일하는 동료입니다. 동료에게 무엇이 위험한지 알려주고, 어떻게 해야 하는지 말하세요.",
+      "scene_description": "거푸집(합판 벽) 공사 현장. 안전모를 쓰지 않은(맨머리) 남성 작업자가 회색 긴팔·공구벨트·안전대 차림으로 알루미늄 사다리를 손으로 들고 세우고 있다. 아직 사다리에 올라가지는 않았다. 주변에 철제 지지대·높은 벽.",
+      "expected_register": "polite",
+      "checklist": [
+        { "id": "c1", "description": "[최소기준] 사진 속 상황에 대한 정보를 하나라도 말했는가", "description_en": "Say at least one thing about what you see.", "weight": 0.5 },
+        { "id": "c2", "description": "위험이나 주의를 나타내는 표현을 사용했는가 (위험해요, 안 돼요, 조심하세요, 큰일 나요 등)", "description_en": "Warn him with a word like dangerous or be careful.", "weight": 1.0 },
+        { "id": "c3", "description": "안전모를 가리키는 표현을 사용했는가 (안전모, 헬멧, 모자, 머리에 쓰는 거 등)", "description_en": "Use a word for the safety helmet, such as helmet or hard hat.", "weight": 1.0 },
+        { "id": "c4", "description": "안전모를 착용하지 않은 상태임을 서술했는가 (안 썼어요, 없어요, 머리에 아무것도 없어요 등)", "description_en": "Say that he is not wearing a helmet.", "weight": 1.5 },
+        { "id": "c5", "description": "사다리를 언급했는가 (사다리, 계단, 올라가는 거 등)", "description_en": "Say that he has a ladder.", "weight": 1.0 },
+        { "id": "c6", "description": "사다리에 올라가는 것(앞으로 할 행동)의 위험을 언급했는가 (올라가면 위험해요, 올라가지 마세요, 그렇게 올라가면 떨어져요 등)", "description_en": "Tell him it is dangerous to climb the ladder like this.", "weight": 1.0 },
+        { "id": "c7", "description": "일어날 수 있는 사고나 그 결과를 언급했는가 (떨어져요, 넘어져요, 다쳐요, 머리 다쳐요, 사고 나요 등)", "description_en": "Say what can happen, such as falling down or getting hurt.", "weight": 1.0 },
+        { "id": "c8", "description": "안전모를 착용하라는 조치를 말했는가 (안전모 쓰세요, 헬멧 써요, 안전모 필요해요 등)", "description_en": "Tell him to put on a safety helmet.", "weight": 1.5 },
+        { "id": "c9", "description": "안전모 착용 외의 구체적인 조치나 행동을 말했는가 (내려오세요, 잠깐 멈추세요, 안전벨트 거세요, 사다리 잡아주세요, 사다리 고정하세요 등)", "description_en": "Tell him one more thing to do, such as stop, come down, or hold the ladder.", "weight": 1.0 },
+        { "id": "c10", "description": "[보너스] 위험 요소를 알리는 내용과 조치를 제안하는 내용을 모두 포함했는가", "description_en": "Do both: tell him the danger and tell him what to do.", "weight": 0.5 }
+      ],
+      "reference_keywords": ["안전모", "사다리", "위험", "다치", "떨어지", "쓰세요"]
+    },
+    {
+      "item_id": "SPK-105",
+      "item_type": "answer_question",
+      "image": "",
+      "audio": "SPK-105.wav",
+      "prompt": "오늘 회사에 늦으셨군요. 왜 늦으셨나요?",
+      "scene_description": "",
+      "expected_register": "polite",
+      "checklist": [
+        { "id": "c1", "description": "[최소기준] 질문에 대해 한국어로 대답하려는 발화가 있는가", "description_en": "Answer the question in Korean.", "weight": 0.5 },
+        { "id": "c2", "description": "늦은 사실을 인정하거나 언급했는가 (늦었어요, 지각했어요, 미안해요, 죄송해요 등)", "description_en": "Say that you were late.", "weight": 1.0 },
+        { "id": "c3", "description": "늦은 이유를 하나라도 말했는가 (차가 막혀서, 늦게 일어나서, 버스를 놓쳐서, 아파서 등)", "description_en": "Give a reason for being late.", "weight": 1.5 },
+        { "id": "c4", "description": "이유가 되는 사건이나 상황을 구체적으로 설명했는가 (알람이 안 울렸어요, 버스가 안 왔어요, 배가 아팠어요 등 상황 서술)", "description_en": "Explain what happened, such as your alarm did not ring.", "weight": 1.5 },
+        { "id": "c5", "description": "시간과 관련된 정보를 언급했는가 (몇 시, 아침에, 30분, 늦게, 일찍 등)", "description_en": "Say something about time, such as this morning or thirty minutes.", "weight": 1.0 },
+        { "id": "c6", "description": "장소나 이동 수단을 언급했는가 (집, 회사, 버스, 지하철, 길, 정류장 등)", "description_en": "Say a place or how you travel, such as the bus or the station.", "weight": 1.0 },
+        { "id": "c7", "description": "원인과 결과의 관계를 나타내는 연결 표현을 사용했는가 (그래서, -어서, -기 때문에, -니까 등)", "description_en": "Connect the cause and the result with a word like so or because.", "weight": 1.0 },
+        { "id": "c8", "description": "앞으로의 행동이나 다짐을 말했는가 (다음부터 일찍 올게요, 조심하겠습니다, 안 늦을게요 등)", "description_en": "Say what you will do next time, such as I will come early.", "weight": 1.0 },
+        { "id": "c9", "description": "사과하거나 양해를 구하는 표현을 사용했는가 (죄송합니다, 미안합니다, 죄송해요 등)", "description_en": "Say sorry to your boss.", "weight": 1.0 },
+        { "id": "c10", "description": "[보너스] 늦은 사실 + 이유 + 사과 또는 앞으로의 다짐, 세 요소를 모두 포함했는가", "description_en": "Say all three things: that you were late, the reason, and an apology or a promise.", "weight": 0.5 }
+      ],
+      "reference_keywords": ["늦", "죄송", "버스", "막혀", "그래서", "다음"]
+    },
+    {
+      "item_id": "SPK-106",
+      "item_type": "answer_question",
+      "image": "",
+      "audio": "SPK-106.wav",
+      "prompt": "손이 못에 찔렸을 때는 어떻게 해야 하나요?",
+      "scene_description": "",
+      "expected_register": "any",
+      "checklist": [
+        { "id": "c1", "description": "[최소기준] 질문에 대해 한국어로 대답하려는 발화가 있는가", "description_en": "Answer the question in Korean.", "weight": 0.5 },
+        { "id": "c2", "description": "다쳤을 때 해야 할 행동을 하나라도 말했는가 (병원 가요, 약 발라요, 말해요, 씻어요 등)", "description_en": "Say one thing you must do when you are hurt.", "weight": 1.0 },
+        { "id": "c3", "description": "작업을 멈추거나 그 자리를 벗어나는 행동을 언급했는가 (일 그만해요, 멈춰요, 나와요, 쉬어요 등)", "description_en": "Say that you stop working or leave the place.", "weight": 1.0 },
+        { "id": "c4", "description": "다른 사람에게 알리는 행동을 언급했는가 (관리자한테 말해요, 반장님한테 알려요, 동료를 불러요, 신고해요 등)", "description_en": "Say that you tell someone, such as your manager.", "weight": 1.5 },
+        { "id": "c5", "description": "상처를 처치하는 구체적인 행동을 언급했는가 (씻어요, 소독해요, 약 발라요, 밴드 붙여요, 피 닦아요 등)", "description_en": "Say how you take care of the wound, such as washing it or putting on a bandage.", "weight": 1.5 },
+        { "id": "c6", "description": "병원이나 의료기관에 가는 것을 언급했는가 (병원, 의무실, 보건실, 의사, 119, 구급차 등)", "description_en": "Say that you go to a hospital or call for help.", "weight": 1.0 },
+        { "id": "c7", "description": "상처나 부상의 상태를 나타내는 표현을 사용했는가 (피가 나요, 아파요, 상처, 다쳤어요, 부었어요 등)", "description_en": "Describe the injury, such as it is bleeding or it hurts.", "weight": 1.0 },
+        { "id": "c8", "description": "하지 말아야 할 행동이나 주의사항을 언급했는가 (계속 일하면 안 돼요, 손으로 만지면 안 돼요, 그냥 두면 안 돼요 등)", "description_en": "Say what you must not do, such as keep working.", "weight": 1.0 },
+        { "id": "c9", "description": "방치했을 때 생길 수 있는 결과를 언급했는가 (덧나요, 세균, 감염, 병 나요, 더 아파요, 파상풍 등)", "description_en": "Say what can happen if you do nothing, such as an infection.", "weight": 1.0 },
+        { "id": "c10", "description": "[보너스] 즉시 취할 행동 + 알리거나 치료받는 행동, 두 축을 모두 포함했는가", "description_en": "Do both: say what you do right away and say that you tell someone or get treatment.", "weight": 0.5 }
+      ],
+      "reference_keywords": ["병원", "다쳤", "피", "소독", "말해", "멈추"]
+    }
+  ]
+}

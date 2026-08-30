@@ -1,0 +1,69 @@
+{
+  "version": "speaking_v0",
+  "mode": "speaking",
+  "status": "draft",
+  "note": "말하기 문항 초안 — 사람 검수 전. 응시자는 음성으로 답하고, 전사 텍스트가 ScoreRequest.answer_text 로 들어온다. items[] 객체는 ScoreRequest.item 에 그대로 넣을 수 있는 형태다. 발화 전달력(발음) 영역은 Azure 도입 후 채점되며 그 전까지 비중 0.",
+  "items": [
+    {
+      "item_id": "SPK-001",
+      "item_type": "incident_report",
+      "prompt": "작업 중에 기계가 갑자기 멈췄습니다. 반장님에게 말로 보고하세요. ① 어떤 문제가 생겼는지 ② 무엇을 해 봤는지 ③ 이제 어떻게 할지 물어보세요.",
+      "expected_register": "formal",
+      "checklist": [
+        { "id": "c1", "description": "어떤 문제가 생겼는지 구체적으로 말했는가", "description_en": "Tell your team leader exactly what went wrong with the machine.", "weight": 1.5 },
+        { "id": "c2", "description": "자신이 이미 해 본 조치를 말했는가", "description_en": "Say what you already tried to fix it.", "weight": 1.0 },
+        { "id": "c3", "description": "다음에 어떻게 할지 지시를 요청했는가", "description_en": "Ask what you should do next.", "weight": 1.5 },
+        { "id": "c4", "description": "상급자에게 맞는 높임 표현을 사용했는가", "description_en": "Use polite forms when you speak to your team leader.", "weight": 0.5 }
+      ],
+      "reference_keywords": ["기계", "멈추", "고장", "반장"]
+    },
+    {
+      "item_id": "SPK-002",
+      "item_type": "hazard_warning",
+      "prompt": "동료가 안전모를 쓰지 않고 높은 곳에서 일하고 있습니다. 동료에게 말로 알려 주세요. ① 무엇이 위험한지 ② 왜 위험한지 ③ 어떻게 하라고 말할지 이야기하세요.",
+      "expected_register": "polite",
+      "checklist": [
+        { "id": "c1", "description": "안전모를 쓰지 않은 것을 지적했는가", "description_en": "Point out that he is not wearing a safety helmet.", "weight": 1.5 },
+        { "id": "c2", "description": "왜 위험한지 이유를 말했는가", "description_en": "Explain why it is dangerous.", "weight": 1.5 },
+        { "id": "c3", "description": "구체적인 행동(안전모 착용 등)을 권했는가", "description_en": "Tell him to wear a safety helmet.", "weight": 1.0 }
+      ],
+      "reference_keywords": ["안전모", "위험", "떨어지", "다치"]
+    },
+    {
+      "item_id": "SPK-003",
+      "item_type": "instruction_restate",
+      "prompt": "반장님이 이렇게 지시했습니다: \"오후 2시에 2번 창고로 가서, 파란색 상자를 전부 1층으로 옮기고, 끝나면 나에게 전화하세요.\" 이 지시를 잘 이해했는지 확인하려고 합니다. 지시 내용을 자기 말로 다시 말해 보세요.",
+      "expected_register": "formal",
+      "checklist": [
+        { "id": "c1", "description": "언제(오후 2시)와 어디(2번 창고)를 말했는가", "description_en": "Say the time (2 p.m.) and the place (Warehouse 2).", "weight": 1.5 },
+        { "id": "c2", "description": "무엇을(파란색 상자를 1층으로 옮김) 말했는가", "description_en": "Say what to do: move the blue boxes to the first floor.", "weight": 1.5 },
+        { "id": "c3", "description": "끝난 뒤 할 일(전화 보고)을 말했는가", "description_en": "Say that you will call the team leader when you finish.", "weight": 1.0 }
+      ],
+      "reference_keywords": ["창고", "상자", "옮기", "전화"]
+    },
+    {
+      "item_id": "SPK-004",
+      "item_type": "completion_report",
+      "prompt": "오늘 맡은 포장 작업이 끝났습니다. 반장님에게 말로 보고하세요. ① 무슨 작업을 끝냈는지 ② 얼마나 했는지(수량) ③ 특별한 일이 있었는지 말하세요.",
+      "expected_register": "formal",
+      "checklist": [
+        { "id": "c1", "description": "무슨 작업을 끝냈는지 말했는가", "description_en": "Tell your team leader which work you finished.", "weight": 1.5 },
+        { "id": "c2", "description": "작업량(수량·개수 등)을 말했는가", "description_en": "Say how much you did, with the number of items.", "weight": 1.0 },
+        { "id": "c3", "description": "특이사항 여부를 말했는가(없으면 없다고)", "description_en": "Say whether anything unusual happened.", "weight": 1.0 }
+      ],
+      "reference_keywords": ["작업", "끝", "완료", "개"]
+    },
+    {
+      "item_id": "SPK-005",
+      "item_type": "help_request",
+      "prompt": "혼자 옮기기에 너무 무거운 자재가 있습니다. 근처에 있는 동료에게 말로 도움을 요청하세요. ① 무엇을 해야 하는지 ② 왜 도움이 필요한지 ③ 정중하게 부탁하세요.",
+      "expected_register": "polite",
+      "checklist": [
+        { "id": "c1", "description": "무엇을 옮기는(하는) 일인지 말했는가", "description_en": "Say what you have to move.", "weight": 1.0 },
+        { "id": "c2", "description": "왜 도움이 필요한지(무거움 등) 말했는가", "description_en": "Say why you need help, because it is too heavy.", "weight": 1.0 },
+        { "id": "c3", "description": "정중한 부탁 표현을 사용했는가", "description_en": "Ask for help politely.", "weight": 1.0 }
+      ],
+      "reference_keywords": ["무겁", "도와", "같이", "부탁"]
+    }
+  ]
+}

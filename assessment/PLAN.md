@@ -83,12 +83,18 @@
 - [ ] 말하기: 경로 확정 + 이미지 문항 설계안
 - [ ] 테스트 전부 통과 유지
 
+## 시험 구성 확정 (8/30) — 말하기 전용
+
+시험은 **말하기 4문항(`items/speaking_v1.json`, SPK-101~104, 이미지 제시형)만**으로 본다. 쓰기 문항은 시험에서 빼되 코드·문항은 삭제하지 않는다.
+남은 일: ① 이미지는 디자인 팀원이 리디자인(우리 담당 아님, 정사각형 표시 유의) ② 백엔드: 말하기 4문항 시드 + `/score` item 에 `item_type`·`scene_description`·`reference_keywords`·`image` 실어 보내기 ③ 회의: 가중치 확정, SPK-104 c6(A/B), 최소기준 항목 통일.
+
 ## 트랙 C — 오류·상태 메시지 코드화 (8/25 백엔드 합의, B 방식)
 
 팀장 요청: 문항은 한글, 오류·상태·근거 문구는 영어. 백엔드가 "code+params 만 주면 화면에서 영어로 바꾸겠다"고 확정.
 - [x] C-1 `Notice{code, params, message}` 모델 + 코드 카탈로그(`src/scoring/messages.py`). 계약은 **추가만** — `warnings: list[str]`·`note`·`comment` 는 그대로 두고 `notices` / `notice` 필드를 나란히 붙인다. HTTP 오류 `detail` 만 `{code, params, message}` 객체로 바뀐다(백엔드 요청 형태)
 - [x] C-2 `outputs/api_messages_ko.md` 의 사용자 대면 문구 전부에 코드 부여 (내부용 7절 제외, STT 전사 조각은 한국어 유지)
 - [x] C-3 백엔드 전달용 카탈로그 `outputs/api_message_codes.md` (code · params · 한국어 원문 · 영어 초안)
+- [ ] C-4 (8/26 추가) 리포트 화면의 "Required Points" 용 체크리스트 영어 문장. 문항 JSON `checklist[].description_en` 추가(한국어 `description` 은 LLM 채점 기준이라 유지) → `ChecklistItem`/`ChecklistResult` 에 `description_en` 필드(선택, 기본 "") → `/score` 응답에 그대로 실림 → 백엔드 시드 재등록 요청. 생성 문항(`/generate-items`)도 영어 문장을 함께 뽑는다
 
 ## 궁극 목표 — [난이도: 불가능] 도전 (8/1 선언, 8/2 갱신)
 

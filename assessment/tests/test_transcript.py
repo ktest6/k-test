@@ -278,3 +278,79 @@ def test_프롬프트가_과보정을_막는_지시를_담는다():
     # 이 지시가 빠지면 응시자의 실제 문법 오류까지 고쳐져 점수가 부풀려진다
     assert "고치지 않는다" in SYSTEM_INSTRUCTION
     assert "조사" in SYSTEM_INSTRUCTION
+
+
+def test_이미지_설명이_없으면_프롬프트가_예전과_글자까지_같다():
+    """그림 설명을 안 넘긴 경우 지시문이 조금도 달라지면 안 된다.
+
+    말하기 말고 쓰기·일반 문항은 그림이 없다. 여기서 지시문이 바뀌면
+    지금까지 확인해 둔 보정 동작이 통째로 다른 조건에서 도는 셈이 된다.
+    """
+    기본 = build_prompt("저는 갔습니다", nationality="네팔", item_prompt="설명하세요")
+    빈값 = build_prompt(
+        "저는 갔습니다",
+        nationality="네팔",
+        item_prompt="설명하세요",
+        scene_description="",
+    )
+    공백만 = build_prompt(
+        "저는 갔습니다",
+        nationality="네팔",
+        item_prompt="설명하세요",
+        scene_description="   \n ",
+    )
+
+    # 빈 값·공백만 넘긴 경우도 안 넘긴 것과 똑같아야 한다
+    assert 기본 == 빈값 == 공백만
+    # 그림 설명 칸 자체가 나타나지 않아야 한다
+    assert "제시된 이미지 내용" not in 기본
+    # 지시문 다음에 곧바로 국적 칸이 오던 예전 모양 그대로인지 확인한다
+    assert "[문항 지시문]\n설명하세요\n\n[응시자 국적]" in 기본
+
+
+def test_이미지_설명을_넘기면_프롬프트에_그림_내용_블록이_들어간다():
+    """그림 내용이 지시문에 실제로 실리는지 확인한다.
+
+    이것이 빠지면 모델이 그림을 못 보는 채로 판단해서, 응시자가 그림대로
+    맞게 말한 '빨간 동그라미'를 상식으로 '하얀 동그라미'로 고쳐 버린다.
+    """
+    scene = "초록 바탕에 흰 테두리 빨간 원, 그 안에 위쪽 화살표"
+    prompt = build_prompt(
+        "빨간 동그라미가 있습니다",
+        nationality="네팔",
+        item_prompt="이 표지가 무슨 뜻인지 설명하세요",
+        scene_description=scene,
+    )
+
+    # 그림 내용 칸과 내용이 그대로 들어가야 한다
+    assert "[제시된 이미지 내용]" in prompt
+    assert scene in prompt
+    # 그림 칸은 지시문과 국적 사이에 놓인다(모델이 지시문 다음에 그림을 읽게)
+    assert prompt.index("[문항 지시문]") < prompt.index("[제시된 이미지 내용]")
+    assert prompt.index("[제시된 이미지 내용]") < prompt.index("[응시자 국적]")
+
+
+def test_그림_설명이_있으면_상식으로_고치지_말라는_규칙이_있다():
+    from src.llm.transcript import SYSTEM_INSTRUCTION
+
+    # 이 규칙이 빠지면 그림 설명을 줘도 모델이 자기 상식을 우선해 버린다
+    assert "이미지 내용이 주어지면" in SYSTEM_INSTRUCTION
+    assert "일반 상식으로 화자의 묘사를 바꾸지 않는다" in SYSTEM_INSTRUCTION
+
+
+def test_보정_호출이_그림_설명을_모델에게_전달한다():
+    """correct_transcript 에 넘긴 그림 설명이 실제 호출까지 닿는지 확인한다."""
+    client = FakeClient(
+        payload={"corrected_text": "빨간 동그라미가 있습니다", "changes": []}
+    )
+
+    correct_transcript(
+        "빨간 동그라미가 있습니다",
+        nationality="네팔",
+        item_prompt="이 표지가 무슨 뜻인지 설명하세요",
+        client=client,
+        scene_description="초록 바탕에 흰 테두리 빨간 원",
+    )
+
+    # 모델이 실제로 받은 지시문 안에 그림 내용이 들어 있어야 한다
+    assert "초록 바탕에 흰 테두리 빨간 원" in client.prompts[0]
