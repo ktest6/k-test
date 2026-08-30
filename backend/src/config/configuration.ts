@@ -13,6 +13,15 @@ export interface AppConfig {
    */
   requireIdentityVerification: boolean;
   /**
+   * true면 실제 anti-cheat 호출 없이 본인인증(POST /verifications/id-card/verify)이
+   * 항상 성공(matched:true)한 것으로 처리한다 — 아무 사진을 넣어도 통과한다.
+   * requireIdentityVerification(게이트 자체를 건너뛰는 것)과는 다르다: 이건 게이트는
+   * 그대로 두고 프론트가 평소처럼 업로드→인증 흐름을 다 타되, 실제 판정만 항상
+   * 성공으로 눙친다 — QA가 프런트 수정 없이 아무 사진으로 시험 흐름 전체를 테스트할
+   * 때 쓴다. 기본값은 false. 절대 운영 환경에 켜두지 말 것.
+   */
+  mockIdentityVerification: boolean;
+  /**
    * 시험 시작 시 이어폰 미착용 확인(earphone_detected:false 기록) 완료를 요구할지 여부.
    * requireIdentityVerification과 같은 이유(AI팀 서비스 미배포 기간)로 임시 우회용.
    * 기본값은 true(강제) — 실제 서비스 배포 전에는 반드시 다시 true로 되돌릴 것.
@@ -89,6 +98,7 @@ export const appConfig = registerAs('app', (): AppConfig => ({
   corsOrigin: process.env.CORS_ORIGIN ?? '*',
   swaggerEnabled: (process.env.SWAGGER_ENABLED ?? 'true') === 'true',
   requireIdentityVerification: (process.env.REQUIRE_IDENTITY_VERIFICATION ?? 'true') === 'true',
+  mockIdentityVerification: (process.env.MOCK_IDENTITY_VERIFICATION ?? 'false') === 'true',
   requireEarphoneCheck: (process.env.REQUIRE_EARPHONE_CHECK ?? 'true') === 'true',
   requireGazeCalibration: (process.env.REQUIRE_GAZE_CALIBRATION ?? 'true') === 'true',
   requireMonitoringService: (process.env.REQUIRE_MONITORING_SERVICE ?? 'true') === 'true',

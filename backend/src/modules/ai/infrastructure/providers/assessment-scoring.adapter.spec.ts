@@ -12,6 +12,7 @@ function buildConfig(overrides: Partial<{ url: string; apiKey: string }> = {}): 
     corsOrigin: '*',
     swaggerEnabled: false,
     requireIdentityVerification: true,
+    mockIdentityVerification: false,
     requireEarphoneCheck: true,
     requireGazeCalibration: true,
     requireMonitoringService: true,

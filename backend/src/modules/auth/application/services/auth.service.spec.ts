@@ -64,6 +64,7 @@ function buildConfig(signupSecret: string): AppConfig {
     corsOrigin: '*',
     swaggerEnabled: false,
     requireIdentityVerification: true,
+    mockIdentityVerification: false,
     requireEarphoneCheck: true,
     requireGazeCalibration: true,
     requireMonitoringService: true,
