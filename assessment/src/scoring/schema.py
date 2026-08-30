@@ -40,12 +40,20 @@ class Mode(str, Enum):
 class FeatureSource(str, Enum):
     """이 자질을 누가 계산했는지.
 
-    kiwi = 규칙(형태소 분석)으로 셈, llm = 모델이 판단, azure = 발음평가(이번 범위 밖).
+    kiwi = 규칙(형태소 분석)으로 셈, llm = 모델이 판단, azure = 발음평가(이번 범위 밖),
+    rule = 이미 나온 다른 판정 결과를 코드가 조합해서 계산.
+
+    `rule` 과 `kiwi` 를 굳이 나눠 둔 이유:
+    `kiwi` 는 체크리스트에서 **LLM 을 못 써서 핵심어 일치로 때운 대체 경로**를 뜻하고,
+    그것이 보이면 채점 신뢰도가 fallback 으로 떨어진다(pipeline.assess_reliability).
+    반면 `rule` 은 대체가 아니라 **원래부터 코드가 계산하기로 정한 값**이라
+    신뢰도를 떨어뜨리면 안 된다. 같은 값을 쓰면 이 둘이 구별되지 않는다.
     """
 
     KIWI = "kiwi"
     LLM = "llm"
     AZURE = "azure"
+    RULE = "rule"
 
 
 class FeatureStatus(str, Enum):
@@ -171,6 +179,19 @@ class ChecklistItem(BaseModel):
         ),
     )
     weight: float = Field(default=1.0, ge=0.0, description="항목별 비중")
+    requires: list[list[str]] = Field(
+        default_factory=list,
+        description=(
+            "이 항목을 **LLM 에게 묻지 않고 앞 항목들의 판정 결과로 계산**할 때 쓰는 조건. "
+            "바깥 리스트는 '그리고(AND)', 안쪽 리스트는 '또는(OR)' 이다. "
+            "예: [[\"c4\"], [\"c3\"], [\"c5\", \"c6\"]] 는 "
+            "'c4 가 충족이고, c3 도 충족이고, c5 나 c6 중 하나가 충족' 이라는 뜻이다. "
+            "비워 두면(기본값) 지금까지처럼 LLM 이 직접 판정한다. "
+            "여러 요소를 다 담았는지 보는 '[보너스]' 항목에 쓴다 — 그런 항목은 근거 인용이 "
+            "답안 여기저기에 흩어져 있어서 LLM 이 인용을 이어 붙여 내고, 그 인용이 "
+            "원문에 없다는 이유로 폐기돼 억울하게 0점이 되는 일이 있었다(SPK-105 c10 실측)"
+        ),
+    )
 
 
 class ChecklistResult(BaseModel):

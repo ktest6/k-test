@@ -2,7 +2,7 @@
   "version": "speaking_v1",
   "mode": "speaking",
   "status": "draft",
-  "note": "가중치 임시 · 회의 후 확정, SPK-104 c6 는 A안 임시. 말하기 문항 4개(이미지 제시형). 응시자는 이미지를 보고 음성으로 답하고, 전사 텍스트가 ScoreRequest.answer_text 로 들어온다. items[] 객체는 ScoreRequest.item 에 그대로 넣을 수 있는 형태다. 채점 AI 는 이미지를 보지 않는다 — 이미지에 무엇이 있는지는 scene_description 으로 글로 전달한다. image 는 파일명만 적어 두었고 실제 파일은 나중에 items/images/ 에 둔다. SPK-105·106 은 음성 질문 문항, 질문 wav 는 별도.",
+  "note": "가중치 임시 · 회의 후 확정, SPK-104 c6 는 A안 임시. 각 문항 마지막 [보너스] 항목의 requires(앞 항목들의 판정으로 코드가 계산하는 조건)도 8/30 임시안이며 회의에서 확정한다. 말하기 문항 4개(이미지 제시형). 응시자는 이미지를 보고 음성으로 답하고, 전사 텍스트가 ScoreRequest.answer_text 로 들어온다. items[] 객체는 ScoreRequest.item 에 그대로 넣을 수 있는 형태다. 채점 AI 는 이미지를 보지 않는다 — 이미지에 무엇이 있는지는 scene_description 으로 글로 전달한다. image 는 파일명만 적어 두었고 실제 파일은 나중에 items/images/ 에 둔다. SPK-105·106 은 음성 질문 문항, 질문 wav 는 별도.",
   "items": [
     {
       "item_id": "SPK-101",
@@ -20,7 +20,7 @@
         { "id": "c6", "description": "사람이 해야 할 행동을 동사로 말했는가 (나가다·가다·따라가다·피하다·대피하다 등)", "description_en": "Say what people must do, using a verb like go out or escape.", "weight": 1.0 },
         { "id": "c7", "description": "위급 상황과 이동(대피)을 하나의 문장 안에서 연결해 말했는가", "description_en": "In one sentence, connect the emergency and going out.", "weight": 1.0 },
         { "id": "c8", "description": "표지의 '의미'를 설명하는 형식으로 진술했는가 (…라는 뜻이에요 / …를 알려주는 표지예요 등)", "description_en": "Explain the meaning of the sign, like this sign means or this sign tells you.", "weight": 1.0 },
-        { "id": "c9", "description": "[보너스] 비상 상황 + 대피 경로 + 방향 또는 행동, 세 요소를 모두 포함했는가", "description_en": "Say all three things: the emergency, the escape route, and the direction or action.", "weight": 0.5 }
+        { "id": "c9", "description": "[보너스] 비상 상황 + 대피 경로 + 방향 또는 행동, 세 요소를 모두 포함했는가", "description_en": "Say all three things: the emergency, the escape route, and the direction or action.", "weight": 0.5, "requires": [["c4"], ["c3"], ["c5", "c6"]] }
       ],
       "reference_keywords": ["비상", "대피", "화살표", "출구", "나가", "위험"]
     },
@@ -41,7 +41,7 @@
         { "id": "c7", "description": "안전과 관련된 표현을 언급했는가 (안전, 사고, 다치다, 위험 등)", "description_en": "Use a word about safety, such as safety, accident, or danger.", "weight": 1.0 },
         { "id": "c8", "description": "휴식과 안전의 관계를 하나의 문장 안에서 연결해 말했는가 (예: '쉬면 안전해요', '안 쉬면 다쳐요')", "description_en": "In one sentence, connect resting and safety.", "weight": 1.0 },
         { "id": "c9", "description": "표지의 '의미'를 설명하는 형식으로 진술했는가 (…라는 뜻이에요 / …를 알려주는 표지예요 등)", "description_en": "Explain the meaning of the sign, like this sign means or this sign tells you.", "weight": 1.0 },
-        { "id": "c10", "description": "[보너스] 대상(일하는 사람) + 기능(쉬는 곳·휴식) + 이유(안전), 세 요소를 모두 포함했는가", "description_en": "Say all three things: who uses it, what it is for, and why it helps.", "weight": 0.5 }
+        { "id": "c10", "description": "[보너스] 대상(일하는 사람) + 기능(쉬는 곳·휴식) + 이유(안전), 세 요소를 모두 포함했는가", "description_en": "Say all three things: who uses it, what it is for, and why it helps.", "weight": 0.5, "requires": [["c5"], ["c4"], ["c7"]] }
       ],
       "reference_keywords": ["근로자", "쉼터", "휴식", "쉬", "안전"]
     },
@@ -62,7 +62,7 @@
         { "id": "c7", "description": "두드리거나 치는 동작을 나타내는 동사를 사용했는가 (때리다, 치다, 두드리다, 박다, 못 박다 등)", "description_en": "Say what he is doing with the tool, such as hitting or hammering.", "weight": 1.5 },
         { "id": "c8", "description": "작업의 대상이 되는 물체를 언급했는가 (나무, 나무판, 판, 목재, 책상, 작업대 등)", "description_en": "Say what he is working on, such as wood or a board.", "weight": 1.5 },
         { "id": "c9", "description": "인물의 자세나 반대쪽 손의 동작을 언급했는가 (누르고 있다, 잡고 있다, 서 있다, 고개를 숙이고 있다, 내려다보고 있다 등)", "description_en": "Say how he stands or what his other hand does, such as holding the board down.", "weight": 1.0 },
-        { "id": "c10", "description": "[보너스] 인물 + 도구 + 대상 + 두드리는 행위, 네 요소를 모두 포함했는가", "description_en": "Say all four things: the person, the tool, the object, and the hitting action.", "weight": 0.5 }
+        { "id": "c10", "description": "[보너스] 인물 + 도구 + 대상 + 두드리는 행위, 네 요소를 모두 포함했는가", "description_en": "Say all four things: the person, the tool, the object, and the hitting action.", "weight": 0.5, "requires": [["c2"], ["c4"], ["c8"], ["c7"]] }
       ],
       "reference_keywords": ["망치", "작업자", "안전모", "나무", "두드리", "장갑"]
     },
@@ -83,7 +83,7 @@
         { "id": "c7", "description": "일어날 수 있는 사고나 그 결과를 언급했는가 (떨어져요, 넘어져요, 다쳐요, 머리 다쳐요, 사고 나요 등)", "description_en": "Say what can happen, such as falling down or getting hurt.", "weight": 1.0 },
         { "id": "c8", "description": "안전모를 착용하라는 조치를 말했는가 (안전모 쓰세요, 헬멧 써요, 안전모 필요해요 등)", "description_en": "Tell him to put on a safety helmet.", "weight": 1.5 },
         { "id": "c9", "description": "안전모 착용 외의 구체적인 조치나 행동을 말했는가 (내려오세요, 잠깐 멈추세요, 안전벨트 거세요, 사다리 잡아주세요, 사다리 고정하세요 등)", "description_en": "Tell him one more thing to do, such as stop, come down, or hold the ladder.", "weight": 1.0 },
-        { "id": "c10", "description": "[보너스] 위험 요소를 알리는 내용과 조치를 제안하는 내용을 모두 포함했는가", "description_en": "Do both: tell him the danger and tell him what to do.", "weight": 0.5 }
+        { "id": "c10", "description": "[보너스] 위험 요소를 알리는 내용과 조치를 제안하는 내용을 모두 포함했는가", "description_en": "Do both: tell him the danger and tell him what to do.", "weight": 0.5, "requires": [["c2", "c4", "c6", "c7"], ["c8", "c9"]] }
       ],
       "reference_keywords": ["안전모", "사다리", "위험", "다치", "떨어지", "쓰세요"]
     },
@@ -105,7 +105,7 @@
         { "id": "c7", "description": "원인과 결과의 관계를 나타내는 연결 표현을 사용했는가 (그래서, -어서, -기 때문에, -니까 등)", "description_en": "Connect the cause and the result with a word like so or because.", "weight": 1.0 },
         { "id": "c8", "description": "앞으로의 행동이나 다짐을 말했는가 (다음부터 일찍 올게요, 조심하겠습니다, 안 늦을게요 등)", "description_en": "Say what you will do next time, such as I will come early.", "weight": 1.0 },
         { "id": "c9", "description": "사과하거나 양해를 구하는 표현을 사용했는가 (죄송합니다, 미안합니다, 죄송해요 등)", "description_en": "Say sorry to your boss.", "weight": 1.0 },
-        { "id": "c10", "description": "[보너스] 늦은 사실 + 이유 + 사과 또는 앞으로의 다짐, 세 요소를 모두 포함했는가", "description_en": "Say all three things: that you were late, the reason, and an apology or a promise.", "weight": 0.5 }
+        { "id": "c10", "description": "[보너스] 늦은 사실 + 이유 + 사과 또는 앞으로의 다짐, 세 요소를 모두 포함했는가", "description_en": "Say all three things: that you were late, the reason, and an apology or a promise.", "weight": 0.5, "requires": [["c2"], ["c3"], ["c8", "c9"]] }
       ],
       "reference_keywords": ["늦", "죄송", "버스", "막혀", "그래서", "다음"]
     },
@@ -127,7 +127,7 @@
         { "id": "c7", "description": "상처나 부상의 상태를 나타내는 표현을 사용했는가 (피가 나요, 아파요, 상처, 다쳤어요, 부었어요 등)", "description_en": "Describe the injury, such as it is bleeding or it hurts.", "weight": 1.0 },
         { "id": "c8", "description": "하지 말아야 할 행동이나 주의사항을 언급했는가 (계속 일하면 안 돼요, 손으로 만지면 안 돼요, 그냥 두면 안 돼요 등)", "description_en": "Say what you must not do, such as keep working.", "weight": 1.0 },
         { "id": "c9", "description": "방치했을 때 생길 수 있는 결과를 언급했는가 (덧나요, 세균, 감염, 병 나요, 더 아파요, 파상풍 등)", "description_en": "Say what can happen if you do nothing, such as an infection.", "weight": 1.0 },
-        { "id": "c10", "description": "[보너스] 즉시 취할 행동 + 알리거나 치료받는 행동, 두 축을 모두 포함했는가", "description_en": "Do both: say what you do right away and say that you tell someone or get treatment.", "weight": 0.5 }
+        { "id": "c10", "description": "[보너스] 즉시 취할 행동 + 알리거나 치료받는 행동, 두 축을 모두 포함했는가", "description_en": "Do both: say what you do right away and say that you tell someone or get treatment.", "weight": 0.5, "requires": [["c3", "c5"], ["c4", "c6"]] }
       ],
       "reference_keywords": ["병원", "다쳤", "피", "소독", "말해", "멈추"]
     }

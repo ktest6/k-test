@@ -169,7 +169,13 @@ def show_response(resp, answer):
         mark = "O" if r.met else "X"
         print(f"  [{mark}] {r.description}  (w={r.weight}, {r.source.value})")
         for ev in r.evidence[:2]:
-            print(f"        인용: \u201c{ev.quote}\u201d")
+            # 인용이 있는 판정(LLM)은 원문 그대로를 보여 준다.
+            # [보너스] 항목처럼 코드가 계산한 판정은 인용이 없고 설명이 근거라서,
+            # 그것까지 안 찍으면 화면에서는 근거가 없는 것처럼 보인다
+            if ev.quote:
+                print(f"        인용: \u201c{ev.quote}\u201d")
+            elif ev.comment:
+                print(f"        근거: {ev.comment}")
 
     m = resp.meta
     print("\n[STT 전사 보정]")
