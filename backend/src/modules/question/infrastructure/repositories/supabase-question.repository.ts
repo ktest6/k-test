@@ -158,12 +158,14 @@ export class SupabaseQuestionRepository implements QuestionRepository {
     return this.attachChecklistItems(questionRows ?? []);
   }
 
+  /** 세션 시작 시 문항 풀 랜덤 선택에 쓰인다 — used=false(검수 전 초안/테스트 문항)는 후보에서 뺀다. */
   async findByPart(part: QuestionSectionType): Promise<Question[]> {
     const client = this.supabaseService.getAdminClient();
     const { data: questionRows } = await client
       .from(QUESTION_TABLE)
       .select('*')
       .eq('part', part)
+      .eq('used', true)
       .is('deleted_at', null)
       .order('question_id', { ascending: true })
       .returns<QuestionRow[]>();
