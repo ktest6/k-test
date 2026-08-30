@@ -1,6 +1,6 @@
 """파이프라인 전체를 실제 답안으로 한 번 돌려서 결과를 눈으로 보는 스크립트.
 
-/score 3문항(말하기 2 + 쓰기 1) -> /finalize 까지 실제 경로를 그대로 탄다.
+/score 4문항(말하기 3 + 쓰기 1) -> /finalize 까지 실제 경로를 그대로 탄다.
 """
 
 import json
@@ -71,11 +71,11 @@ def load_speaking_item(item_id):
 
 
 # ---------------------------------------------------------------------------
-# 답안 3개. 실제 현장 상황을 가정한, 체크리스트를 대체로 만족하는 좋은 답안이다.
+# 답안 4개. 실제 현장 상황을 가정한, 체크리스트를 대체로 만족하는 좋은 답안이다.
 # 다만 외국인 노동자의 실제 답안처럼 보이도록 띄어쓰기 흔들림("표지 입니다")과
 # 맞춤법 오류("여덜시")를 일부러 조금씩 남겨 두었다 — 오류 자질이 실제로
 # 잡히는지도 이 스크립트로 같이 확인하려는 것이다.
-# 말하기 두 문항은 음성이 아니라 전사 텍스트(answer_text)를 직접 넣는 경로라
+# 말하기 세 문항은 음성이 아니라 전사 텍스트(answer_text)를 직접 넣는 경로라
 # 받아쓰기(LoRA) 서버가 꺼져 있어도 이 스크립트는 끝까지 돈다.
 # ---------------------------------------------------------------------------
 
@@ -98,6 +98,18 @@ ANSWER2 = (
     "그렇게 사다리 올라가면 떨어져서 머리 다쳐요 "
     "안전모 먼저 쓰세요 "
     "제가 사다리 잡아 줄게요"
+)
+
+# SPK-105 · 질문 음성("왜 늦으셨나요?")을 듣고 대답하는 문항
+# 이미지가 아니라 소리를 듣는 문항이라 화면에 띄울 것은 audio 칸(SPK-105.wav)에 있다.
+# 그 소리 파일은 아직 없지만 질문 문장이 prompt 에 글로 들어 있어서 채점은 지금도 된다.
+ITEM_Q = load_speaking_item("SPK-105")
+ANSWER_Q = (
+    "죄송합니다 오늘 늦었습니다 "
+    "아침에 알람이 안 울려서 늦게 일어났습니다 "
+    "그리고 정류장에서 버스가 안 와서 삼십분쯤 기다렸습니다 "
+    "그래서 회사에 늦게 도착했습니다 "
+    "다음부터는 일찍 나오겠습니다 정말 죄송합니다"
 )
 
 ITEM3 = ItemInfo(
@@ -125,6 +137,7 @@ ANSWER3 = (
 CASES = [
     (ITEM1.item_id, Mode.SPEAKING, ANSWER1, ITEM1, TranscriptInput(correct=True, nationality="베트남")),
     (ITEM2.item_id, Mode.SPEAKING, ANSWER2, ITEM2, TranscriptInput(correct=True, nationality="베트남")),
+    (ITEM_Q.item_id, Mode.SPEAKING, ANSWER_Q, ITEM_Q, TranscriptInput(correct=True, nationality="베트남")),
     (ITEM3.item_id, Mode.WRITING, ANSWER3, ITEM3, None),
 ]
 
@@ -273,7 +286,7 @@ def main():
             print(f"    ! {short(w)}")
 
     rule("합계")
-    print(f"  채점 3문항 총 소요시간: {total_ms}ms")
+    print(f"  채점 {len(CASES)}문항 총 소요시간: {total_ms}ms")
 
 
 if __name__ == "__main__":

@@ -188,7 +188,7 @@ def test_영어는_LLM_프롬프트에_들어가지_않는다():
 # 파일마다 항목 수가 다르다. 항목이 조용히 사라지는 것을 잡으려고 개수까지 못 박는다
 @pytest.mark.parametrize(
     ("filename", "expected_total"),
-    [("speaking_v1.json", 39), ("writing_v0.json", 16)],
+    [("speaking_v1.json", 59), ("writing_v0.json", 16)],
 )
 def test_문항_세트의_모든_체크리스트에_영어_문장이_있다(filename, expected_total):
     """빈 칸이 하나라도 있으면 리포트 화면의 'Required Points' 가 비어 보인다."""
@@ -211,7 +211,7 @@ def test_문항_세트의_모든_체크리스트에_영어_문장이_있다(file
             assert english.endswith("."), f"{where} 가 마침표로 끝나지 않는다"
             total += 1
 
-    # 말하기 v1 은 문항 4개에 39개, 쓰기 v0 은 문항 5개에 16개다
+    # 말하기 v1 은 문항 6개에 59개, 쓰기 v0 은 문항 5개에 16개다
     assert total == expected_total, f"{filename} 의 체크리스트 항목이 {total}개다"
 
 

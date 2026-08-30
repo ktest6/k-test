@@ -2,7 +2,7 @@
   "version": "speaking_v1",
   "mode": "speaking",
   "status": "draft",
-  "note": "가중치 임시 · 회의 후 확정, SPK-104 c6 는 A안 임시. 말하기 문항 4개(이미지 제시형). 응시자는 이미지를 보고 음성으로 답하고, 전사 텍스트가 ScoreRequest.answer_text 로 들어온다. items[] 객체는 ScoreRequest.item 에 그대로 넣을 수 있는 형태다. 채점 AI 는 이미지를 보지 않는다 — 이미지에 무엇이 있는지는 scene_description 으로 글로 전달한다. image 는 파일명만 적어 두었고 실제 파일은 나중에 items/images/ 에 둔다.",
+  "note": "가중치 임시 · 회의 후 확정, SPK-104 c6 는 A안 임시. 말하기 문항 4개(이미지 제시형). 응시자는 이미지를 보고 음성으로 답하고, 전사 텍스트가 ScoreRequest.answer_text 로 들어온다. items[] 객체는 ScoreRequest.item 에 그대로 넣을 수 있는 형태다. 채점 AI 는 이미지를 보지 않는다 — 이미지에 무엇이 있는지는 scene_description 으로 글로 전달한다. image 는 파일명만 적어 두었고 실제 파일은 나중에 items/images/ 에 둔다. SPK-105·106 은 음성 질문 문항, 질문 wav 는 별도.",
   "items": [
     {
       "item_id": "SPK-101",
@@ -86,6 +86,50 @@
         { "id": "c10", "description": "[보너스] 위험 요소를 알리는 내용과 조치를 제안하는 내용을 모두 포함했는가", "description_en": "Do both: tell him the danger and tell him what to do.", "weight": 0.5 }
       ],
       "reference_keywords": ["안전모", "사다리", "위험", "다치", "떨어지", "쓰세요"]
+    },
+    {
+      "item_id": "SPK-105",
+      "item_type": "answer_question",
+      "image": "",
+      "audio": "SPK-105.wav",
+      "prompt": "오늘 회사에 늦으셨군요. 왜 늦으셨나요?",
+      "scene_description": "",
+      "expected_register": "polite",
+      "checklist": [
+        { "id": "c1", "description": "[최소기준] 질문에 대해 한국어로 대답하려는 발화가 있는가", "description_en": "Answer the question in Korean.", "weight": 0.5 },
+        { "id": "c2", "description": "늦은 사실을 인정하거나 언급했는가 (늦었어요, 지각했어요, 미안해요, 죄송해요 등)", "description_en": "Say that you were late.", "weight": 1.0 },
+        { "id": "c3", "description": "늦은 이유를 하나라도 말했는가 (차가 막혀서, 늦게 일어나서, 버스를 놓쳐서, 아파서 등)", "description_en": "Give a reason for being late.", "weight": 1.5 },
+        { "id": "c4", "description": "이유가 되는 사건이나 상황을 구체적으로 설명했는가 (알람이 안 울렸어요, 버스가 안 왔어요, 배가 아팠어요 등 상황 서술)", "description_en": "Explain what happened, such as your alarm did not ring.", "weight": 1.5 },
+        { "id": "c5", "description": "시간과 관련된 정보를 언급했는가 (몇 시, 아침에, 30분, 늦게, 일찍 등)", "description_en": "Say something about time, such as this morning or thirty minutes.", "weight": 1.0 },
+        { "id": "c6", "description": "장소나 이동 수단을 언급했는가 (집, 회사, 버스, 지하철, 길, 정류장 등)", "description_en": "Say a place or how you travel, such as the bus or the station.", "weight": 1.0 },
+        { "id": "c7", "description": "원인과 결과의 관계를 나타내는 연결 표현을 사용했는가 (그래서, -어서, -기 때문에, -니까 등)", "description_en": "Connect the cause and the result with a word like so or because.", "weight": 1.0 },
+        { "id": "c8", "description": "앞으로의 행동이나 다짐을 말했는가 (다음부터 일찍 올게요, 조심하겠습니다, 안 늦을게요 등)", "description_en": "Say what you will do next time, such as I will come early.", "weight": 1.0 },
+        { "id": "c9", "description": "사과하거나 양해를 구하는 표현을 사용했는가 (죄송합니다, 미안합니다, 죄송해요 등)", "description_en": "Say sorry to your boss.", "weight": 1.0 },
+        { "id": "c10", "description": "[보너스] 늦은 사실 + 이유 + 사과 또는 앞으로의 다짐, 세 요소를 모두 포함했는가", "description_en": "Say all three things: that you were late, the reason, and an apology or a promise.", "weight": 0.5 }
+      ],
+      "reference_keywords": ["늦", "죄송", "버스", "막혀", "그래서", "다음"]
+    },
+    {
+      "item_id": "SPK-106",
+      "item_type": "answer_question",
+      "image": "",
+      "audio": "SPK-106.wav",
+      "prompt": "손이 못에 찔렸을 때는 어떻게 해야 하나요?",
+      "scene_description": "",
+      "expected_register": "any",
+      "checklist": [
+        { "id": "c1", "description": "[최소기준] 질문에 대해 한국어로 대답하려는 발화가 있는가", "description_en": "Answer the question in Korean.", "weight": 0.5 },
+        { "id": "c2", "description": "다쳤을 때 해야 할 행동을 하나라도 말했는가 (병원 가요, 약 발라요, 말해요, 씻어요 등)", "description_en": "Say one thing you must do when you are hurt.", "weight": 1.0 },
+        { "id": "c3", "description": "작업을 멈추거나 그 자리를 벗어나는 행동을 언급했는가 (일 그만해요, 멈춰요, 나와요, 쉬어요 등)", "description_en": "Say that you stop working or leave the place.", "weight": 1.0 },
+        { "id": "c4", "description": "다른 사람에게 알리는 행동을 언급했는가 (관리자한테 말해요, 반장님한테 알려요, 동료를 불러요, 신고해요 등)", "description_en": "Say that you tell someone, such as your manager.", "weight": 1.5 },
+        { "id": "c5", "description": "상처를 처치하는 구체적인 행동을 언급했는가 (씻어요, 소독해요, 약 발라요, 밴드 붙여요, 피 닦아요 등)", "description_en": "Say how you take care of the wound, such as washing it or putting on a bandage.", "weight": 1.5 },
+        { "id": "c6", "description": "병원이나 의료기관에 가는 것을 언급했는가 (병원, 의무실, 보건실, 의사, 119, 구급차 등)", "description_en": "Say that you go to a hospital or call for help.", "weight": 1.0 },
+        { "id": "c7", "description": "상처나 부상의 상태를 나타내는 표현을 사용했는가 (피가 나요, 아파요, 상처, 다쳤어요, 부었어요 등)", "description_en": "Describe the injury, such as it is bleeding or it hurts.", "weight": 1.0 },
+        { "id": "c8", "description": "하지 말아야 할 행동이나 주의사항을 언급했는가 (계속 일하면 안 돼요, 손으로 만지면 안 돼요, 그냥 두면 안 돼요 등)", "description_en": "Say what you must not do, such as keep working.", "weight": 1.0 },
+        { "id": "c9", "description": "방치했을 때 생길 수 있는 결과를 언급했는가 (덧나요, 세균, 감염, 병 나요, 더 아파요, 파상풍 등)", "description_en": "Say what can happen if you do nothing, such as an infection.", "weight": 1.0 },
+        { "id": "c10", "description": "[보너스] 즉시 취할 행동 + 알리거나 치료받는 행동, 두 축을 모두 포함했는가", "description_en": "Do both: say what you do right away and say that you tell someone or get treatment.", "weight": 0.5 }
+      ],
+      "reference_keywords": ["병원", "다쳤", "피", "소독", "말해", "멈추"]
     }
   ]
 }

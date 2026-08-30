@@ -509,6 +509,15 @@ class ItemInfo(BaseModel):
             "선택 필드라서 백엔드가 안 보내도 채점은 그대로 돈다"
         ),
     )
+    audio: str = Field(
+        default="",
+        description=(
+            "음성 질문형 문항에서 응시자에게 들려 줄 질문 소리 파일 이름 (예: 'SPK-105.wav'). "
+            "image 와 똑같이 화면(스피커)에 무엇을 틀지 고르는 값일 뿐이고 채점에는 쓰지 않는다. "
+            "채점 LLM 은 소리를 듣지 못하므로 질문 문장 자체는 prompt 에 글로 적어 둔다. "
+            "선택 필드라서 백엔드가 안 보내도 채점은 그대로 돈다"
+        ),
+    )
     scene_description: str = Field(
         default="",
         description=(
