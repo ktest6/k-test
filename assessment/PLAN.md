@@ -86,7 +86,7 @@
 ## 시험 구성 확정 (8/30) — 말하기 전용
 
 시험은 **말하기 4문항(`items/speaking_v1.json`, SPK-101~104, 이미지 제시형)만**으로 본다. 쓰기 문항은 시험에서 빼되 코드·문항은 삭제하지 않는다.
-남은 일: ① 이미지는 디자인 팀원이 리디자인(우리 담당 아님, 정사각형 표시 유의) ② 백엔드: 말하기 4문항 시드 + `/score` item 에 `item_type`·`scene_description`·`reference_keywords`·`image` 실어 보내기 ③ 회의: 가중치 확정, SPK-104 c6(A/B), 최소기준 항목 통일.
+남은 일: ① 이미지는 디자인 팀원이 리디자인(우리 담당 아님, 정사각형 표시 유의) ② 백엔드: 말하기 4문항 시드 + `/score` item 에 `item_type`·`scene_description`·`reference_keywords`·`image` 실어 보내기 ③ ~~회의: 가중치 확정, SPK-104 c6(A/B), 최소기준 항목 통일~~ → 8/30 회의에서 전부 이대로 확정(status: confirmed).
 
 ## 트랙 C — 오류·상태 메시지 코드화 (8/25 백엔드 합의, B 방식)
 
