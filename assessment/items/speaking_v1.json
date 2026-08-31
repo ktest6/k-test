@@ -1,8 +1,8 @@
 {
   "version": "speaking_v1",
   "mode": "speaking",
-  "status": "draft",
-  "note": "가중치 임시 · 회의 후 확정, SPK-104 c6 는 A안 임시. 각 문항 마지막 [보너스] 항목의 requires(앞 항목들의 판정으로 코드가 계산하는 조건)도 8/30 임시안이며 회의에서 확정한다. 말하기 문항 4개(이미지 제시형). 응시자는 이미지를 보고 음성으로 답하고, 전사 텍스트가 ScoreRequest.answer_text 로 들어온다. items[] 객체는 ScoreRequest.item 에 그대로 넣을 수 있는 형태다. 채점 AI 는 이미지를 보지 않는다 — 이미지에 무엇이 있는지는 scene_description 으로 글로 전달한다. image 는 파일명만 적어 두었고 실제 파일은 나중에 items/images/ 에 둔다. SPK-105·106 은 음성 질문 문항, 질문 wav 는 별도.",
+  "status": "confirmed",
+  "note": "8/30 회의 확정: 체크리스트 가중치·requires(각 문항 마지막 [보너스] 항목을 앞 항목 판정으로 코드가 계산하는 조건)·SPK-104 c6 A안 모두 이대로 간다. 백엔드 DB(마이그레이션 0046)에도 같은 값이 들어가 있다. 말하기 문항 6개(이미지 제시형 4 + 음성 질문 2). 응시자는 이미지를 보고 음성으로 답하고, 전사 텍스트가 ScoreRequest.answer_text 로 들어온다. items[] 객체는 ScoreRequest.item 에 그대로 넣을 수 있는 형태다. 채점 AI 는 이미지를 보지 않는다 — 이미지에 무엇이 있는지는 scene_description 으로 글로 전달한다. image 는 파일명만 적어 두었고 실제 파일은 나중에 items/images/ 에 둔다. SPK-105·106 은 음성 질문 문항, 질문 wav 는 별도.",
   "items": [
     {
       "item_id": "SPK-101",
