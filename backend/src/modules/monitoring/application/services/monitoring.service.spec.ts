@@ -247,7 +247,8 @@ describe('MonitoringService.analyze', () => {
       face_count: 0,
       ruleId: 'RULE_FACE_OUT_OF_FRAME',
       decision: 'RECORD_EVENT',
-      message: '얼굴이 화면 밖으로 벗어났습니다.',
+      // 원본 한국어 메시지는 anti-cheat-rule-messages 카탈로그로 영어로 번역돼 저장된다.
+      message: "The candidate's face could not be detected on screen.",
     });
     expect(createInput.snapshotPath).toMatch(/^100\/\d+-.+\.jpg$/);
     expect(result.recordedEvents).toEqual([savedEvent]);
