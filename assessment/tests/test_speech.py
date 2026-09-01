@@ -25,6 +25,8 @@
 from __future__ import annotations
 
 import io
+import subprocess
+import sys
 import wave
 
 import httpx
@@ -41,6 +43,7 @@ from src.scoring.schema import (
     ScoreOptions,
     ScoreRequest,
 )
+from src.speech import audio as audio_module
 from src.speech.audio import (
     MAX_AUDIO_BYTES,
     AudioRequestError,
@@ -174,6 +177,12 @@ def speaking_request(**overrides) -> ScoreRequest:
     }
     payload.update(overrides)
     return ScoreRequest(**payload)
+
+
+#: mp3 파일의 앞머리(ID3 태그)를 흉내 낸 알맹이.
+#: 소리 알맹이는 없지만 우리 코드가 형식을 알아보는 근거는 이 표식이라 이것으로 충분하다
+#: (실제 변환은 가짜로 바꿔 끼운다).
+FAKE_MP3 = b"ID3" + bytes([4, 0, 0]) + bytes(200)
 
 
 def mock_http(handler) -> httpx.Client:
@@ -459,24 +468,48 @@ def test_정상_wav_는_형식과_길이가_함께_나온다():
     assert fetched.size_bytes == len(data)
 
 
-def test_wav가_아니면_요청이_알려_준_길이를_쓴다():
-    """압축 형식은 파일을 풀어 봐야 길이를 알 수 있어서 우리가 재지 않는다."""
+def test_압축_형식은_입구에서_wav_로_바뀌고_길이도_직접_잰다(monkeypatch):
+    """2026-08-30 이후 달라진 대목이다.
+
+    예전에는 mp3·webm 을 그대로 넘기고 길이는 요청이 알려 준 값을 믿었다. 그런데
+    받아쓰기 서버도 발음 평가도 wav 만 읽을 줄 알아서 말하기 채점이 전부 503 이 났다.
+    지금은 입구에서 wav 로 바꾸고, 바뀐 파일에서 길이를 직접 잰다.
+    (변환 자체의 자세한 시험은 tests/test_audio_transcode.py 에 있다)
+    """
+    바뀐wav = make_wav(seconds=9.0)
+
+    def fake_run(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 0, stdout=바뀐wav, stderr=b"")
+
+    # ffmpeg 가 '있는' 상태를 만든다(실제로 부르는 자리는 가짜로 바꿔 끼운다)
+    monkeypatch.setenv("KTEST_FFMPEG", sys.executable)
+    monkeypatch.setattr(audio_module.subprocess, "run", fake_run)
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, content=b"fake-mp3-bytes",
+        return httpx.Response(200, content=FAKE_MP3,
                               headers={"content-type": "audio/mpeg"})
 
     with mock_http(handler) as client:
-        # 길이를 알려 준 경우
-        fetched = fetch_audio(
-            AudioInput(url="https://x.test/a.mp3", duration_ms=9000), http_client=client
-        )
-        assert fetched.duration_ms == 9000
-
-        # 안 알려 준 경우에는 없는 대로 두고 사람이 알 수 있게 남긴다
         fetched = fetch_audio(AudioInput(url="https://x.test/a.mp3"), http_client=client)
-        assert fetched.duration_ms is None
-        assert any("길이를 재지 못한다" in w for w in fetched.warnings)
+
+    assert fetched.audio_format == "wav"
+    assert fetched.source_format == "mp3"
+    # 요청이 알려 준 값이 아니라 바뀐 파일에서 잰 값이다
+    assert fetched.duration_ms == 9000
+
+
+def test_바꿀_수_없으면_조용히_넘기지_않고_막는다(monkeypatch):
+    """ffmpeg 이 없는 서버에서는 압축 형식이 여기서 분명히 막혀야 한다."""
+    monkeypatch.setenv("KTEST_FFMPEG", "이런-이름의-실행파일은-없다-ktest")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=FAKE_MP3,
+                              headers={"content-type": "audio/mpeg"})
+
+    with mock_http(handler) as client:
+        with pytest.raises(SttUnavailable) as caught:
+            fetch_audio(AudioInput(url="https://x.test/a.mp3"), http_client=client)
+    assert caught.value.notice.code == "STT_AUDIO_TRANSCODE_FAILED"
 
 
 def test_wav_길이는_파일에서_직접_잰다():
@@ -855,23 +888,33 @@ def test_정상_크기의_음성은_관문을_그대로_통과한다(monkeypatch
     assert result.audio_duration_ms == 2000
 
 
-def test_압축_형식은_소리_관문을_건너뛴다(monkeypatch):
-    """mp3·m4a 는 풀어 봐야 소리를 볼 수 있어서 우리가 재지 못한다.
+def test_압축_형식도_이제_소리_관문을_지난다(monkeypatch):
+    """예전에는 여기가 구멍이었다(2026-08-30 에 닫혔다).
 
-    남아 있는 구멍이라는 사실을 코드로 적어 둔다.
-    이 형식들은 관문 2(모델이 말 없음을 밝히는 것)에만 기댄다.
+    mp3·m4a·webm 은 압축돼 있어서 소리 크기를 잴 수 없었고, 그래서 무음 관문이
+    통째로 건너뛰어졌다. 지금은 입구에서 wav 로 바꾸므로 압축 형식도 관문을 지난다.
+    받아쓰기에 넘어가는 파일이 wav 이고 소리 크기가 재져 있는지를 못 박는다.
     """
+    바뀐wav = make_tone_wav(amplitude=8000, seconds=1.0)
+
+    def fake_run(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 0, stdout=바뀐wav, stderr=b"")
+
+    monkeypatch.setenv("KTEST_FFMPEG", sys.executable)
+    monkeypatch.setattr(audio_module.subprocess, "run", fake_run)
 
     def fake_call(self, fetched, item_prompt):
-        # 소리를 재지 못했으므로 loudness 가 비어 있어야 한다
-        assert fetched.loudness is None
+        # 바뀐 뒤라 소리 크기가 재져 있어야 한다(예전에는 여기가 None 이었다)
+        assert fetched.audio_format == "wav"
+        assert fetched.source_format == "mp3"
+        assert fetched.loudness is not None and fetched.loudness.peak_window_rms > 0
         return SPOKEN_TEXT, True, {}
 
     monkeypatch.setattr(GeminiStt, "_call_gemini", fake_call)
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
-            200, content=b"fake-mp3-bytes", headers={"content-type": "audio/mpeg"}
+            200, content=FAKE_MP3, headers={"content-type": "audio/mpeg"}
         )
 
     with mock_http(handler) as client:

@@ -24,8 +24,12 @@ from .audio import (
     FORMAT_TO_MIME,
     MAX_AUDIO_BYTES,
     AudioRequestError,
+    ensure_wav,
     fetch_audio,
+    ffmpeg_available,
     load_local_audio,
+    sniff_format,
+    transcode_to_wav,
 )
 from .azure_stt import AzureStt, is_read_aloud
 from .gemini_stt import DEFAULT_STT_MODEL, GeminiStt
@@ -83,11 +87,15 @@ __all__ = [
     "build_default_pronouncer",
     "build_default_stt",
     "choose_stt_provider",
+    "ensure_wav",
     "fetch_audio",
+    "ffmpeg_available",
     "is_read_aloud",
     "is_silent",
     "is_too_quiet_for_speech",
     "load_local_audio",
     "measure_wav_loudness",
     "resolve_audio_answer",
+    "sniff_format",
+    "transcode_to_wav",
 ]

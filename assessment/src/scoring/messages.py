@@ -232,6 +232,15 @@ MESSAGE_CATALOG: dict[str, MessageSpec] = {
         where="HTTP 400 detail",
         situation="빈 파일",
     ),
+    "AUDIO_TRANSCODED_TO_WAV": _spec(
+        "'{sourceFormat}' 녹음을 wav(16kHz 모노)로 바꿔서 채점했다.",
+        "The '{sourceFormat}' recording was converted to wav (16 kHz mono) before scoring.",
+        params={"sourceFormat": "str"},
+        examples={"sourceFormat": "webm"},
+        where="warnings",
+        situation="브라우저 녹음(webm 등)을 입구에서 wav 로 변환함",
+        internal=True,
+    ),
     "AUDIO_NOT_ALLOWED_FOR_WRITING": _spec(
         "쓰기 답안에는 음성 파일을 붙일 수 없다. 음성 채점은 mode 를 speaking 으로 보내야 한다.",
         "A writing answer cannot carry an audio file. Send mode=speaking to have audio scored.",
@@ -257,6 +266,15 @@ MESSAGE_CATALOG: dict[str, MessageSpec] = {
         examples={"timeoutSec": 30},
         where="HTTP 503 detail",
         situation="내려받기 시간 초과",
+    ),
+    "STT_AUDIO_TRANSCODE_FAILED": _spec(
+        "'{format}' 녹음을 wav 로 바꾸지 못했다({reason}). 서버에 ffmpeg 가 있는지 확인해야 한다.",
+        "The '{format}' recording could not be converted to wav ({reason}). "
+        "Check that ffmpeg is installed on the server.",
+        params={"format": "str", "reason": "str"},
+        examples={"format": "webm", "reason": "ffmpeg 실행파일을 찾을 수 없다"},
+        where="HTTP 503 detail",
+        situation="ffmpeg 가 없거나 변환이 실패함(브라우저 webm 녹음이 여기서 막힌다)",
     ),
     "STT_EMPTY_TRANSCRIPT_FINAL": _spec(
         "음성에서 말을 하나도 옮겨 적지 못했다. 녹음 상태를 확인해야 한다.",

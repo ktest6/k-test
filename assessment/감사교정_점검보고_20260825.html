@@ -1,0 +1,126 @@
+<title>2차 감사시트 점검</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#f2f4f6; --paper:#ffffff; --ink:#1b2129; --ink-2:#4a5561; --ink-3:#7b8792;
+  --line:#d9dee3; --accent:#0e6b6a; --accent-soft:#d8ecea; --warn:#a1471c; --warn-soft:#f6e3d8;
+  --bar:#0e6b6a; --bar-track:#e3e8ec;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#13181d; --paper:#1b2229; --ink:#e8ecef; --ink-2:#b4bec7; --ink-3:#7f8b96;
+    --line:#2d363f; --accent:#5ec3bf; --accent-soft:#183a39; --warn:#e69a6c; --warn-soft:#3b261a;
+    --bar:#5ec3bf; --bar-track:#2a333c;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#13181d; --paper:#1b2229; --ink:#e8ecef; --ink-2:#b4bec7; --ink-3:#7f8b96;
+  --line:#2d363f; --accent:#5ec3bf; --accent-soft:#183a39; --warn:#e69a6c; --warn-soft:#3b261a;
+  --bar:#5ec3bf; --bar-track:#2a333c;
+}
+body{background:var(--bg);color:var(--ink);font-family:"Noto Sans KR",system-ui,-apple-system,"Malgun Gothic",sans-serif;line-height:1.7;margin:0}
+.wrap{max-width:860px;margin:0 auto;padding:48px 24px 80px}
+header{border-bottom:2px solid var(--ink);padding-bottom:20px;margin-bottom:36px}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);font-family:"IBM Plex Mono",monospace}
+h1{font-family:"Noto Serif KR",serif;font-weight:700;font-size:30px;line-height:1.3;margin:8px 0 10px;text-wrap:balance}
+.lede{font-size:17px;color:var(--ink-2);max-width:40em;margin:0}
+h2{font-family:"Noto Serif KR",serif;font-size:20px;margin:44px 0 12px;padding-top:8px}
+h2 small{font-family:"IBM Plex Mono",monospace;font-weight:400;font-size:12px;color:var(--ink-3);margin-left:10px}
+p{max-width:40em;margin:0 0 12px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:20px 22px;margin:14px 0}
+.note{border-left:3px solid var(--accent);background:var(--accent-soft);padding:12px 16px;border-radius:0 6px 6px 0;margin:14px 0}
+.note.warn{border-color:var(--warn);background:var(--warn-soft)}
+.tbl{overflow-x:auto;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px;font-variant-numeric:tabular-nums}
+th,td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:12px;letter-spacing:.06em;color:var(--ink-3);font-weight:500;text-transform:uppercase}
+td.num,th.num{text-align:right;font-family:"IBM Plex Mono",monospace}
+td.name{font-weight:700}
+.bar{display:flex;align-items:center;gap:10px;min-width:180px}
+.bar i{display:block;height:10px;background:var(--bar-track);flex:1;border-radius:2px;overflow:hidden}
+.bar i b{display:block;height:100%;background:var(--bar)}
+.bar span{font-family:"IBM Plex Mono",monospace;width:3.2em;text-align:right}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0}
+.kv div{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.kv b{display:block;font-family:"IBM Plex Mono",monospace;font-size:24px;font-weight:500;line-height:1.1}
+.kv small{color:var(--ink-3);font-size:12px}
+ol,ul{padding-left:1.3em;max-width:44em}
+li{margin:4px 0}
+code{font-family:"IBM Plex Mono",monospace;font-size:.92em;background:var(--bar-track);padding:1px 5px;border-radius:3px}
+.ex{font-family:"IBM Plex Mono",monospace;font-size:13.5px;color:var(--ink-2)}
+.ex b{color:var(--ink);font-weight:500}
+.next{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14.5px}
+.next .d{font-family:"IBM Plex Mono",monospace;color:var(--ink-3)}
+footer{margin-top:48px;color:var(--ink-3);font-size:12.5px;border-top:1px solid var(--line);padding-top:12px}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">K-TEST · 채점 모델 파트 · 2026-08-25</div>
+  <h1>2차 감사시트 점검 — 팀원 4명 2,000건, 무엇이 나왔나</h1>
+  <p class="lede">v3 받아쓰기 모델을 학습하기 전에, 팀원이 귀로 고쳐 준 정답지가 믿을 만한지 확인했다. 결론: 시트는 멀쩡하고, 규칙 구멍 하나와 감사자 한 명의 과교정이 있었다.</p>
+</header>
+
+<h2>한 줄 요약</h2>
+<div class="kv">
+  <div><b>2,000</b><small>회수 건수 (양은희 500건 미회수)</small></div>
+  <div><b>0</b><small>빠진 행·번호 어긋남·겹침</small></div>
+  <div><b>571</b><small>필터 뒤 남은 실질 교정</small></div>
+  <div><b>20%</b><small>한효주 교정의 증인 지지율 (다른 셋 35~49%)</small></div>
+</div>
+
+<h2>1. 시트는 구조적으로 멀쩡하다</h2>
+<p>4명 회수본 모두 원본 500행과 파일명·번호가 100% 일치했다. 사람 간 겹치는 파일 0, <code>+</code> 기호 보존 전부 확인. 자잘한 것만 있었다.</p>
+<div class="tbl"><table>
+<tr><th>감사자</th><th class="num">실질 교정</th><th class="num">교정률</th><th>특이사항</th></tr>
+<tr><td class="name">김도영</td><td class="num">153</td><td class="num">31%</td><td>4번째 열에 진행도 ㅇ + 메모 3건. #165 "소리 x"는 실제 무음 파일(제외)</td></tr>
+<tr><td class="name">백예나</td><td class="num">94</td><td class="num">19%</td><td>#363 빈칸 제출, 낱자모 잔존 1건</td></tr>
+<tr><td class="name">황인홍</td><td class="num">92</td><td class="num">18%</td><td>낱자모 잔존 1건 ("잃어ㅃ려서")</td></tr>
+<tr><td class="name">한효주</td><td class="num">261</td><td class="num">52%</td><td>#316 "?" 한 글자 — 못 알아들음 표시로 처리</td></tr>
+</table></div>
+<p class="ex">교정 = 띄어쓰기·문장부호를 뺀 뒤 글자가 바뀐 것. 원본 라벨 자체가 잘린 사례도 있었다 — 김도영 #168: 16.6초 음성에 원라벨 "하세요." 한 마디.</p>
+
+<h2>2. 규칙 구멍: "표준 발음"을 소리 나는 대로 적은 교정 <small>같은 발음 필터</small></h2>
+<p>안내문에는 "들리는 대로"만 있고 "한국어 발음 규칙은 맞춤법대로"가 없었다. 그래서 <span class="ex"><b>잠을→자믈, 원래→월래, 여덟→여덜</b></span> 같은 교정이 생겼다. 이건 학습자 오류가 아니라 정상 발음이라, 그대로 학습하면 모델이 맞춤법을 버린다.</p>
+<p>해결은 사람이 아니라 기계다. g2p(글자→발음 변환)로 원본·교정 어절의 발음이 같으면 원본으로 되돌렸다.</p>
+<div class="tbl"><table>
+<tr><th>감사자</th><th class="num">되돌린 어절</th><th class="num">필터 뒤 교정</th></tr>
+<tr><td class="name">김도영</td><td class="num">2</td><td class="num">148</td></tr>
+<tr><td class="name">백예나</td><td class="num">1</td><td class="num">92</td></tr>
+<tr><td class="name">황인홍</td><td class="num">2</td><td class="num">92</td></tr>
+<tr><td class="name">한효주</td><td class="num">50</td><td class="num">239</td></tr>
+</table></div>
+<div class="note">필터가 사람보다 정확했던 예: "넓다"의 표준 발음은 <b>널따</b>다. 학습자가 "넙다"라고 한 건 진짜 오류라서 필터가 교정을 살렸다 — 우리 둘 다 되돌려야 한다고 생각했었다.</div>
+<p>단, 규칙 구멍은 한효주 몫의 50어절만 설명한다. 한효주는 필터 뒤에도 239건(48%)으로 다른 셋의 2.5배였다. 진짜 편차가 남아 있었다.</p>
+
+<h2>3. 진짜 편차: 증인 4종이 심판했다 <small>671건 · GPU</small></h2>
+<p>네 명이 서로 다른 500건을 들었으니 교정률만으로는 "과하다"를 말할 수 없다. 그래서 세탁 탐지기용으로 뽑아 둔 AI 받아쓰기 4종(Whisper·Qwen·OWSM·SenseVoice)에게 같은 음성을 들려주고, 원본과 교정본 중 어느 쪽에 가깝게 들었는지 표를 셌다. 고친 571건 + 안 고친 대조군 100건.</p>
+<div class="tbl"><table>
+<tr><th>감사자</th><th class="num">실질 교정</th><th class="num">지지</th><th class="num">반대</th><th class="num">보류</th><th>정밀도 = 지지/(지지+반대)</th></tr>
+<tr><td class="name">김도영</td><td class="num">116</td><td class="num">45</td><td class="num">47</td><td class="num">24</td><td><div class="bar"><i><b style="width:49%"></b></i><span>49%</span></div></td></tr>
+<tr><td class="name">황인홍</td><td class="num">81</td><td class="num">26</td><td class="num">36</td><td class="num">19</td><td><div class="bar"><i><b style="width:42%"></b></i><span>42%</span></div></td></tr>
+<tr><td class="name">백예나</td><td class="num">77</td><td class="num">19</td><td class="num">35</td><td class="num">23</td><td><div class="bar"><i><b style="width:35%"></b></i><span>35%</span></div></td></tr>
+<tr><td class="name">한효주</td><td class="num">224</td><td class="num">38</td><td class="num">152</td><td class="num">34</td><td><div class="bar"><i><b style="width:20%"></b></i><span>20%</span></div></td></tr>
+</table></div>
+<div class="note warn"><b>읽을 때 주의.</b> 절대값이 낮은 건 증인도 완벽하지 않아서다(증인 자신의 오류 보존율 67~79%). 이 표는 <b>사람 사이 순위와 격차</b>로만 읽는다. "김도영도 절반은 틀렸다"로 읽으면 안 된다. 군말("어", "음")만 추가한 교정 55건은 증인이 군말을 아예 안 받아써서 판정 불가라 표에서 뺐다.</div>
+<p>결론: 편차는 진짜였고, 한효주는 <b>과교정</b> 쪽이다. 한효주 교정 10개 중 증인이 편든 건 2개, 다른 셋은 4~5개.</p>
+
+<h2>4. 오늘 만든 것</h2>
+<ul>
+  <li><code>scripts/speech_lab/audit_merge.py</code> — 시트 4장 병합 · 같은 발음 필터 · wav 추출 · 정밀도 표 (테스트 15개)</li>
+  <li><code>data/manifests/audit2000.jsonl</code> / <code>audit2000_gold.jsonl</code> — 기계용 목록 2,000행</li>
+  <li><code>D:\해커톤데이터\launder_audit2000\</code> — 증인 4종 받아쓰기 671건 × 4</li>
+  <li><code>D:\해커톤데이터\witness-venv</code> — Qwen을 GPU에서 돌리기 위한 환경 (메인 venv 복사 + CUDA torch)</li>
+  <li><code>assessment/deploy/gcp/</code>, <code>deploy/runpod/</code> — 서버 이전 꾸러미 (시연용 GCP 상시 · 작업용 RunPod)</li>
+</ul>
+
+<h2>5. 다음</h2>
+<div class="next">
+  <span class="d">8/26</span><span>재완이 50건 직접 청취(한효주 25 + 나머지 25) → 증인 표결이 사람 판정과 맞는지 검산</span>
+  <span class="d">8/26</span><span>맞으면 라벨 등급 확정 — <b>금</b> 미교정+증인동의(시험지) · <b>은</b> 교정+증인지지(시험지+학습) · <b>동</b> 교정+증인반대(학습 1단만 또는 제외)</span>
+  <span class="d">8/27</span><span>양은희 500건 회수 → 골든셋 확장 → base·v1·v2 재평가 → v3 1단 학습(RunPod)</span>
+  <span class="d">9/2 전</span><span>GCP <code>stt-lora</code> VM에 채점 서버 + LoRA 서버 상시 기동, 백엔드에 고정 주소 전달</span>
+</div>
+
+<footer>원자료: 회수본 <code>D:\해커톤데이터\해커톤_오디오데이터_2500-…\</code> · 표결 코드 <code>D:\해커톤데이터\audit2000_vote.py</code> · 상세 기록 <code>assessment/HISTORY.md</code> 8/25</footer>
+</div>

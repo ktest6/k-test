@@ -62,6 +62,7 @@ from .speech.audio import (
     FORMAT_TO_MIME,
     MAX_AUDIO_BYTES,
     AudioRequestError,
+    ffmpeg_available,
 )
 from .speech.gemini_stt import DEFAULT_STT_MODEL, GeminiStt
 from .speech.intake import (
@@ -195,6 +196,13 @@ def health() -> dict:
         # 못 쓰는 이유 한 문장. 정상이면 null 이다.
         # **새로 추가된 필드다** — 기존 필드의 이름과 뜻은 하나도 바뀌지 않았다
         "stt_detail": stt_detail,
+        # 소리 형식을 바꿀 수 있는지(서버에 ffmpeg 가 깔려 있는지).
+        # **새로 추가된 필드다** — 기존 필드는 하나도 바뀌지 않았다.
+        # 응시자 음성은 브라우저 녹음(webm)으로 들어오는데 받아쓰기·발음 평가는 wav 만
+        # 읽는다. 그래서 입구에서 wav 로 바꾸는데, 이 값이 false 면 그 변환을 못 해
+        # **말하기 채점이 전부 503 이 된다**(쓰기 채점은 영향 없다).
+        # 고치는 법: 서버에 ffmpeg 를 깔거나(apt-get install ffmpeg) KTEST_FFMPEG 로 자리를 알려 준다
+        "ffmpeg_available": ffmpeg_available(),
         # azure 만 '원래 계획하던 것'이라 임시가 아니다. lora·gemini 는 임시로 본다
         # (lora 는 골든셋 검증 전, gemini 는 Azure 자리에 임시로 꽂아 둔 것)
         "stt_provisional": choose_stt_provider() != "azure",

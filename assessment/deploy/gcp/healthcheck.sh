@@ -67,6 +67,20 @@ else
   fi
 fi
 
+# ── 1-2) 소리 형식 변환기(ffmpeg) ───────────────────────────────────────────
+# 왜 보나: 응시자 음성은 브라우저 녹음(webm)으로 들어오는데 받아쓰기·발음 평가는
+# wav 만 읽는다. 채점 서버가 입구에서 ffmpeg 로 바꾸므로, 이게 없으면
+# 말하기 채점이 전부 503 이 된다(쓰기는 영향 없다).
+echo
+echo "[1-2] 소리 형식 변환기 (ffmpeg)"
+if ffmpeg -version >/dev/null 2>&1; then
+  echo "  $(ffmpeg -version 2>/dev/null | head -1)"
+else
+  echo "  X ffmpeg 이 없다 -> webm 녹음은 말하기 채점이 전부 503 이 된다."
+  echo "    고치기:  sudo apt-get install -y ffmpeg"
+  PROBLEM=1
+fi
+
 # ── 2) 채점 서버(8001) ──────────────────────────────────────────────────────
 echo
 echo "[2] 채점 서버 (8001)"
@@ -82,6 +96,7 @@ else
   echo "  stt_provider    = $(field "$API_JSON" stt_provider)"
   echo "  stt_available   = $(field "$API_JSON" stt_available)"
   echo "  stt_detail      = $(field "$API_JSON" stt_detail)   (정상이면 null)"
+  echo "  ffmpeg_available = $(field "$API_JSON" ffmpeg_available)   (false 면 webm 답안이 전부 503)"
   echo "  auth_enabled    = $(field "$API_JSON" auth_enabled)   (true 면 X-API-Key 필요)"
 
   # 여기가 이 스크립트의 핵심이다. 이 값이 false 면 말하기 채점이 전부 503 이다

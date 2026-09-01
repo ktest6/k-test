@@ -85,7 +85,7 @@ params 이름이 `...Notice` 로 끝나면 전부 이 중첩이다.
 - **어디서 나오는지** — 응답의 어느 자리에 실리는지
 
 
-**전체 190개** (그중 내부용 2개는 영어화 대상이 아님)
+**전체 192개** (그중 내부용 3개는 영어화 대상이 아님)
 
 
 ---
@@ -99,7 +99,7 @@ params 이름이 `...Notice` 로 끝나면 전부 이 중첩이다.
 
 ---
 
-## POST /score (117개)
+## POST /score (119개)
 
 | code | params | 한국어 원문 | 영어 초안 | 어디서 나오는지 |
 |---|---|---|---|---|
@@ -110,9 +110,11 @@ params 이름이 `...Notice` 로 끝나면 전부 이 중첩이다.
 | `AUDIO_FILE_TOO_LARGE` | `actualMb` (float) 예: 25.3<br>`maxMb` (int) 예: 20 | 음성 파일이 {actualMb}MB 로 너무 크다(최대 {maxMb}MB). | The audio file is {actualMb}MB, which is too large (maximum {maxMb}MB). | HTTP 400 detail |
 | `AUDIO_FILE_TOO_LARGE_STREAM` | `maxMb` (int) 예: 20 | 음성 파일이 최대 {maxMb}MB 를 넘는다. | The audio file exceeds the maximum of {maxMb}MB. | HTTP 400 detail |
 | `AUDIO_FILE_EMPTY` | (없음) | 음성 파일이 비어 있다(0바이트). | The audio file is empty (0 bytes). | HTTP 400 detail |
+| `AUDIO_TRANSCODED_TO_WAV` ※내부용 | `sourceFormat` (str) 예: "webm" | '{sourceFormat}' 녹음을 wav(16kHz 모노)로 바꿔서 채점했다. | The '{sourceFormat}' recording was converted to wav (16 kHz mono) before scoring. | warnings |
 | `AUDIO_NOT_ALLOWED_FOR_WRITING` | (없음) | 쓰기 답안에는 음성 파일을 붙일 수 없다. 음성 채점은 mode 를 speaking 으로 보내야 한다. | A writing answer cannot carry an audio file. Send mode=speaking to have audio scored. | HTTP 400 detail |
 | `AUDIO_TEXT_AND_AUDIO_BOTH` | (없음) | answer_text 와 audio 가 함께 왔다. 어느 것을 채점해야 할지 알 수 없다. 음성으로 채점하려면 answer_text 를 비워서 보내야 한다. | Both answer_text and audio were sent, so it is unclear which one to score. Leave answer_text empty to have the audio scored. | HTTP 400 detail |
 | `AUDIO_DOWNLOAD_TIMEOUT` | `timeoutSec` (int(초)) 예: 30 | 음성 파일을 내려받지 못했다(제한 시간 {timeoutSec}초). 저장소 주소가 살아 있는지 확인해야 한다. | The audio file could not be downloaded within {timeoutSec} seconds. Check that the storage URL is reachable. | HTTP 503 detail |
+| `STT_AUDIO_TRANSCODE_FAILED` | `format` (str) 예: "webm"<br>`reason` (str) 예: "ffmpeg 실행파일을 찾을 수 없다" | '{format}' 녹음을 wav 로 바꾸지 못했다({reason}). 서버에 ffmpeg 가 있는지 확인해야 한다. | The '{format}' recording could not be converted to wav ({reason}). Check that ffmpeg is installed on the server. | HTTP 503 detail |
 | `STT_EMPTY_TRANSCRIPT_FINAL` | (없음) | 음성에서 말을 하나도 옮겨 적지 못했다. 녹음 상태를 확인해야 한다. | No speech at all could be transcribed from the audio. Check the recording. | HTTP 503 detail |
 | `STT_EMPTY_TRANSCRIPT` | `provider` (str) 예: "lora" | 음성에서 말을 하나도 옮겨 적지 못했다. 녹음이 비어 있거나 소리가 너무 작은지 확인해야 한다. | No speech at all could be transcribed from the audio. Check whether the recording is empty or too quiet. | HTTP 503 detail |
 | `STT_SILENT_AUDIO` | `loudness` (str) 예: "가장 큰 0.1초 구간 12.0, 전체 평균 3.4 (0~32767 눈금, 실측한 사람 발화는 8,500 이상)"<br>`loudnessNotice` (notice) 예: → AUDIO_LOUDNESS_DESCRIBE | 음성에서 소리를 찾지 못했다(녹음이 무음이다). 마이크가 꺼져 있었거나 녹음이 실패했는지 확인해야 한다. 측정값: {loudness} | No sound was found in the audio (the recording is silent). Check whether the microphone was off or the recording failed. Measurements: {loudness} | HTTP 503 detail |

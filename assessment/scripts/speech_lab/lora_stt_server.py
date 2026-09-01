@@ -66,6 +66,8 @@ from __future__ import annotations
 import argparse
 import io
 import os
+import shutil
+import subprocess
 import time
 
 # FastAPI 는 서버 뼈대. 어댑터를 담아 둘 전역 자리를 함께 만든다.
@@ -75,6 +77,11 @@ from fastapi import FastAPI, HTTPException, Request
 ADAPTER_DIR_ENV = "LORA_ADAPTER_DIR"
 #: 받아쓸 언어. 이 시험은 한국어만 본다(Whisper 표기로는 "korean").
 LANGUAGE = os.getenv("LORA_LANGUAGE", "korean")
+
+#: 소리 형식을 바꿔 주는 프로그램(ffmpeg)의 자리. PATH 에 있으면 그냥 "ffmpeg" 로 잡힌다.
+#: 채점 서버(src/speech/audio.py)와 같은 환경변수 이름을 쓴다 — 두 곳에 다른 이름을
+#: 두면 한쪽만 설정하고 왜 안 되는지 찾게 된다.
+FFMPEG_ENV = "KTEST_FFMPEG"
 
 app = FastAPI(title="K-TEST LoRA STT", summary="Whisper LoRA 받아쓰기 추론 서버")
 
@@ -123,8 +130,20 @@ class AdapterWhisper:
         import numpy as np
         import soundfile as sf
 
-        # 소리를 숫자 배열로 읽는다. 스테레오면 평균 내어 모노로 만든다
-        wave, sr = sf.read(io.BytesIO(wav_bytes), dtype="float32")
+        # 소리를 숫자 배열로 읽는다. 스테레오면 평균 내어 모노로 만든다.
+        # soundfile 은 wav·flac 같은 '풀려 있는' 소리만 읽는다. 브라우저 녹음(webm)이
+        # 그대로 들어오면 여기서 터지므로, 한 번은 ffmpeg 로 바꿔 보고 다시 시도한다
+        try:
+            wave, sr = sf.read(io.BytesIO(wav_bytes), dtype="float32")
+        except Exception as exc:  # noqa: BLE001 - 형식 문제든 깨진 파일이든 같은 대응이다
+            converted = _to_wav_bytes(wav_bytes)
+            if converted is None:
+                # 바꾸지도 못했다. 원래 실패 사유를 그대로 올려 위쪽이 500 detail 에 담게 한다
+                raise RuntimeError(
+                    f"소리를 읽지 못했다({exc}). wav 가 아니면 서버에 ffmpeg 가 있어야 한다"
+                    f"({FFMPEG_ENV} 또는 PATH 확인)."
+                ) from exc
+            wave, sr = sf.read(io.BytesIO(converted), dtype="float32")
         if wave.ndim > 1:
             wave = wave.mean(axis=1)
         # 음성 길이를 밀리초로 잰다(리샘플 전에 원래 촘촘함으로 계산한다)
@@ -145,6 +164,39 @@ class AdapterWhisper:
             )
         text = self.processor.batch_decode(ids, skip_special_tokens=True)[0].strip()
         return text, duration_ms
+
+
+def _to_wav_bytes(data: bytes) -> bytes | None:
+    """어떤 형식의 소리든 ffmpeg 로 16kHz 모노 wav 알맹이로 바꾼다. 못 바꾸면 None.
+
+    **이것은 방어선이지 정식 통로가 아니다.**
+    형식 변환은 채점 서버 입구(src/speech/audio.py 의 ensure_wav)에서 이미 한 번
+    한다. 그런데 이 서버는 다른 사람이 직접 부를 수도 있고(스모크·데모), 그때
+    webm 이 그대로 들어오면 예전에는 "받아쓰기 실패"라는 말만 남기고 500 이 났다.
+    그래서 여기서도 한 번은 바꿔 보고, 그래도 안 되면 이유를 분명히 적어 올린다.
+
+    파이썬 꾸러미를 새로 들이지 않으려고 표준 라이브러리(subprocess)로만 부른다.
+    """
+    # ffmpeg 가 아예 없으면 시도해 볼 것도 없다
+    ffmpeg = shutil.which(os.getenv(FFMPEG_ENV, "").strip() or "ffmpeg")
+    if ffmpeg is None:
+        return None
+    try:
+        # -i pipe:0 은 '입력을 표준입력으로 받는다', 마지막 pipe:1 은 '결과를 표준출력으로'.
+        # 임시 파일을 만들지 않아서 응시자 음성이 서버 디스크에 남지 않는다
+        done = subprocess.run(
+            [ffmpeg, "-hide_banner", "-loglevel", "error", "-i", "pipe:0",
+             "-f", "wav", "-ac", "1", "-ar", "16000", "pipe:1"],
+            input=data,
+            capture_output=True,
+            timeout=60,
+        )
+    except Exception:  # noqa: BLE001 - 실행 실패·시간 초과 모두 '못 바꿨다'로 같다
+        return None
+    # 종료값이 0이 아니거나 결과가 비면 실패다
+    if done.returncode != 0 or not done.stdout:
+        return None
+    return done.stdout
 
 
 def _load_engine() -> AdapterWhisper:
@@ -191,6 +243,9 @@ async def transcribe(request: Request) -> dict:
       - wav 알맹이를 요청 본문(body)에 그대로 담아 보내는 방식 (LoraStt 가 쓰는 길)
       - {"url": "..."} JSON 으로 음성 주소를 보내면 서버가 내려받는 방식 (보조)
 
+    wav 가 아닌 소리(브라우저 녹음 webm 등)가 와도 한 번은 ffmpeg 로 바꿔 보고
+    받아쓴다. 그래도 못 읽으면 500 을 주되 **왜 못 읽었는지를 detail 에 담아** 준다.
+
     돌려주는 것: {"text": 받아쓴 글, "model": 모델 이름, "duration_ms": 음성 길이}.
     """
     if _engine is None:
@@ -217,7 +272,13 @@ async def transcribe(request: Request) -> dict:
     try:
         text, duration_ms = _engine.transcribe(wav_bytes)
     except Exception as exc:  # noqa: BLE001 - 어떤 실패든 원인을 담아 올린다
-        raise HTTPException(status_code=500, detail=f"받아쓰기 실패: {exc}") from exc
+        # 원인을 그대로 실어 보낸다. 예전에는 "받아쓰기 실패" 한마디만 나가서,
+        # 부르는 쪽(채점 서버)에는 "LoRA 서버가 500 으로 답했다"만 남고 진짜 이유
+        # (webm 을 못 읽었다)를 찾을 수가 없었다
+        raise HTTPException(
+            status_code=500,
+            detail=f"받아쓰기 실패: {type(exc).__name__}: {exc}",
+        ) from exc
     elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
 
     return {
