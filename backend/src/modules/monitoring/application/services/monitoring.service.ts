@@ -11,6 +11,7 @@ import {
   NotFoundDomainException,
 } from '../../../../common/exceptions/domain.exception';
 import { notFound, notOwnedByUser } from '../../../../common/exceptions/error-messages';
+import { resolveAntiCheatRuleMessage } from '../../../../common/exceptions/anti-cheat-rule-messages';
 import { describeError } from '../../../../common/utils/describe-error.util';
 import { SupabaseService } from '../../../../infrastructure/supabase/supabase.service';
 import {
@@ -235,7 +236,7 @@ export class MonitoringService {
             ...event.details,
             ruleId: event.ruleId,
             decision: event.decision,
-            message: event.message,
+            message: resolveAntiCheatRuleMessage(event.ruleId, event.message),
           },
           snapshotPath,
         });

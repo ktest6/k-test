@@ -54,7 +54,7 @@ export class JwtAuthGuard implements CanActivate {
       if (isOptionalAuth) {
         return true;
       }
-      throw new UnauthorizedException('인증 토큰이 없습니다.');
+      throw new UnauthorizedException('No authentication token was provided.');
     }
 
     let payload: AccessTokenPayload;
@@ -66,13 +66,13 @@ export class JwtAuthGuard implements CanActivate {
       if (isOptionalAuth) {
         return true;
       }
-      throw new UnauthorizedException('유효하지 않거나 만료된 토큰입니다.');
+      throw new UnauthorizedException('The token is invalid or has expired.');
     }
     if (payload.type === 'refresh') {
       if (isOptionalAuth) {
         return true;
       }
-      throw new UnauthorizedException('리프레시 토큰으로는 인증할 수 없습니다.');
+      throw new UnauthorizedException('A refresh token cannot be used for authentication.');
     }
 
     request.user = { id: payload.sub, email: payload.email, role: payload.role };
