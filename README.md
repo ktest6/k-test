@@ -65,7 +65,7 @@ flowchart LR
 |---|---|---|---|
 | [`frontend/`](frontend/) | 시험 화면, 녹음, 결과 리포트 | Next.js | 한효주 |
 | [`backend/`](backend/) | 인증·회차·답안 저장·AI 모듈 오케스트레이션 | NestJS · Supabase | 백예나 |
-| [`anti-cheat/`](anti-cheat/) | 본인 인증, 이어폰 탐지, 시험 중 모니터링 | FastAPI · AWS Rekognition | 김도영 |
+| [`anti-cheat/`](anti-cheat/) | 본인 인증, 이어폰 탐지, 시험 중 모니터링 | FastAPI · AWS Rekognition · Azure Document Intelligence| 김도영 |
 | [`assessment/`](assessment/) | 문항 설계, AI 자동 채점 파이프라인 | FastAPI · Whisper LoRA · Gemini | 전재완 |
 
 > `frontend/`에는 현재 README만 있습니다 — 프론트엔드 구현은 이 저장소 밖에서 관리됩니다.
@@ -84,11 +84,11 @@ flowchart LR
 
 ## 2. 부정행위 감독
 
-시험 전과 시험 중 두 단계로 나뉩니다. 전부 AWS Rekognition 위에 규칙 엔진을 얹은 구조입니다.
+시험 전과 시험 중 두 단계로 나뉩니다. Azure Document Intelligence와 AWS Rekognition을 활용한 분석 결과 위에 규칙 엔진을 적용하는 구조입니다.
 
 **시험 시작 전**
-- **본인 인증** — 신분증/수험표 사진과 웹캠 캡처를 `CompareFaces`로 대조, 유사도 임계값으로 판정
-- **이어폰 탐지** — 좌·우 귀 이미지를 받아 `DetectLabels`로 `Earbuds`/`Headphones` 검출. 한쪽이라도 나오면 시험 시작 제한
+- **본인 인증** — 여권의 이름·생년월일·여권번호를 판독해 응시자가 입력한 정보와 대조하고, 여권 사진과 웹캠 캡처의 얼굴 유사도를 비교해 본인 여부 판정
+- **이어폰 탐지** — 좌·우 귀 이미지를 받아 `Earbuds`/`Headphones` 검출. 한쪽이라도 나오면 시험 시작 제한
 
 **시험 중** (프레임 이미지를 주기적으로 수신)
 - 얼굴 화면 이탈 · 다중 인원 감지
